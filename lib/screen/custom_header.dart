@@ -5,12 +5,14 @@ class CustomHeader extends StatelessWidget {
   final bool isDarkMode;
   final bool isSidebarOpen;
   final VoidCallback onToggleDarkMode;
+  final String? userPhotoUrl; 
 
   const CustomHeader({
     super.key,
     required this.isDarkMode,
     required this.isSidebarOpen,
     required this.onToggleDarkMode,
+     this.userPhotoUrl,
   });
 
   @override
@@ -54,17 +56,27 @@ class CustomHeader extends StatelessWidget {
               ),
               onPressed: onToggleDarkMode,
             ),
-            GestureDetector(
+             GestureDetector(
               onTap: () {
-                // ✅ Navigate to profile.dart directly
+                // Navigate to profile screen
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const EnergyProfileScreen()),
+                  MaterialPageRoute(builder: (_) => EnergyProfileScreen()),
                 );
               },
-              child: const CircleAvatar(
+              child: CircleAvatar(
+                radius: 22, // Slightly larger for photo
                 backgroundColor: Colors.teal,
-                child: Icon(Icons.person, color: Colors.white),
+                backgroundImage: userPhotoUrl != null
+                    ? NetworkImage(userPhotoUrl!) // Use network photo if provided
+                    : null,
+                child: userPhotoUrl == null
+                    ? const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 28,
+                      )
+                    : null, // Fallback icon if no photo
               ),
             ),
             const SizedBox(width: 12),

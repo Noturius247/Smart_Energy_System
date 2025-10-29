@@ -14,7 +14,6 @@ class DevicesTab extends StatefulWidget {
 
 class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   bool _isDarkMode = false;
-  bool _breakerStatus = false;
 
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
@@ -59,8 +58,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     _searchController.dispose();
     super.dispose();
   }
-
-  
 
   void _filterDevices(String query) {
     final results = connectedDevices.where((device) {
@@ -204,7 +201,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                   onToggleDarkMode: () {
                     setState(() => _isDarkMode = !_isDarkMode);
                   },
-                 
                 ),
 
                 const SizedBox(height: 16),
@@ -221,6 +217,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                         const SizedBox(height: 16),
+
                         // Search + Chat
                         Row(
                           children: [
@@ -261,80 +258,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                           ],
                         ),
                         const SizedBox(height: 16),
-
-                        // Breaker Card
-                        Card(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                          elevation: 10,
-                          shadowColor: Colors.orangeAccent.withAlpha((0.4 * 255).toInt()),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF1A1F36), Color(0xFF111629)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.power,
-                                  color: _breakerStatus
-                                      ? const Color.fromARGB(255, 25, 207, 98)
-                                      : Colors.grey.shade400,
-                                  size: 36,
-                                ),
-                                const Text(
-                                  'Breaker',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _breakerStatus = !_breakerStatus;
-                                    });
-                                  },
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 300),
-                                    width: 70,
-                                    height: 70,
-                                    decoration: BoxDecoration(
-                                      color: _breakerStatus
-                                          ? const Color.fromARGB(255, 110, 219, 168)
-                                          : Colors.grey[800],
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: _breakerStatus
-                                              ? const Color.fromARGB(255, 60, 197, 108).withAlpha(150)
-                                              : Colors.black26,
-                                          blurRadius: 12,
-                                          spreadRadius: 2,
-                                        ),
-                                      ],
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      _breakerStatus ? 'ON' : 'OFF',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
 
                         // Connected Devices Header
                         Row(

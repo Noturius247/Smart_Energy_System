@@ -21,6 +21,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   double powerSavingLevel = 0.6;
   bool _isDarkMode = false;
   int _currentIndex = 4; // Settings tab index
+  bool _breakerStatus = false; // ⬅️ Breaker state
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -57,8 +58,6 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     _profileController.dispose();
     super.dispose();
   }
-
-  
 
   String get powerSavingText {
     if (powerSavingLevel < 0.33) return 'Low';
@@ -130,33 +129,32 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-  _buildHeader(),
-  const SizedBox(height: 12), // ⬅️ reduced from 30 → 12
-  _buildEnergyUsage(),
-  const SizedBox(height: 30), // keep others as they are
-  _buildEnergyManagement(),
-  const SizedBox(height: 40),
-  _buildDeviceManagement(),
-  const SizedBox(height: 40),
-  _buildPreferences(),
-  const SizedBox(height: 100),
-],
-
+                      _buildHeader(),
+                      const SizedBox(height: 12),
+                      _buildEnergyUsageAndBreaker(), // ⬅️ Updated combined row
+                      const SizedBox(height: 30),
+                      _buildEnergyManagement(),
+                      const SizedBox(height: 40),
+                      _buildDeviceManagement(),
+                      const SizedBox(height: 40),
+                      _buildPreferences(),
+                      const SizedBox(height: 100),
+                    ],
                   ),
                 ),
               ),
             ),
           ),
           // Top AppBar
-         CustomHeader(
-      isDarkMode: _isDarkMode,
-      isSidebarOpen: false, // settings screen has no sidebar
-      onToggleDarkMode: () {
-        setState(() {
-          _isDarkMode = !_isDarkMode;
-        });
-      },
-    ),
+          CustomHeader(
+            isDarkMode: _isDarkMode,
+            isSidebarOpen: false,
+            onToggleDarkMode: () {
+              setState(() {
+                _isDarkMode = !_isDarkMode;
+              });
+            },
+          ),
           // Profile Popover
           Positioned(
             top: 70,
@@ -259,7 +257,6 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
           ),
         ],
       ),
-      // ✅ Use CustomBottomNav instead of _buildBottomNavBar()
       bottomNavigationBar: CustomBottomNav(
         currentIndex: _currentIndex,
         onTap: (index, page) {
@@ -277,16 +274,38 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     );
   }
 
- Widget _buildHeader() {
-  return const Padding(
-    padding: EdgeInsets.only(top: 80, bottom: 12), // ⬅️ smaller bottom padding
-    child: Text(
-      'Settings',
-      style: TextStyle(
-        fontSize: 30,
-        fontWeight: FontWeight.w300,
-        color: Colors.white,
+  Widget _buildHeader() {
+    return const Padding(
+      padding: EdgeInsets.only(top: 80, bottom: 12),
+      child: Text(
+        'Settings',
+        style: TextStyle(
+          fontSize: 30,
+          fontWeight: FontWeight.w300,
+          color: Colors.white,
+        ),
       ),
+    );
+  }
+
+  // 🔹 New combined row of Energy Usage + Breaker (same height)
+Widget _buildEnergyUsageAndBreaker() {
+  return IntrinsicHeight(
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch, // ensures same height
+      children: [
+        // Energy Usage
+        Expanded(
+          flex: 2,
+          child: _buildEnergyUsage(),
+        ),
+        const SizedBox(width: 16),
+        // Breaker control
+        Expanded(
+          flex: 1,
+          child: _buildBreakerControl(),
+        ),
+      ],
     ),
   );
 }
@@ -302,85 +321,41 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
+            color: Colors.black.withAlpha(80),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Today's Energy Usage",
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.grey[400],
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '7.4 kWh',
-                  style: TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.w200,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: _navigateToSchedule,
-                  child: Text(
-                    'Next Task: 10:30 AM',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey[500],
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-              ],
+          Text(
+            "Today's Energy Usage",
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[400],
+              fontWeight: FontWeight.w400,
             ),
           ),
-          _buildCircularProgress(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCircularProgress() {
-    return SizedBox(
-      width: 80,
-      height: 80,
-      child: Stack(
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: SweepGradient(
-                startAngle: 0,
-                endAngle: 1.2,
-                colors: [Color(0xFFf59e0b), Color(0xFF1e293b)],
-                stops: [0.2, 0.2],
-              ),
+          const SizedBox(height: 8),
+          const Text(
+            '7.4 kWh',
+            style: TextStyle(
+              fontSize: 48,
+              fontWeight: FontWeight.w200,
+              color: Colors.white,
             ),
           ),
-          Center(
-            child: Container(
-              width: 60,
-              height: 60,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
-                ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _navigateToSchedule,
+            child: Text(
+              'Next Task: 10:30 AM',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[500],
+                decoration: TextDecoration.underline,
               ),
             ),
           ),
@@ -445,7 +420,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
             activeTrackColor: const Color(0xFF10b981),
             inactiveTrackColor: const Color(0xFF1e293b),
             thumbColor: const Color(0xFF10b981),
-            overlayColor: const Color(0xFF10b981).withValues(alpha: 0.32),
+            overlayColor: const Color(0xFF10b981).withAlpha(80),
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
           ),
@@ -463,10 +438,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Low',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[500])),
-              Text('High',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+              Text('Low', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+              Text('High', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
             ],
           ),
         ),
@@ -480,6 +453,77 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildBreakerControl() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1A1F36), Color(0xFF111629)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.power,
+            color: _breakerStatus
+                ? const Color.fromARGB(255, 25, 207, 98)
+                : Colors.grey.shade400,
+            size: 36,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Breaker',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _breakerStatus = !_breakerStatus;
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                color: _breakerStatus
+                    ? const Color.fromARGB(255, 110, 219, 168)
+                    : Colors.grey[800],
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: _breakerStatus
+                        ? const Color.fromARGB(255, 60, 197, 108).withAlpha(150)
+                        : Colors.black26,
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                _breakerStatus ? 'ON' : 'OFF',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
