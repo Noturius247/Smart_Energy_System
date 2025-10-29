@@ -46,7 +46,7 @@ class _AuthPageState extends State<AuthPage> {
                   child: Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.07),
+                      color: const Color.fromARGB(255, 55, 143, 206).withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: Colors.white30),
                     ),
@@ -170,7 +170,7 @@ class _AuthPageState extends State<AuthPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: const Color.fromARGB(255, 17, 13, 128).withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white24),
       ),
