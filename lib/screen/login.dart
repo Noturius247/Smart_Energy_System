@@ -1,10 +1,9 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'admin_home.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'theadmin.dart'; 
-import 'package:smartenergy_app/screen/user_signup.dart';
+import 'theadmin.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -22,9 +21,12 @@ class _AuthPageState extends State<AuthPage> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 600;
+    final isTablet = size.width >= 600 && size.width < 1000;
+
     return Scaffold(
       body: Container(
-        // ✅ Dark gradient background (same as admin_home.dart)
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
@@ -34,235 +36,271 @@ class _AuthPageState extends State<AuthPage> {
         ),
         child: Center(
           child: SingleChildScrollView(
-            child: ConstrainedBox( // ✅ Added
-              constraints: const BoxConstraints(maxWidth: 500), // set max width
-              child: Container(
-                margin: const EdgeInsets.all(16),
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white.withAlpha((255 * 0.05).toInt()), // subtle overlay
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white30),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                   Text(
-  isLogin ? 'Welcome Back!' : 'Create an Account',
-  style: const TextStyle(
-    fontSize: 24,
-    fontWeight: FontWeight.bold,
-    color: Colors.white,
-  ),
-),
-const SizedBox(height: 6),
-Text(
-  isLogin ? 'Log in to your account' : 'Sign up to get started',
-  style: const TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    color: Colors.white70,
-  ),
-),
-
-                    const SizedBox(height: 20),
-                    if (!isLogin)
-                      TextField(
-                        controller: _nameController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: _inputDecoration('Name', Icons.person),
-                      ),
-                    if (!isLogin) const SizedBox(height: 12),
-                    TextField(
-                      controller: _emailController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration('Email', Icons.email),
+            padding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1100),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.07),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white30),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration('Password', Icons.lock),
-                    ),
-                    if (isLogin)
-                      TextButton(
-                        onPressed: () {},
-                        child: const Text('Forgot Password?',
-                            style: TextStyle(color: Colors.white70)),
-                      ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (isLogin) {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const HomeScreen(),
-                              ),
-                            );
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.tealAccent.shade700,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(isLogin ? 'Login' : 'Sign Up'),
-                      ),
-                    ),
-const SizedBox(height: 20),
-
-SizedBox(
-  width: double.infinity,
-  child: ElevatedButton.icon(
-    onPressed: () {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const MyAdminScreen(), // ✅ change if you have admin_home.dart screen
-        ),
-      );
-    },
-    style: ElevatedButton.styleFrom(
-      backgroundColor: const Color.fromARGB(255, 42, 164, 142), // Admin color
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-    ),
-    icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
-    label: const Text(
-      'Admin',
-      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-    ),
-  ),
-),
-                    const SizedBox(height: 12),
-                  Row(
-  mainAxisAlignment: MainAxisAlignment.center,
-  children: [
-    Text(
-      isLogin
-          ? "Don't have an account?"
-          : "Already have an account?",
-      style: const TextStyle(color: Colors.white70),
-    ),
-    TextButton(
-      onPressed: () {
-        if (isLogin) {
-          // Go to Sign Up page
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const  SignUpPage(), // <-- your sign-up page
-            ),
-          );
-        } else {
-          setState(() {
-            isLogin = true; // go back to login screen
-          });
-        }
-      },
-      child: Text(
-        isLogin ? 'Sign Up' : 'Login',
-        style: const TextStyle(color: Colors.white),
-      ),
-    ),
-  ],
-),
-const SizedBox(height: 20),
-
-
-                    
-                    const Text(
-                      'Or continue with',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          icon: const FaIcon(FontAwesomeIcons.google,
-                              color: Colors.white),
-                          onPressed: () async {
-                            final GoogleSignIn googleSignIn = GoogleSignIn();
-                            final GoogleSignInAccount? googleUser =
-                                await googleSignIn.signIn();
-                            if (!context.mounted) return;
-                            if (googleUser != null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                    content:
-                                        Text('Signed in as ${googleUser.email}')),
-                              );
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 16),
-                        // ✅ Facebook Login Button
-                        IconButton(
-                          icon: const FaIcon(FontAwesomeIcons.facebook,
-                              color: Colors.white),
-                          onPressed: () async {
-                            const fbUrl =
-                                'https://www.facebook.com/v15.0/dialog/oauth'
-                                '?client_id=YOUR_FACEBOOK_APP_ID'
-                                '&redirect_uri=YOUR_REDIRECT_URI'
-                                '&response_type=token'
-                                '&scope=email,public_profile';
-                            final uri = Uri.parse(fbUrl);
-                            if (await canLaunchUrl(uri)) {
-                              await launchUrl(uri,
-                                  mode: LaunchMode.externalApplication);
-                            } else {
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Could not launch Facebook Sign-In')),
-                              );
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 16),
-                        IconButton(
-                          icon: const FaIcon(FontAwesomeIcons.microsoft,
-                              color: Colors.white),
-                          onPressed: () async {
-                            const oauthUrl =
-                                'https://login.microsoftonline.com/common/oauth2/v2.0/authorize'
-                                '?client_id=YOUR_MICROSOFT_CLIENT_ID'
-                                '&response_type=token'
-                                '&redirect_uri=YOUR_REDIRECT_URI'
-                                '&scope=User.Read';
-                            final uri = Uri.parse(oauthUrl);
-                            if (await canLaunchUrl(uri)) {
-                              await launchUrl(uri,
-                                  mode: LaunchMode.externalApplication);
-                            } else {
-                              if (!context.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Could not launch Microsoft Sign-In')),
-                              );
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
+                    child: isMobile
+                        ? _buildVerticalLayout(context)
+                        : _buildHorizontalLayout(context, isTablet),
+                  ),
                 ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // 🧱 Horizontal Layout for Desktop/Tablets
+  Widget _buildHorizontalLayout(BuildContext context, bool isTablet) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(flex: isTablet ? 1 : 2, child: _buildLeftPanel()),
+        const SizedBox(width: 20),
+        Expanded(flex: 2, child: _buildRightPanel(context)),
+      ],
+    );
+  }
+
+  // 📱 Vertical Layout for Mobile
+  Widget _buildVerticalLayout(BuildContext context) {
+    return Column(
+      children: [
+        _buildLeftPanel(),
+        const SizedBox(height: 30),
+        _buildRightPanel(context),
+      ],
+    );
+  }
+
+  // 🟦 Left side content
+  Widget _buildLeftPanel() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Lottie.asset(
+          'assets/Animation - 1750510706715.json',
+          width: 250,
+          height: 250,
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Welcome Back!',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 28,
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'We are delighted to have you here.\nPlease enter personal details to your user account.\nIf you need any assistance feel free to reach out.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 15, color: Colors.white70, height: 1.4),
+        ),
+        const SizedBox(height: 25),
+        _buildToggleButtons(),
+      ],
+    );
+  }
+
+  // 🔘 Sign In / Sign Up toggle
+  Widget _buildToggleButtons() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(color: Colors.white30),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _toggleButton('Sign in', true),
+          _toggleButton('Sign up', false),
+        ],
+      ),
+    );
+  }
+
+  Widget _toggleButton(String label, bool loginMode) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          isLogin = loginMode;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        decoration: BoxDecoration(
+          color: isLogin == loginMode
+              ? Colors.white.withValues(alpha: 0.25)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(50),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🟨 Right side (Login / Signup form)
+  Widget _buildRightPanel(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            isLogin ? 'Log in to your account' : 'Create Account',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 25),
+
+          if (!isLogin) ...[
+            TextField(
+              controller: _nameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: _inputDecoration('Full Name', Icons.person),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          TextField(
+            controller: _emailController,
+            style: const TextStyle(color: Colors.white),
+            decoration: _inputDecoration('Email', Icons.email),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _passwordController,
+            obscureText: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: _inputDecoration('Password', Icons.lock),
+          ),
+          const SizedBox(height: 12),
+
+          if (!isLogin)
+            TextField(
+              obscureText: true,
+              style: const TextStyle(color: Colors.white),
+              decoration:
+                  _inputDecoration('Confirm Password', Icons.lock_outline),
+            ),
+
+          if (isLogin)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {},
+                child: const Text('Forgot Password?',
+                    style: TextStyle(color: Colors.white70)),
+              ),
+            ),
+
+          const SizedBox(height: 18),
+
+          // ✅ Main button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                if (isLogin) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HomeScreen()),
+                  );
+                } else {
+                  // handle signup
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.tealAccent.shade700,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text(
+                isLogin ? 'Login' : 'Sign Up',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+
+          if (isLogin) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const MyAdminScreen()),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.white30),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.admin_panel_settings,
+                    color: Colors.white70),
+                label: const Text(
+                  'Admin Login',
+                  style: TextStyle(
+                      color: Colors.white70, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 20),
+          const Text('Or continue with',
+              style: TextStyle(color: Colors.white70)),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(FontAwesomeIcons.google, color: Colors.white),
+              SizedBox(width: 16),
+              Icon(FontAwesomeIcons.facebook, color: Colors.white),
+              SizedBox(width: 16),
+              Icon(FontAwesomeIcons.microsoft, color: Colors.white),
+            ],
+          ),
+        ],
       ),
     );
   }
