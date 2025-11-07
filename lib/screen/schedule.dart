@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'profile.dart';
-import 'custom_bottom_nav.dart';
+import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
 
 class EnergySchedulingScreen extends StatefulWidget {
@@ -252,226 +252,250 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      body: Row(
         children: [
-          // Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-              ),
-            ),
+          // ✅ Sidebar on the left
+          CustomSidebarNav(
+            currentIndex: _currentIndex,
+            onTap: (index, page) {
+              setState(() {
+                _currentIndex = index;
+              });
+              if (index != 3) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (_) => page),
+                );
+              }
+            },
           ),
-         SafeArea(
-  child: Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 70),
-    child: SingleChildScrollView( // ✅ added scroll
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Tip
-          Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.teal.withAlpha(50),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
+
+          // ✅ Main content area
+          Expanded(
+            child: Stack(
               children: [
-                const Icon(Icons.lightbulb, color: Colors.teal, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Tip: Running the Washing Machine at 10 PM could save ₱5 (off-peak rate).",
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.teal.shade900,
-                        fontWeight: FontWeight.w600),
+                // Background
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
+                    ),
+                  ),
+                ),
+
+                SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 70),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Tip Section
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.teal.withAlpha(50),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.lightbulb,
+                                    color: Colors.teal, size: 16),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    "Tip: Running the Washing Machine at 10 PM could save ₱5 (off-peak rate).",
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.teal.shade900,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          if (_scheduledTasks.isNotEmpty) ...[
+                            Text("Next Scheduled Task",
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[400])),
+                            const SizedBox(height: 8),
+                            _buildTaskCard(_scheduledTasks[0], 0),
+                          ],
+
+                          const SizedBox(height: 18),
+                          const Text("Upcoming Tasks",
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white)),
+                          const SizedBox(height: 6),
+
+                          Column(
+                            children: _scheduledTasks.length > 1
+                                ? _scheduledTasks
+                                    .sublist(1)
+                                    .asMap()
+                                    .entries
+                                    .map((entry) => _buildTaskCard(
+                                        entry.value, entry.key + 1))
+                                    .toList()
+                                : [
+                                    const Text(
+                                      "No upcoming tasks.",
+                                      style: TextStyle(
+                                          color: Colors.white70,
+                                          fontSize: 12),
+                                    )
+                                  ],
+                          ),
+
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              onPressed: _addTask,
+                              child: const Text("Add Task",
+                                  style: TextStyle(
+                                      fontSize: 14, color: Colors.white)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Top AppBar
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: CustomHeader(
+                    isDarkMode: _isDarkMode,
+                    isSidebarOpen: false,
+                    onToggleDarkMode: () {
+                      setState(() {
+                        _isDarkMode = !_isDarkMode;
+                      });
+                    },
+                  ),
+                ),
+
+                // Profile Popover
+                Positioned(
+                  top: 70,
+                  right: 10,
+                  child: FadeTransition(
+                    opacity: _profileController,
+                    child: SlideTransition(
+                      position: _profileSlideAnimation,
+                      child: ScaleTransition(
+                        scale: _profileScaleAnimation,
+                        alignment: Alignment.topRight,
+                        child: Container(
+                          width: 200,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withAlpha(150),
+                                blurRadius: 8,
+                                offset: const Offset(2, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              const Text('Profile',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white)),
+                              const SizedBox(height: 8),
+                              const CircleAvatar(
+                                radius: 22,
+                                backgroundColor: Colors.teal,
+                                child: Icon(Icons.person,
+                                    size: 18, color: Colors.white),
+                              ),
+                              const SizedBox(height: 8),
+                              const Text('Marie Fe Tapales',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              const Text('marie@example.com',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 11)),
+                              const SizedBox(height: 10),
+                              InkWell(
+                                onTap: () {
+                                  _profileController.reverse();
+                                  Future.delayed(
+                                      const Duration(milliseconds: 300),
+                                      () {
+                                    if (!mounted) return;
+                                    Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                                const EnergyProfileScreen()));
+                                  });
+                                },
+                                child: const Text('View Profile',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                              const SizedBox(height: 8),
+                              ElevatedButton(
+                                onPressed: _profileController.reverse,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.teal,
+                                  minimumSize:
+                                      const Size.fromHeight(34),
+                                ),
+                                child: const Text('Close',
+                                    style: TextStyle(fontSize: 13)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          if (_scheduledTasks.isNotEmpty) ...[
-            Text("Next Scheduled Task",
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[400])),
-            const SizedBox(height: 8),
-            _buildTaskCard(_scheduledTasks[0], 0),
-          ],
-          const SizedBox(height: 18),
-          const Text("Upcoming Tasks",
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white)),
-          const SizedBox(height: 6),
-          Column(
-            children: _scheduledTasks.length > 1
-                ? _scheduledTasks
-                    .sublist(1)
-                    .asMap()
-                    .entries
-                    .map((entry) => _buildTaskCard(entry.value, entry.key + 1))
-                    .toList()
-                : [
-                    const Text(
-                      "No upcoming tasks.",
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    )
-                  ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onPressed: _addTask,
-              child: const Text("Add Task",
-                  style: TextStyle(fontSize: 14, color: Colors.white)),
-            ),
-          ),
         ],
-      ),
-    ),
-  ),
-),
-
-
-          // Top AppBar
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: CustomHeader(
-              isDarkMode: _isDarkMode,
-              isSidebarOpen: false,
-              onToggleDarkMode: () {
-                setState(() {
-                  _isDarkMode = !_isDarkMode;
-                });
-              },
-            ),
-          ),
-
-          // Profile Popover
-          Positioned(
-            top: 70,
-            right: 10,
-            child: FadeTransition(
-              opacity: _profileController,
-              child: SlideTransition(
-                position: _profileSlideAnimation,
-                child: ScaleTransition(
-                  scale: _profileScaleAnimation,
-                  alignment: Alignment.topRight,
-                  child: Container(
-                    width: 200,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(150),
-                          blurRadius: 8,
-                          offset: const Offset(2, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Profile',
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white)),
-                        const SizedBox(height: 8),
-                        const CircleAvatar(
-                          radius: 22,
-                          backgroundColor: Colors.teal,
-                          child: Icon(Icons.person,
-                              size: 18, color: Colors.white),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('Marie Fe Tapales',
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        const Text('marie@example.com',
-                            style: TextStyle(
-                                color: Colors.white70, fontSize: 11)),
-                        const SizedBox(height: 10),
-                        InkWell(
-                          onTap: () {
-                            _profileController.reverse();
-                            Future.delayed(const Duration(milliseconds: 300),
-                                () {
-                              if (!mounted) return;
-                              Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) =>
-                                          const EnergyProfileScreen()));
-                            });
-                          },
-                          child: const Text('View Profile',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(height: 8),
-                        ElevatedButton(
-                          onPressed: _profileController.reverse,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.teal,
-                            minimumSize: const Size.fromHeight(34),
-                          ),
-                          child: const Text('Close',
-                              style: TextStyle(fontSize: 13)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: CustomBottomNav(
-        currentIndex: _currentIndex,
-        onTap: (index, page) {
-          setState(() {
-            _currentIndex = index;
-          });
-          if (index != 3) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => page),
-            );
-          }
-        },
       ),
     );
   }
@@ -516,12 +540,12 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                         color: Colors.white)),
                 const SizedBox(height: 3),
                 Text(task["time"],
-                    style: TextStyle(
-                        color: Colors.grey[400], fontSize: 12)),
+                    style:
+                        TextStyle(color: Colors.grey[400], fontSize: 12)),
                 const SizedBox(height: 3),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 5, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.white.withAlpha(25),
                     borderRadius: BorderRadius.circular(5),

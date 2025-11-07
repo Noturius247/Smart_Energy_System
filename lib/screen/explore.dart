@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:smartenergy_app/screen/profile.dart';
 import 'chatbot.dart';
 import 'connected_devices.dart';
-import 'custom_bottom_nav.dart';
+import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
 
 class DevicesTab extends StatefulWidget {
@@ -14,14 +13,8 @@ class DevicesTab extends StatefulWidget {
 
 class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   bool _isDarkMode = false;
-
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
-
-  late AnimationController _profileController;
-  late Animation<Offset> _profileSlideAnimation;
-  late Animation<double> _profileScaleAnimation;
-  late Animation<double> _profileFadeAnimation;
 
   final TextEditingController _searchController = TextEditingController();
   List<ConnectedDevice> filteredDevices = List.from(connectedDevices);
@@ -37,24 +30,11 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     );
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(_controller);
     _controller.forward();
-
-    _profileController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _profileSlideAnimation = Tween<Offset>(
-      begin: const Offset(0.2, -0.2),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _profileController, curve: Curves.easeOutBack));
-    _profileScaleAnimation = Tween<double>(begin: 0, end: 1)
-        .animate(CurvedAnimation(parent: _profileController, curve: Curves.easeOutBack));
-    _profileFadeAnimation = CurvedAnimation(parent: _profileController, curve: Curves.easeInOut);
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _profileController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -68,430 +48,554 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     });
   }
 
-  void _showDeviceDialog({ConnectedDevice? device, int? index}) {
-    final nameController = TextEditingController(text: device?.name ?? "");
-    IconData? selectedIcon = device?.icon;
+  void _addDeviceDialog() {
+    final nameController = TextEditingController();
+    String status = "off";
+    String selectedIcon = "Devices";
 
-    final Map<String, IconData> icons = {
-      '💡 ': Icons.lightbulb,
-      '🔌 ': Icons.power,
-      '📱 ': Icons.phone_android,
-      '💻 ': Icons.laptop,
-      '🎛 ': Icons.devices,
+    final Map<String, IconData> iconOptions = {
+      "Devices": Icons.devices_other,
+      "Light": Icons.lightbulb_outline,
+      "Fan": Icons.toys,
+      "TV": Icons.tv,
+      "AC": Icons.ac_unit,
+      "Fridge": Icons.kitchen,
+      "Washer": Icons.local_laundry_service,
+      "Microwave": Icons.microwave,
+      "Computer": Icons.computer,
     };
 
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: StatefulBuilder(
-              builder: (context, setStateDialog) => Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    device == null ? 'Add Device' : 'Edit Device',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Device Name',
-                      border: UnderlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    value: selectedIcon != null
-                        ? icons.entries
-                            .firstWhere((e) => e.value == selectedIcon,
-                                orElse: () => const MapEntry('🎛 ', Icons.devices))
-                            .key
-                        : null,
-                    hint: const Text('Select Icon'),
-                    items: icons.keys
-                        .map((iconName) => DropdownMenuItem(value: iconName, child: Text(iconName)))
-                        .toList(),
-                    onChanged: (value) {
-                      setStateDialog(() {
-                        selectedIcon = icons[value!];
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                      const SizedBox(width: 10),
-                      ElevatedButton(
-                        onPressed: () {
-                          if (nameController.text.isNotEmpty) {
-                            setState(() {
-                              if (device == null) {
-                                connectedDevices.add(
-                                  ConnectedDevice(
-                                    name: nameController.text,
-                                    status: "off",
-                                    icon: selectedIcon ?? Icons.devices,
-                                    usage: 0.0,
-                                    percent: 0.0,
-                                  ),
-                                );
-                              } else {
-                                connectedDevices[index!] = ConnectedDevice(
-                                  name: nameController.text,
-                                  status: device.status,
-                                  icon: selectedIcon ?? device.icon,
-                                  usage: device.usage,
-                                  percent: device.percent,
-                                );
-                              }
-                              filteredDevices = List.from(connectedDevices);
-                            });
-                            Navigator.pop(context);
-                          }
-                        },
-                        child: Text(device == null ? 'Add' : 'Save'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2A2F45),
+          title: const Text(
+            "Add Device",
+            style: TextStyle(color: Colors.white),
           ),
-        ),
-      ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: "Device Name",
+                  labelStyle: TextStyle(color: Colors.white70),
+                  focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.teal)),
+                ),
+                style: const TextStyle(color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: status,
+                dropdownColor: const Color(0xFF2A2F45),
+                decoration: const InputDecoration(
+                  labelText: "Status",
+                  labelStyle: TextStyle(color: Colors.white70),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                      value: "on",
+                      child: Text("On", style: TextStyle(color: Colors.white))),
+                  DropdownMenuItem(
+                      value: "off",
+                      child: Text("Off", style: TextStyle(color: Colors.white))),
+                ],
+                onChanged: (value) => status = value ?? "off",
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedIcon,
+                dropdownColor: const Color(0xFF2A2F45),
+                decoration: const InputDecoration(
+                  labelText: "Device Icon",
+                  labelStyle: TextStyle(color: Colors.white70),
+                ),
+                items: iconOptions.keys.map((iconName) {
+                  return DropdownMenuItem(
+                    value: iconName,
+                    child: Row(
+                      children: [
+                        Icon(iconOptions[iconName], color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(iconName, style: const TextStyle(color: Colors.white)),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  selectedIcon = value ?? "Devices";
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              onPressed: () {
+                if (nameController.text.isNotEmpty) {
+                  setState(() {
+                    connectedDevices.add(ConnectedDevice(
+                      name: nameController.text,
+                      icon: iconOptions[selectedIcon] ?? Icons.devices_other,
+                      status: status,
+                      usage: 0.0,
+                      percent: 0.0,
+                    ));
+                    filteredDevices = List.from(connectedDevices);
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text("Add"),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  void _removeDevice(int index) {
-    setState(() {
-      connectedDevices.removeAt(index);
-      filteredDevices = List.from(connectedDevices);
-    });
-  }
+  void _editDeviceDialog(ConnectedDevice device) {
+    final nameController = TextEditingController(text: device.name);
+    String status = device.status.toLowerCase();
+    IconData selectedIcon = device.icon;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          // background gradient
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-              ),
-            ),
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2A2F45),
+          title: const Text(
+            "Edit Device",
+            style: TextStyle(color: Colors.white),
           ),
-          SafeArea(
+          content: SingleChildScrollView(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // ✅ Reusable Header
-                CustomHeader(
-                  isDarkMode: _isDarkMode,
-                  isSidebarOpen: false,
-                  onToggleDarkMode: () {
-                    setState(() => _isDarkMode = !_isDarkMode);
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // Main Body
-                Expanded(
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: ListView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      children: [
-                        const Text(
-                          'Devices',
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Search + Chat
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _searchController,
-                                onChanged: _filterDevices,
-                                textInputAction: TextInputAction.search,
-                                onSubmitted: (_) => FocusScope.of(context).unfocus(),
-                                decoration: InputDecoration(
-                                  hintText: 'Search devices....',
-                                  prefixIcon: const Icon(Icons.search, color: Colors.teal),
-                                  filled: true,
-                                  fillColor: Colors.white.withAlpha(200),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.teal,
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              child: IconButton(
-                                icon: const Icon(Icons.chat, color: Colors.white),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => const ChatbotScreen()),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Connected Devices Header
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Connected Devices',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                            ),
-                            FloatingActionButton.extended(
-                              backgroundColor: Colors.transparent,
-                              elevation: 0,
-                              onPressed: () => _showDeviceDialog(),
-                              label: const Text("Add Device",
-                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                              icon: const Icon(Icons.add, color: Colors.white, size: 16),
-                              extendedPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Device Cards
-                        ...filteredDevices.asMap().entries.map((entry) {
-                          int index = entry.key;
-                          ConnectedDevice device = entry.value;
-
-                          Color statusColor;
-                          switch (device.status.toLowerCase()) {
-                            case "on":
-                            case "active":
-                            case "charging":
-                              statusColor = Colors.green;
-                              break;
-                            case "off":
-                              statusColor = Colors.red;
-                              break;
-                            default:
-                              statusColor = Colors.orange;
-                          }
-
-                          return Card(
-                            color: const Color(0xFF2A2F45),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            margin: const EdgeInsets.symmetric(vertical: 6),
-                            child: ListTile(
-                              leading: Icon(device.icon, color: Colors.teal),
-                              title: Text(device.name, style: const TextStyle(color: Colors.white)),
-                              subtitle: Text("Status: ${device.status}", style: TextStyle(color: statusColor)),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        device.status = device.status.toLowerCase() == "on" ? "off" : "on";
-                                      });
-                                    },
-                                    child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 250),
-                                      width: 70,
-                                      height: 32,
-                                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: device.status.toLowerCase() == 'on'
-                                              ? [Colors.teal, Colors.greenAccent]
-                                              : [Colors.grey.shade700, Colors.grey.shade800],
-                                        ),
-                                        borderRadius: BorderRadius.circular(30),
-                                        boxShadow: [
-                                          if (device.status.toLowerCase() == 'on')
-                                            const BoxShadow(color: Colors.teal, blurRadius: 8, spreadRadius: 1),
-                                        ],
-                                      ),
-                                      child: Stack(
-                                        children: [
-                                          Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(right: 8),
-                                              child: Text(
-                                                'OFF',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: device.status.toLowerCase() == 'on'
-                                                      ? Colors.transparent
-                                                      : Colors.white,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          Align(
-                                            alignment: Alignment.centerRight,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(left: 8),
-                                              child: Text(
-                                                'ON',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: device.status.toLowerCase() == 'on'
-                                                      ? Colors.black87
-                                                      : Colors.transparent,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                          AnimatedAlign(
-                                            duration: const Duration(milliseconds: 250),
-                                            alignment: device.status.toLowerCase() == 'on'
-                                                ? Alignment.centerRight
-                                                : Alignment.centerLeft,
-                                            child: Container(
-                                              width: 24,
-                                              height: 24,
-                                              decoration: BoxDecoration(
-                                                color: device.status.toLowerCase() == 'on' ? Colors.white : Colors.black,
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.yellow),
-                                    onPressed: () => _showDeviceDialog(device: device, index: index),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red),
-                                    onPressed: () => _removeDevice(index),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ],
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: "Device Name",
+                    labelStyle: TextStyle(color: Colors.white70),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: Colors.teal),
                     ),
                   ),
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: status,
+                  dropdownColor: const Color(0xFF2A2F45),
+                  decoration: const InputDecoration(
+                    labelText: "Status",
+                    labelStyle: TextStyle(color: Colors.white70),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: "on",
+                        child: Text("On", style: TextStyle(color: Colors.white))),
+                    DropdownMenuItem(
+                        value: "off",
+                        child: Text("Off", style: TextStyle(color: Colors.white))),
+                  ],
+                  onChanged: (value) => status = value ?? "off",
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<IconData>(
+                  value: selectedIcon,
+                  dropdownColor: const Color(0xFF2A2F45),
+                  decoration: const InputDecoration(
+                    labelText: "Icon",
+                    labelStyle: TextStyle(color: Colors.white70),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: Icons.kitchen,
+                        child: Row(children: [
+                          Icon(Icons.kitchen, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                    DropdownMenuItem(
+                        value: Icons.local_laundry_service,
+                        child: Row(children: [
+                          Icon(Icons.local_laundry_service, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                    DropdownMenuItem(
+                        value: Icons.tv,
+                        child: Row(children: [
+                          Icon(Icons.tv, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                    DropdownMenuItem(
+                        value: Icons.videocam,
+                        child: Row(children: [
+                          Icon(Icons.videocam, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                    DropdownMenuItem(
+                        value: Icons.lightbulb,
+                        child: Row(children: [
+                          Icon(Icons.lightbulb, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                    DropdownMenuItem(
+                        value: Icons.thermostat,
+                        child: Row(children: [
+                          Icon(Icons.thermostat, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                    DropdownMenuItem(
+                        value: Icons.phone_android,
+                        child: Row(children: [
+                          Icon(Icons.phone_android, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                    DropdownMenuItem(
+                        value: Icons.toys,
+                        child: Row(children: [
+                          Icon(Icons.toys, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                    DropdownMenuItem(
+                        value: Icons.laptop,
+                        child: Row(children: [
+                          Icon(Icons.laptop, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                    DropdownMenuItem(
+                        value: Icons.devices_other,
+                        child: Row(children: [
+                          Icon(Icons.devices_other, color: Colors.white),
+                          SizedBox(width: 8),
+                        ])),
+                  ],
+                  onChanged: (icon) => selectedIcon = icon ?? Icons.devices_other,
                 ),
               ],
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              onPressed: () {
+                setState(() {
+                  device.name = nameController.text;
+                  device.status = status;
+                  device.icon = selectedIcon;
+                });
+                Navigator.pop(context);
+              },
+              child: const Text("Save"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
-          // Profile Popover
-          Positioned(
-            top: 70,
-            right: 12,
-            child: FadeTransition(
-              opacity: _profileFadeAnimation,
-              child: SlideTransition(
-                position: _profileSlideAnimation,
-                child: ScaleTransition(
-                  scale: _profileScaleAnimation,
-                  alignment: Alignment.topRight,
-                  child: Container(
-                    width: 220,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+  @override
+  Widget build(BuildContext context) {
+    // Check screen width to determine layout
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 768;
+
+    return Scaffold(
+      body: isSmallScreen ? _buildMobileLayout() : _buildDesktopLayout(),
+    );
+  }
+
+  // Desktop Layout (Sidebar on Left)
+  Widget _buildDesktopLayout() {
+    return Row(
+      children: [
+        CustomSidebarNav(
+          currentIndex: 1,
+          isBottomNav: false,
+          onTap: (index, page) {
+            if (index == 1) return;
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => page),
+            );
+          },
+        ),
+        Expanded(child: _buildMainContent()),
+      ],
+    );
+  }
+
+  // Mobile Layout (Bottom Navigation)
+  Widget _buildMobileLayout() {
+    return Column(
+      children: [
+        Expanded(child: _buildMainContent()),
+        CustomSidebarNav(
+          currentIndex: 1,
+          isBottomNav: true,
+          onTap: (index, page) {
+            if (index == 1) return;
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => page),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMainContent() {
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
+            ),
+          ),
+        ),
+        SafeArea(
+          child: Column(
+            children: [
+              CustomHeader(
+                isDarkMode: _isDarkMode,
+                isSidebarOpen: true,
+                onToggleDarkMode: () {
+                  setState(() => _isDarkMode = !_isDarkMode);
+                },
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    children: [
+                      const Text(
+                        'Devices',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(150),
-                          blurRadius: 10,
-                          offset: const Offset(2, 2),
-                        )
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Profile',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-                        const SizedBox(height: 12),
-                        const CircleAvatar(
-                            radius: 30,
-                            backgroundColor: Colors.teal,
-                            child: Icon(Icons.person, size: 30, color: Colors.white)),
-                        const SizedBox(height: 12),
-                        const Text('Marie Fe Tapales',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        const Text('mariefe@example.com',
-                            style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        const SizedBox(height: 12),
-                        InkWell(
-                          onTap: () {
-                            _profileController.reverse();
-                            Future.delayed(const Duration(milliseconds: 300), () {
-                              if (!mounted) return;
-                              Navigator.push(context,
-                                  MaterialPageRoute(builder: (_) => const EnergyProfileScreen()));
-                            });
-                          },
-                          child: const Text('View Profile',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(height: 8),
-                        ElevatedButton(
-                          onPressed: _profileController.reverse,
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.teal, minimumSize: const Size.fromHeight(36)),
-                          child: const Text('Close'),
-                        ),
-                      ],
-                    ),
+                      const SizedBox(height: 16),
+
+                      // Search & Chat
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              onChanged: _filterDevices,
+                              decoration: InputDecoration(
+                                hintText: 'Search devices...',
+                                prefixIcon: const Icon(Icons.search, color: Colors.teal),
+                                filled: true,
+                                fillColor: Colors.white.withAlpha(200),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.teal,
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.chat, color: Colors.white),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => const ChatbotScreen()),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Header + Add button
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Connected Devices',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          FloatingActionButton.extended(
+                            backgroundColor: Colors.transparent,
+                            elevation: 0,
+                            onPressed: _addDeviceDialog,
+                            label: const Text(
+                              "Add Device",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            icon: const Icon(Icons.add, color: Colors.white, size: 16),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Device cards
+                      ...filteredDevices.map((device) {
+                        return Card(
+                          color: const Color(0xFF2A2F45),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          margin: const EdgeInsets.symmetric(vertical: 6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(device.icon, color: Colors.teal, size: 32),
+                                    const SizedBox(width: 12),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          device.name,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        Text(
+                                          "Status: ${device.status == "on" ? "On" : "Off"}",
+                                          style: TextStyle(
+                                            color: device.status == "on"
+                                                ? Colors.green
+                                                : Colors.red,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                                      tooltip: "Edit Device",
+                                      onPressed: () => _editDeviceDialog(device),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                      tooltip: "Delete Device",
+                                      onPressed: () async {
+                                        final confirmDelete = await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            backgroundColor: const Color(0xFF2A2F45),
+                                            title: const Text(
+                                              "Delete Device",
+                                              style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                            content: Text(
+                                              "Are you sure you want to delete '${device.name}'?",
+                                              style: const TextStyle(color: Colors.white70),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context, false),
+                                                child: const Text("Cancel",
+                                                    style: TextStyle(color: Colors.grey)),
+                                              ),
+                                              ElevatedButton(
+                                                style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.redAccent),
+                                                onPressed: () => Navigator.pop(context, true),
+                                                child: const Text("Delete"),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+
+                                        if (confirmDelete == true) {
+                                          setState(() {
+                                            connectedDevices.remove(device);
+                                            filteredDevices = List.from(connectedDevices);
+                                          });
+
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text("${device.name} has been deleted."),
+                                              backgroundColor: Colors.redAccent,
+                                              duration: const Duration(seconds: 2),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                    IconButton(
+                                      icon: Icon(
+                                        device.status == "on"
+                                            ? Icons.toggle_on
+                                            : Icons.toggle_off,
+                                        color: device.status == "on"
+                                            ? Colors.green
+                                            : Colors.grey,
+                                        size: 36,
+                                      ),
+                                      tooltip: device.status == "on" ? "Turn Off" : "Turn On",
+                                      onPressed: () {
+                                        setState(() {
+                                          device.status =
+                                              device.status == "on" ? "off" : "on";
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ],
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
-      bottomNavigationBar: CustomBottomNav(
-        currentIndex: 1, // since this is Devices
-        onTap: (index, page) {
-          if (index == 1) return; // already on Devices
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => page),
-          );
-        },
-      ),
+        ),
+      ],
     );
   }
 }

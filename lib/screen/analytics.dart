@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'connected_devices.dart';
-import 'custom_bottom_nav.dart';
+import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
 import 'profile.dart';
 
@@ -189,153 +189,218 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    double totalUsage = connectedDevices.fold(0, (sum, d) => sum + d.usage);
+ @override
+ Widget build(BuildContext context) {
+  double totalUsage = connectedDevices.fold(0, (sum, d) => sum + d.usage);
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-              ),
-            ),
-          ),
-          Column(
+  return Scaffold(
+    body: Row(
+      children: [
+        // ✅ Sidebar on the left
+        CustomSidebarNav(
+          currentIndex: 2,
+          onTap: (index, page) {
+            if (index != 2) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => page),
+              );
+            }
+          },
+        ),
+
+        // ✅ Main content on the right
+        Expanded(
+          child: Stack(
             children: [
-              CustomHeader(
-                isDarkMode: _isDarkMode,
-                isSidebarOpen: false,
-                onToggleDarkMode: () {
-                  setState(() => _isDarkMode = !_isDarkMode);
-                },
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
+                  ),
+                ),
               ),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 20),
-                      const Text('Analytics', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-                      const SizedBox(height: 16),
-                      Row(
+              Column(
+                children: [
+                  CustomHeader(
+                    isDarkMode: _isDarkMode,
+                    isSidebarOpen: true,
+                    onToggleDarkMode: () {
+                      setState(() => _isDarkMode = !_isDarkMode);
+                    },
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(child: summaryCard('Total Consumption', '${totalUsage.toStringAsFixed(1)} kWh', '+4.2%')),
-                          const SizedBox(width: 12),
-                          Expanded(child: summaryCard('Cost', '₱${(totalUsage * 0.188).toStringAsFixed(2)}', '+16.5%')),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Analytics',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(child: summaryCard('Total Consumption', '${totalUsage.toStringAsFixed(1)} kWh', '+4.2%')),
+                              const SizedBox(width: 12),
+                              Expanded(child: summaryCard('Cost', '₱${(totalUsage * 0.188).toStringAsFixed(2)}', '+16.5%')),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Energy Usage',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                          const SizedBox(height: 8),
+                          _rangeSelector(),
+                          const SizedBox(height: 12),
+                          _headerWidget(),
+                          const SizedBox(height: 12),
+                          SizedBox(height: 200, child: lineChart()),
+                          const SizedBox(height: 24),
+                          if (_selectedDateFromChart != null)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Devices on ${_monthNames[_selectedDateFromChart!.month - 1]} ${_selectedDateFromChart!.day}, ${_selectedDateFromChart!.year}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Column(
+                                  children: connectedDevices.map((device) {
+                                    double adjustedUsage = device.usage;
+                                    bool isOnline = true;
+                                    String status = "Good";
+
+                                    return breakdownTile(
+                                      device.icon,
+                                      device.name,
+                                      '${adjustedUsage.toStringAsFixed(1)} kWh',
+                                      adjustedUsage / totalUsage,
+                                      isOnline,
+                                      status,
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
-                      const SizedBox(height: 24),
-                      const Text('Energy Usage', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                      const SizedBox(height: 8),
-                      _rangeSelector(),
-                      const SizedBox(height: 12),
-                      _headerWidget(),
-                      const SizedBox(height: 12),
-                      SizedBox(height: 200, child: lineChart()),
-                      const SizedBox(height: 24),
-                      if (_selectedDateFromChart != null)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Devices on ${_monthNames[_selectedDateFromChart!.month - 1]} ${_selectedDateFromChart!.day}, ${_selectedDateFromChart!.year}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18),
-                            ),
-                            const SizedBox(height: 16),
-                            Column(
-                              children: connectedDevices.map((device) {
-                                double adjustedUsage = device.usage;
-                                bool isOnline = true;
-                                String status = "Good";
-
-                                return breakdownTile(device.icon, device.name, '${adjustedUsage.toStringAsFixed(1)} kWh', adjustedUsage / totalUsage, isOnline, status);
-                              }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+              // Profile popup
+              Positioned(
+                top: 70,
+                right: 12,
+                child: FadeTransition(
+                  opacity: _profileFadeAnimation,
+                  child: SlideTransition(
+                    position: _profileSlideAnimation,
+                    child: ScaleTransition(
+                      scale: _profileScaleAnimation,
+                      alignment: Alignment.topRight,
+                      child: Container(
+                        width: 220,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.6),
+                              blurRadius: 10,
+                              offset: const Offset(2, 2),
                             ),
                           ],
                         ),
-                    ],
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Profile',
+                              style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white),
+                            ),
+                            const SizedBox(height: 12),
+                            const CircleAvatar(
+                                radius: 30,
+                                backgroundColor: Colors.teal,
+                                child: Icon(Icons.person,
+                                    size: 30, color: Colors.white)),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Marie Fe Tapales',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text('marie@example.com',
+                                style: TextStyle(
+                                    color: Colors.white70, fontSize: 12)),
+                            const SizedBox(height: 12),
+                            InkWell(
+                              onTap: () async {
+                                _profileController.reverse();
+                                await Future.delayed(
+                                    const Duration(milliseconds: 300));
+                                if (!mounted) return;
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const EnergyProfileScreen()));
+                              },
+                              child: const Text('View Profile',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(height: 8),
+                            ElevatedButton(
+                              onPressed: _profileController.reverse,
+                              style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.teal,
+                                  minimumSize: const Size.fromHeight(36)),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
             ],
           ),
-          // Profile popup
-          Positioned(
-            top: 70,
-            right: 12,
-            child: FadeTransition(
-              opacity: _profileFadeAnimation,
-              child: SlideTransition(
-                position: _profileSlideAnimation,
-                child: ScaleTransition(
-                  scale: _profileScaleAnimation,
-                  alignment: Alignment.topRight,
-                  child: Container(
-                    width: 220,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.6), blurRadius: 10, offset: const Offset(2, 2)),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-                        const SizedBox(height: 12),
-                        const CircleAvatar(radius: 30, backgroundColor: Colors.teal, child: Icon(Icons.person, size: 30, color: Colors.white)),
-                        const SizedBox(height: 12),
-                        const Text('Marie Fe Tapales', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        const Text('marie@example.com', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                        const SizedBox(height: 12),
-                        InkWell(
-                          onTap: () async {
-                            _profileController.reverse();
-                            await Future.delayed(const Duration(milliseconds: 300));
-                            if (!mounted) return;
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const EnergyProfileScreen()));
-                          },
-                          child: const Text('View Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(height: 8),
-                        ElevatedButton(
-                          onPressed: _profileController.reverse,
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, minimumSize: const Size.fromHeight(36)),
-                          child: const Text('Close'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: CustomBottomNav(
-        currentIndex: 2,
-        onTap: (index, page) {
-          if (index != 2) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => page));
-          }
-        },
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
+
 
   Widget summaryCard(String title, String value, String change) {
     return Container(

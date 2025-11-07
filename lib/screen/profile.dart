@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart'; // ✅ Google Sign-In
 import 'login.dart'; // ✅ Replace with your actual login page
-import 'custom_bottom_nav.dart'; // ✅ Custom bottom nav
-import 'custom_header.dart'; // ✅ Import custom header
+import 'custom_sidebar_nav.dart'; // ✅ Custom left sidebar
+import 'custom_header.dart'; // ✅ Custom top header
 
 class EnergyProfileScreen extends StatefulWidget {
   const EnergyProfileScreen({super.key});
@@ -13,10 +13,10 @@ class EnergyProfileScreen extends StatefulWidget {
 
 class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     with SingleTickerProviderStateMixin {
-  int _currentIndex = 5; // Profile tab
+  int _currentIndex = 5; // ✅ Profile tab index
   late AnimationController _animationController;
   bool _isDarkMode = false;
-  bool _isSidebarOpen = false; // For header toggle
+  bool _isSidebarOpen = false; // ✅ For toggling sidebar animation
 
   @override
   void initState() {
@@ -35,7 +35,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
   }
 
   void _onTabTapped(int index, Widget page) {
-    if (index == _currentIndex) return; // prevent reloading same page
+    if (index == _currentIndex) return;
     setState(() => _currentIndex = index);
 
     Navigator.pushReplacement(
@@ -47,40 +47,56 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
+      body: Row(
         children: [
-          // ✅ Gradient background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-              ),
-            ),
+          // ✅ Sidebar on the left
+          CustomSidebarNav(
+            currentIndex: _currentIndex,
+            onTap: _onTabTapped,
           ),
-          SafeArea(
-            child: Column(
+
+          // ✅ Main content area
+          Expanded(
+            child: Stack(
               children: [
-                // ✅ Use CustomHeader here
-                CustomHeader(
-                  isDarkMode: _isDarkMode,
-                  isSidebarOpen: _isSidebarOpen,
-                  onToggleDarkMode: () {
-                    setState(() {
-                      _isDarkMode = !_isDarkMode;
-                    });
-                  },
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        _buildProfileCard(),
-                        const SizedBox(height: 20),
-                        _buildMenuOptions(),
-                      ],
+                // ✅ Background gradient
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
                     ),
+                  ),
+                ),
+
+                SafeArea(
+                  child: Column(
+                    children: [
+                      // ✅ Top Header
+                      CustomHeader(
+                        isDarkMode: _isDarkMode,
+                        isSidebarOpen: _isSidebarOpen,
+                        onToggleDarkMode: () {
+                          setState(() {
+                            _isDarkMode = !_isDarkMode;
+                          });
+                        },
+                      ),
+
+                      // ✅ Scrollable profile content
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              _buildProfileCard(),
+                              const SizedBox(height: 20),
+                              _buildMenuOptions(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -88,15 +104,10 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
           ),
         ],
       ),
-
-      // ✅ Use custom bottom nav
-      bottomNavigationBar: CustomBottomNav(
-        currentIndex: _currentIndex,
-        onTap: _onTabTapped,
-      ),
     );
   }
 
+  // ✅ Profile card section
   Widget _buildProfileCard() {
     return Container(
       margin: const EdgeInsets.all(20),
@@ -107,7 +118,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha((0.3 * 255).toInt()),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -117,7 +128,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
         padding: const EdgeInsets.all(25),
         child: Column(
           children: [
-            // Profile Header
+            // ✅ Profile header
             Row(
               children: [
                 Container(
@@ -125,18 +136,16 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                   height: 80,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border:
-                        Border.all(color: const Color(0xFF4ECDC4), width: 3),
+                    border: Border.all(color: const Color(0xFF4ECDC4), width: 3),
                   ),
                   child: ClipOval(
                     child: Image.asset(
-                      'assets/images/profile_avatar.jpg', // ✅ Add your image
+                      'assets/images/profile_avatar.jpg',
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
                         return const CircleAvatar(
                           backgroundColor: Color(0xFF4ECDC4),
-                          child: Icon(Icons.person,
-                              size: 40, color: Colors.white),
+                          child: Icon(Icons.person, size: 40, color: Colors.white),
                         );
                       },
                     ),
@@ -175,7 +184,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
             ),
             const SizedBox(height: 30),
 
-            // Energy Stats Section
+            // ✅ Energy stats section
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -189,23 +198,23 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
             ),
             const SizedBox(height: 20),
 
-            // Stats Row
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Column(
                     children: [
-                      _buildStatItem('Current Energy Usage', '350'),
+                      _buildStatItem('Current Energy Usage', '350 kWh'),
                       const SizedBox(height: 15),
                       _buildStatItem('Monthly Savings', '₱25'),
                       const SizedBox(height: 15),
-                      _buildStatItem('Carbon Reduction', '120'),
+                      _buildStatItem('Carbon Reduction', '120 kg'),
                     ],
                   ),
                 ),
                 const SizedBox(width: 30),
-                // Circular Progress Indicator
+
+                // ✅ Circular Progress Indicator
                 Stack(
                   alignment: Alignment.center,
                   children: [
@@ -215,8 +224,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                       child: CircularProgressIndicator(
                         value: 0.7,
                         strokeWidth: 8,
-                        backgroundColor:
-                            Colors.white.withAlpha((0.2 * 255).toInt()),
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
                         valueColor: const AlwaysStoppedAnimation<Color>(
                           Color(0xFF10b981),
                         ),
@@ -251,23 +259,25 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     );
   }
 
+  // ✅ Stat row builder
   Widget _buildStatItem(String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-        ),
+        Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[400])),
         Text(
           value,
           style: const TextStyle(
-              fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
       ],
     );
   }
 
+  // ✅ Menu options container
   Widget _buildMenuOptions() {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -278,7 +288,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha((0.3 * 255).toInt()),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -299,7 +309,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
           _buildMenuItem(Icons.settings, 'Manage Smart Devices', () {}),
           const SizedBox(height: 20),
 
-          // Help & Support and Logout
+          // ✅ Help & Logout row
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 25),
             child: Row(
@@ -313,14 +323,12 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    _showLogoutDialog();
-                  },
+                  onPressed: _showLogoutDialog,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF6B6B),
                     foregroundColor: Colors.white,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 25, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(25),
                     ),
@@ -339,6 +347,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     );
   }
 
+  // ✅ Menu item builder
   Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
       leading: Container(
@@ -357,23 +366,24 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
           color: Colors.white,
         ),
       ),
-      trailing:
-          Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+      trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 25),
     );
   }
 
+  // ✅ Divider between menu items
   Widget _buildDivider() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 25),
       child: Divider(
-        color: Colors.white.withAlpha((0.2 * 255).toInt()),
+        color: Colors.white.withValues(alpha: 0.2),
         height: 1,
       ),
     );
   }
 
+  // ✅ Logout confirmation dialog
   void _showLogoutDialog() {
     showDialog(
       context: context,
@@ -383,10 +393,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text(
-            'Logout',
-            style: TextStyle(color: Colors.white),
-          ),
+          title: const Text('Logout', style: TextStyle(color: Colors.white)),
           content: const Text(
             'Are you sure you want to logout?',
             style: TextStyle(color: Colors.grey),
@@ -398,7 +405,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
             ),
             ElevatedButton(
               onPressed: () async {
-                Navigator.of(context).pop(); // Close dialog first
+                Navigator.of(context).pop();
                 try {
                   final googleSignIn = GoogleSignIn();
                   await googleSignIn.signOut();
