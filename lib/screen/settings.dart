@@ -20,8 +20,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   bool peakHourAlerts = true;
   double powerSavingLevel = 0.6;
   bool _isDarkMode = false;
-  int _currentIndex = 4; // Settings tab index
-  bool _breakerStatus = false; // ⬅️ Breaker state
+  int _currentIndex = 4;
+  bool _breakerStatus = false;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -108,13 +108,23 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   }
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    body: Row(
+  Widget build(BuildContext context) {
+    // Check screen width to determine layout
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 768;
+
+    return Scaffold(
+      body: isSmallScreen ? _buildMobileLayout() : _buildDesktopLayout(),
+    );
+  }
+
+  // Desktop Layout (Sidebar on Left)
+  Widget _buildDesktopLayout() {
+    return Row(
       children: [
-        // ✅ Left Sidebar Navigation
         CustomSidebarNav(
           currentIndex: _currentIndex,
+          isBottomNav: false,
           onTap: (index, page) {
             setState(() {
               _currentIndex = index;
@@ -127,164 +137,180 @@ Widget build(BuildContext context) {
             }
           },
         ),
+        Expanded(child: _buildMainContent()),
+      ],
+    );
+  }
 
-        // ✅ Main Settings Content
-        Expanded(
-          child: Stack(
-            children: [
-              // Background
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-                  ),
+  // Mobile Layout (Bottom Navigation)
+  Widget _buildMobileLayout() {
+    return Column(
+      children: [
+        Expanded(child: _buildMainContent()),
+        CustomSidebarNav(
+          currentIndex: _currentIndex,
+          isBottomNav: true,
+          onTap: (index, page) {
+            setState(() {
+              _currentIndex = index;
+            });
+            if (index != 4) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => page),
+              );
+            }
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMainContent() {
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
+            ),
+          ),
+          child: SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 25),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 12),
+                    _buildEnergyUsageAndBreaker(),
+                    const SizedBox(height: 30),
+                    _buildEnergyManagement(),
+                    const SizedBox(height: 40),
+                    _buildDeviceManagement(),
+                    const SizedBox(height: 40),
+                    _buildPreferences(),
+                    const SizedBox(height: 100),
+                  ],
                 ),
-                child: SafeArea(
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 25),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildHeader(),
-                          const SizedBox(height: 12),
-                          _buildEnergyUsageAndBreaker(),
-                          const SizedBox(height: 30),
-                          _buildEnergyManagement(),
-                          const SizedBox(height: 40),
-                          _buildDeviceManagement(),
-                          const SizedBox(height: 40),
-                          _buildPreferences(),
-                          const SizedBox(height: 100),
-                        ],
-                      ),
+              ),
+            ),
+          ),
+        ),
+
+        // Top Header
+        CustomHeader(
+          isDarkMode: _isDarkMode,
+          isSidebarOpen: false,
+          onToggleDarkMode: () {
+            setState(() {
+              _isDarkMode = !_isDarkMode;
+            });
+          },
+        ),
+
+        // Profile Popover
+        Positioned(
+          top: 70,
+          right: 12,
+          child: FadeTransition(
+            opacity: _profileController,
+            child: SlideTransition(
+              position: _profileSlideAnimation,
+              child: ScaleTransition(
+                scale: _profileController,
+                alignment: Alignment.topRight,
+                child: Container(
+                  width: 220,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
                     ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(150),
+                        blurRadius: 10,
+                        offset: const Offset(2, 2),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-
-              // ✅ Top Header (AppBar-style)
-              CustomHeader(
-                isDarkMode: _isDarkMode,
-                isSidebarOpen: false,
-                onToggleDarkMode: () {
-                  setState(() {
-                    _isDarkMode = !_isDarkMode;
-                  });
-                },
-              ),
-
-              // ✅ Profile Popover
-              Positioned(
-                top: 70,
-                right: 12,
-                child: FadeTransition(
-                  opacity: _profileController,
-                  child: SlideTransition(
-                    position: _profileSlideAnimation,
-                    child: ScaleTransition(
-                      scale: _profileController,
-                      alignment: Alignment.topRight,
-                      child: Container(
-                        width: 220,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha(150),
-                              blurRadius: 10,
-                              offset: const Offset(2, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Profile',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            const CircleAvatar(
-                              radius: 30,
-                              backgroundColor: Colors.teal,
-                              child: Icon(Icons.person,
-                                  size: 30, color: Colors.white),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Marie Fe Tapales',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'marie@example.com',
-                              style: TextStyle(
-                                  color: Colors.white70, fontSize: 12),
-                            ),
-                            const SizedBox(height: 12),
-                            InkWell(
-                              onTap: () {
-                                _profileController.reverse();
-                                Future.delayed(
-                                    const Duration(milliseconds: 300), () {
-                                  if (!mounted) return;
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (_) =>
-                                            const EnergyProfileScreen()),
-                                  );
-                                });
-                              },
-                              child: const Text(
-                                'View Profile',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: _profileController.reverse,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.teal,
-                                minimumSize: const Size.fromHeight(36),
-                              ),
-                              child: const Text('Close'),
-                            ),
-                          ],
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Profile',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      const CircleAvatar(
+                        radius: 30,
+                        backgroundColor: Colors.teal,
+                        child: Icon(Icons.person, size: 30, color: Colors.white),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Marie Fe Tapales',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'marie@example.com',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 12),
+                      InkWell(
+                        onTap: () {
+                          _profileController.reverse();
+                          Future.delayed(const Duration(milliseconds: 300), () {
+                            if (!mounted) return;
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => const EnergyProfileScreen()),
+                            );
+                          });
+                        },
+                        child: const Text(
+                          'View Profile',
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _profileController.reverse,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          minimumSize: const Size.fromHeight(36),
+                        ),
+                        child: const Text('Close'),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ],
-    ),
-  );
-}
-
+    );
+  }
 
   Widget _buildHeader() {
     return const Padding(
@@ -300,28 +326,24 @@ Widget build(BuildContext context) {
     );
   }
 
-  // 🔹 New combined row of Energy Usage + Breaker (same height)
-Widget _buildEnergyUsageAndBreaker() {
-  return IntrinsicHeight(
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch, // ensures same height
-      children: [
-        // Energy Usage
-        Expanded(
-          flex: 2,
-          child: _buildEnergyUsage(),
-        ),
-        const SizedBox(width: 16),
-        // Breaker control
-        Expanded(
-          flex: 1,
-          child: _buildBreakerControl(),
-        ),
-      ],
-    ),
-  );
-}
-
+  Widget _buildEnergyUsageAndBreaker() {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 2,
+            child: _buildEnergyUsage(),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 1,
+            child: _buildBreakerControl(),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildEnergyUsage() {
     return Container(
@@ -618,8 +640,7 @@ Widget _buildEnergyUsageAndBreaker() {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: const BoxDecoration(
-          border:
-              Border(bottom: BorderSide(color: Color(0xFF1e293b), width: 1)),
+          border: Border(bottom: BorderSide(color: Color(0xFF1e293b), width: 1)),
         ),
         child: Row(
           children: [
@@ -637,9 +658,7 @@ Widget _buildEnergyUsageAndBreaker() {
               child: Text(
                 title,
                 style: const TextStyle(
-                    fontSize: 18,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w400),
+                    fontSize: 18, color: Colors.white, fontWeight: FontWeight.w400),
               ),
             ),
             if (trailing != null) trailing,

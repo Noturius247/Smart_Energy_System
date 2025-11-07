@@ -94,12 +94,12 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
         children: [
           // ✅ Top Logo Section
           Padding(
-            padding: const EdgeInsets.only(top: 20),
+            padding: const EdgeInsets.only(top: 7),
             child: Column(
               children: [
                 Lottie.asset(
                   'assets/Animation - 1750510706715.json',
-                  height: 60,
+                  height: 80,
                   repeat: true,
                   fit: BoxFit.contain,
                 ),

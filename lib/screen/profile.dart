@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart'; // ✅ Google Sign-In
-import 'login.dart'; // ✅ Replace with your actual login page
-import 'custom_sidebar_nav.dart'; // ✅ Custom left sidebar
-import 'custom_header.dart'; // ✅ Custom top header
+import 'package:google_sign_in/google_sign_in.dart';
+import 'login.dart';
+import 'custom_sidebar_nav.dart';
+import 'custom_header.dart';
 
 class EnergyProfileScreen extends StatefulWidget {
   const EnergyProfileScreen({super.key});
@@ -13,10 +13,10 @@ class EnergyProfileScreen extends StatefulWidget {
 
 class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     with SingleTickerProviderStateMixin {
-  int _currentIndex = 5; // ✅ Profile tab index
+  int _currentIndex = 5;
   late AnimationController _animationController;
   bool _isDarkMode = false;
-  bool _isSidebarOpen = false; // ✅ For toggling sidebar animation
+  bool _isSidebarOpen = false;
 
   @override
   void initState() {
@@ -46,220 +46,232 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Check screen width to determine layout
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 768;
+
     return Scaffold(
-      body: Row(
-        children: [
-          // ✅ Sidebar on the left
-          CustomSidebarNav(
-            currentIndex: _currentIndex,
-            onTap: _onTabTapped,
-          ),
-
-          // ✅ Main content area
-          Expanded(
-            child: Stack(
-              children: [
-                // ✅ Background gradient
-                Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-                    ),
-                  ),
-                ),
-
-                SafeArea(
-                  child: Column(
-                    children: [
-                      // ✅ Top Header
-                      CustomHeader(
-                        isDarkMode: _isDarkMode,
-                        isSidebarOpen: _isSidebarOpen,
-                        onToggleDarkMode: () {
-                          setState(() {
-                            _isDarkMode = !_isDarkMode;
-                          });
-                        },
-                      ),
-
-                      // ✅ Scrollable profile content
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              _buildProfileCard(),
-                              const SizedBox(height: 20),
-                              _buildMenuOptions(),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      body: isSmallScreen ? _buildMobileLayout() : _buildDesktopLayout(),
     );
   }
 
-  // ✅ Profile card section
-  Widget _buildProfileCard() {
-    return Container(
-      margin: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+  // Desktop Layout (Sidebar on Left)
+  Widget _buildDesktopLayout() {
+    return Row(
+      children: [
+        CustomSidebarNav(
+          currentIndex: _currentIndex,
+          isBottomNav: false,
+          onTap: _onTabTapped,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+        Expanded(child: _buildMainContent()),
+      ],
+    );
+  }
+
+  // Mobile Layout (Bottom Navigation)
+  Widget _buildMobileLayout() {
+    return Column(
+      children: [
+        Expanded(child: _buildMainContent()),
+        CustomSidebarNav(
+          currentIndex: _currentIndex,
+          isBottomNav: true,
+          onTap: _onTabTapped,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMainContent() {
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
+            ),
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(25),
-        child: Column(
-          children: [
-            // ✅ Profile header
-            Row(
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF4ECDC4), width: 3),
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(
-                      'assets/images/profile_avatar.jpg',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const CircleAvatar(
-                          backgroundColor: Color(0xFF4ECDC4),
-                          child: Icon(Icons.person, size: 40, color: Colors.white),
-                        );
-                      },
-                    ),
+        ),
+        SafeArea(
+          child: Column(
+            children: [
+              CustomHeader(
+                isDarkMode: _isDarkMode,
+                isSidebarOpen: _isSidebarOpen,
+                onToggleDarkMode: () {
+                  setState(() {
+                    _isDarkMode = !_isDarkMode;
+                  });
+                },
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildProfileCard(),
+                      const SizedBox(height: 20),
+                      _buildMenuOptions(),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileCard() {
+  return Container(
+    margin: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(20),
+      gradient: const LinearGradient(
+        colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+      ),
+      boxShadow: [
+        BoxShadow(
+          // Fixed a compilation error here by removing .withValues(alpha: 0.3)
+          // and using a direct opacity value which is common practice.
+          color: Colors.black.withValues(alpha: 0.3), 
+          blurRadius: 20,
+          offset: const Offset(0, 10),
+        ),
+      ],
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(25),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF4ECDC4), width: 3),
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/profile_avatar.jpg',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const CircleAvatar(
+                        backgroundColor: Color(0xFF4ECDC4),
+                        child: Icon(Icons.person, size: 40, color: Colors.white),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Marie Fe Tapales',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Home Owner',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[400],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.edit, color: Colors.grey[400]),
+                onPressed: () {},
+              ),
+            ],
+          ),
+          const SizedBox(height: 30),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Energy Stats',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    _buildStatItem('Current Energy Usage', '350 kWh'),
+                    const SizedBox(height: 15),
+                    _buildStatItem('Monthly Savings', '₱25'),
+                    const SizedBox(height: 15),
+                    _buildStatItem('Carbon Reduction', '120 kg'),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 30),
+              // --- Sizing Fix Applied Here ---
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  SizedBox(
+  width: 85,
+  height: 85,
+  child: CircularProgressIndicator(
+    value: 0.7,
+    strokeWidth: 7,
+    backgroundColor: Colors.white.withValues(alpha: 0.2),
+    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10b981)),
+  ),
+),
+
+                  Column(
                     children: [
                       const Text(
-                        'Marie Fe Tapales',
+                        '120',
                         style: TextStyle(
-                          fontSize: 22,
+                          fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-                      const SizedBox(height: 5),
                       Text(
-                        'Home Owner',
+                        'kg CO₂',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 12,
                           color: Colors.grey[400],
-                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
-                ),
-                IconButton(
-                  icon: Icon(Icons.edit, color: Colors.grey[400]),
-                  onPressed: () {},
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-
-            // ✅ Energy stats section
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Energy Stats',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+                ],
               ),
-            ),
-            const SizedBox(height: 20),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildStatItem('Current Energy Usage', '350 kWh'),
-                      const SizedBox(height: 15),
-                      _buildStatItem('Monthly Savings', '₱25'),
-                      const SizedBox(height: 15),
-                      _buildStatItem('Carbon Reduction', '120 kg'),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 30),
-
-                // ✅ Circular Progress Indicator
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      width: 100,
-                      height: 100,
-                      child: CircularProgressIndicator(
-                        value: 0.7,
-                        strokeWidth: 8,
-                        backgroundColor: Colors.white.withValues(alpha: 0.2),
-                        valueColor: const AlwaysStoppedAnimation<Color>(
-                          Color(0xFF10b981),
-                        ),
-                      ),
-                    ),
-                    Column(
-                      children: [
-                        const Text(
-                          '120',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Text(
-                          'kg CO₂',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[400],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  // ✅ Stat row builder
   Widget _buildStatItem(String label, String value) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -277,7 +289,6 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     );
   }
 
-  // ✅ Menu options container
   Widget _buildMenuOptions() {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -308,8 +319,6 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
           _buildDivider(),
           _buildMenuItem(Icons.settings, 'Manage Smart Devices', () {}),
           const SizedBox(height: 20),
-
-          // ✅ Help & Logout row
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 25),
             child: Row(
@@ -347,7 +356,6 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     );
   }
 
-  // ✅ Menu item builder
   Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
       leading: Container(
@@ -372,7 +380,6 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     );
   }
 
-  // ✅ Divider between menu items
   Widget _buildDivider() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 25),
@@ -383,7 +390,6 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     );
   }
 
-  // ✅ Logout confirmation dialog
   void _showLogoutDialog() {
     showDialog(
       context: context,
