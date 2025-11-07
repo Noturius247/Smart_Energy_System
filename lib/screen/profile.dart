@@ -138,7 +138,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
           // Fixed a compilation error here by removing .withValues(alpha: 0.3)
           // and using a direct opacity value which is common practice.
           color: Colors.black.withValues(alpha: 0.3), 
-          blurRadius: 20,
+          blurRadius: 15,
           offset: const Offset(0, 10),
         ),
       ],
@@ -220,21 +220,21 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                 child: Column(
                   children: [
                     _buildStatItem('Current Energy Usage', '350 kWh'),
-                    const SizedBox(height: 15),
+                    const SizedBox(height: 5),
                     _buildStatItem('Monthly Savings', '₱25'),
-                    const SizedBox(height: 15),
+                    const SizedBox(height: 5),
                     _buildStatItem('Carbon Reduction', '120 kg'),
                   ],
                 ),
               ),
-              const SizedBox(width: 30),
+              const SizedBox(width: 20),
               // --- Sizing Fix Applied Here ---
               Stack(
                 alignment: Alignment.center,
                 children: [
                   SizedBox(
-  width: 85,
-  height: 85,
+  width: 60,
+  height: 60,
   child: CircularProgressIndicator(
     value: 0.7,
     strokeWidth: 7,
@@ -248,7 +248,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                       const Text(
                         '120',
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
@@ -256,7 +256,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                       Text(
                         'kg CO₂',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 10,
                           color: Colors.grey[400],
                         ),
                       ),
