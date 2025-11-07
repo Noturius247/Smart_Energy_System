@@ -263,7 +263,7 @@ class _EnergyChartState extends State<EnergyChart> {
             barWidth: 3,
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.teal.withOpacity(0.2),
+              color: Colors.teal.withValues(alpha: 0.2),
             ),
             dotData: FlDotData(show: true),
           ),

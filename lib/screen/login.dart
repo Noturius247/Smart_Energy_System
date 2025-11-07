@@ -14,6 +14,7 @@ class AuthPage extends StatefulWidget {
 
 class _AuthPageState extends State<AuthPage> {
   bool isLogin = true;
+  bool showForm = false; // <-- new: controls form visibility
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -46,7 +47,8 @@ class _AuthPageState extends State<AuthPage> {
                   child: Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 55, 143, 206).withValues(alpha: 0.07),
+                      color: const Color.fromARGB(255, 55, 143, 206)
+                          .withOpacity(0.07),
                       borderRadius: BorderRadius.circular(24),
                       border: Border.all(color: Colors.white30),
                     ),
@@ -70,7 +72,17 @@ class _AuthPageState extends State<AuthPage> {
       children: [
         Expanded(flex: isTablet ? 1 : 2, child: _buildLeftPanel()),
         const SizedBox(width: 20),
-        Expanded(flex: 2, child: _buildRightPanel(context)),
+        if (showForm)
+          Expanded(
+  flex: 2,
+  child: AnimatedSlide(
+    offset: showForm ? Offset(0, 0) : Offset(1.0, 0), // slide from right
+    duration: Duration(milliseconds: 800),
+    curve: Curves.easeInOut,
+    child: _buildRightPanel(context),
+  ),
+),
+ // <-- conditional
       ],
     );
   }
@@ -81,7 +93,7 @@ class _AuthPageState extends State<AuthPage> {
       children: [
         _buildLeftPanel(),
         const SizedBox(height: 30),
-        _buildRightPanel(context),
+        if (showForm) _buildRightPanel(context), // <-- conditional
       ],
     );
   }
@@ -123,7 +135,7 @@ class _AuthPageState extends State<AuthPage> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
+        color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(50),
         border: Border.all(color: Colors.white30),
       ),
@@ -142,6 +154,7 @@ class _AuthPageState extends State<AuthPage> {
       onTap: () {
         setState(() {
           isLogin = loginMode;
+          showForm = true; // <-- show form when toggle tapped
         });
       },
       child: AnimatedContainer(
@@ -149,7 +162,7 @@ class _AuthPageState extends State<AuthPage> {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         decoration: BoxDecoration(
           color: isLogin == loginMode
-              ? Colors.white.withValues(alpha: 0.25)
+              ? Colors.white.withOpacity(0.25)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(50),
         ),
@@ -170,7 +183,7 @@ class _AuthPageState extends State<AuthPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 17, 13, 128).withValues(alpha: 0.05),
+        color: const Color.fromARGB(255, 17, 13, 128).withOpacity(0.05),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white24),
       ),
@@ -266,7 +279,8 @@ class _AuthPageState extends State<AuthPage> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const MyAdminScreen()),
+                    MaterialPageRoute(
+                        builder: (context) => const MyAdminScreen()),
                   );
                 },
                 style: OutlinedButton.styleFrom(
