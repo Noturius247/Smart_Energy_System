@@ -10,7 +10,7 @@ import 'login.dart';
 class CustomSidebarNav extends StatefulWidget {
   final int currentIndex;
   final void Function(int, Widget) onTap;
-  final bool isBottomNav; // ✅ New parameter to switch between sidebar and bottom nav
+  final bool isBottomNav;
 
   const CustomSidebarNav({
     super.key,
@@ -24,7 +24,14 @@ class CustomSidebarNav extends StatefulWidget {
 }
 
 class _CustomSidebarNavState extends State<CustomSidebarNav> {
-  bool isCollapsed = true;
+  late bool isCollapsed;
+  final Map<int, bool> _hoverStates = {}; // Track hover states per item
+
+  @override
+  void initState() {
+    super.initState();
+    isCollapsed = false; // default expanded
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +43,7 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
       {'icon': Icons.settings, 'label': 'Settings', 'page': const EnergySettingScreen()},
     ];
 
-    // ✅ Bottom Navigation Layout for Mobile
+    // Bottom Navigation (mobile)
     if (widget.isBottomNav) {
       return Container(
         decoration: const BoxDecoration(
@@ -52,9 +59,9 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                 final index = entry.key;
                 final item = entry.value;
                 final isSelected = index == widget.currentIndex;
-                
+
                 return InkWell(
-                  onTap: () => widget.onTap(index, item['page']),
+                  onTap: () => widget.onTap(index, item['page']), // only navigate
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -81,7 +88,7 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
       );
     }
 
-    // ✅ Sidebar Layout for Desktop/Tablet
+    // Sidebar (desktop/tablet)
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       width: isCollapsed ? 80 : 200,
@@ -92,7 +99,7 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // ✅ Top Logo Section
+          // Logo
           Padding(
             padding: const EdgeInsets.only(top: 7),
             child: Column(
@@ -103,52 +110,72 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                   repeat: true,
                   fit: BoxFit.contain,
                 ),
-                if (!isCollapsed) ...[
-                  const SizedBox(height: 6),
-                ],
+                if (!isCollapsed) const SizedBox(height: 6),
               ],
             ),
           ),
 
-          // ✅ Navigation Items
+          // Navigation Items
           Expanded(
             child: ListView.builder(
               itemCount: navItems.length,
               itemBuilder: (context, index) {
                 final isSelected = index == widget.currentIndex;
-                return InkWell(
-                  onTap: () => widget.onTap(index, navItems[index]['page']),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Colors.tealAccent.withValues(alpha: 0.2)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: isCollapsed
-                          ? MainAxisAlignment.center
-                          : MainAxisAlignment.start,
-                      children: [
-                        Icon(
-                          navItems[index]['icon'],
-                          color: isSelected ? Colors.tealAccent : Colors.white70,
-                        ),
-                        if (!isCollapsed) ...[
-                          const SizedBox(width: 10),
-                          Text(
-                            navItems[index]['label'],
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Colors.tealAccent
-                                  : Colors.white70,
-                              fontSize: 12,
-                            ),
+                _hoverStates[index] ??= false;
+
+                return MouseRegion(
+                  onEnter: (_) => setState(() => _hoverStates[index] = true),
+                  onExit: (_) => setState(() => _hoverStates[index] = false),
+                  child: InkWell(
+                    onTap: () {
+  Navigator.pushReplacement(
+    context,
+    PageRouteBuilder(
+      pageBuilder: (_, __, ___) => navItems[index]['page'],
+      transitionsBuilder: (_, animation, __, child) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+      transitionDuration: const Duration(milliseconds: 300),
+    ),
+  );
+},
+
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.tealAccent.withValues(alpha: 0.2)
+                            : _hoverStates[index]!
+                                ? Colors.white24
+                                : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: isCollapsed
+                            ? MainAxisAlignment.center
+                            : MainAxisAlignment.start,
+                        children: [
+                          Icon(
+                            navItems[index]['icon'],
+                            color: isSelected || _hoverStates[index]!
+                                ? Colors.tealAccent
+                                : Colors.white70,
                           ),
+                          if (!isCollapsed) ...[
+                            const SizedBox(width: 10),
+                            Text(
+                              navItems[index]['label'],
+                              style: TextStyle(
+                                color: isSelected || _hoverStates[index]!
+                                    ? Colors.tealAccent
+                                    : Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 );
@@ -156,18 +183,13 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
             ),
           ),
 
-          // ✅ Collapse and Logout Buttons
+          // Collapse & Logout
           Padding(
             padding: const EdgeInsets.all(10.0),
             child: Column(
               children: [
-                // Collapse / Expand Button
                 InkWell(
-                  onTap: () {
-                    setState(() {
-                      isCollapsed = !isCollapsed;
-                    });
-                  },
+                  onTap: () => setState(() => isCollapsed = !isCollapsed),
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     width: double.infinity,
@@ -199,15 +221,12 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
-                // Logout Button
                 InkWell(
                   onTap: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => const AuthPage()),
+                      MaterialPageRoute(builder: (_) => const AuthPage()),
                     );
                   },
                   borderRadius: BorderRadius.circular(8),
@@ -235,7 +254,6 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 10),
               ],
             ),
