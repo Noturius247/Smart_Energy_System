@@ -51,25 +51,28 @@ class _EnergyChartState extends State<EnergyChart> {
     }
   }
 
- List<FlSpot> _getUsageData() {
-  switch (_selectedRange) {
-    case EnergyRange.daily:
-      // ✅ Start from 1 → 24 hours
-      return List.generate(24, (h) => FlSpot((h + 1).toDouble(), 10 + (h % 6) * 3));
+  List<FlSpot> _getUsageData() {
+    switch (_selectedRange) {
+      case EnergyRange.daily:
+        // ⏰ Start from 0 → 23 hours
+        return List.generate(24, (h) => FlSpot(h.toDouble(), 10 + (h % 6) * 3));
 
-    case EnergyRange.weekly:
-      // ✅ Start from 1 → 7 days
-      return List.generate(7, (d) => FlSpot((d + 1).toDouble(), 20 + (d % 3) * 5));
+      case EnergyRange.weekly:
+        // 📅 Start from 0 → 6 (Mon → Sun)
+        return List.generate(7, (d) {
+          
+          double usage = 20 + (d % 3) * 5; // dummy usage
+          return FlSpot(d.toDouble(), usage);
+        });
 
-    case EnergyRange.monthly:
-      final daysInMonth =
-          DateTime(DateTime.now().year, _selectedMonth + 1, 0).day;
-      // ✅ Start from 1 → number of days
-      return List.generate(
-          daysInMonth, (i) => FlSpot((i + 1).toDouble(), 30 + (i % 5) * 4));
+      case EnergyRange.monthly:
+        // 🗓 Start from 1 → number of days
+        final daysInMonth =
+            DateTime(DateTime.now().year, _selectedMonth + 1, 0).day;
+        return List.generate(
+            daysInMonth, (i) => FlSpot((i + 1).toDouble(), 30 + (i % 5) * 4));
+    }
   }
-}
-
 
   String _getHeaderText() {
     switch (_selectedRange) {
@@ -189,86 +192,131 @@ class _EnergyChartState extends State<EnergyChart> {
   }
 
   Widget lineChart() {
-  final spots = _getUsageData();
-  double minX = 1; // ✅ start from 1
-  double maxX = spots.length.toDouble();
+    final spots = _getUsageData();
 
-  return LineChart(
-    LineChartData(
-      minX: minX,
-      maxX: maxX,
-      minY: 0,
-      maxY: 50,
-      titlesData: FlTitlesData(
-        bottomTitles: AxisTitles(
-          sideTitles: SideTitles(
-            showTitles: true,
-            interval: 1,
-            getTitlesWidget: (value, _) {
-              if (_selectedRange == EnergyRange.weekly) {
-                int idx = value.toInt() - 1; // ✅ adjust index
-                if (idx >= 0 && idx < 7) {
-                  return Text(_weekDays[idx],
-                      style: const TextStyle(color: Colors.white, fontSize: 12));
+    double minX = 0;
+    double maxX = 0;
+
+    switch (_selectedRange) {
+      case EnergyRange.daily:
+        minX = 0;
+        maxX = 23;
+        break;
+      case EnergyRange.weekly:
+        minX = 0;
+        maxX = 6;
+        break;
+      case EnergyRange.monthly:
+        minX = 1;
+        maxX = spots.length.toDouble();
+        break;
+    }
+
+    return LineChart(
+      LineChartData(
+        minX: minX,
+        maxX: maxX,
+        minY: 0,
+        maxY: 50,
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: 1,
+              getTitlesWidget: (value, _) {
+                if (_selectedRange == EnergyRange.weekly) {
+                  int idx = value.toInt();
+                  if (idx >= 0 && idx < 7) {
+                    DateTime date = _selectedWeekStart.add(Duration(days: idx));
+                    return Text(
+                      _weekDays[date.weekday - 1],
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    );
+                  }
+                } else if (_selectedRange == EnergyRange.monthly) {
+                  int day = value.toInt();
+                  if (day >= 1 && day <= spots.length) {
+                    return Text(day.toString(),
+                        style: const TextStyle(color: Colors.white, fontSize: 10));
+                  }
+                } else {
+                  int hour = value.toInt();
+                  if (hour >= 0 && hour < 24) {
+                    String period = hour < 12 ? 'AM' : 'PM';
+                    int displayHour = hour % 12;
+                    if (displayHour == 0) displayHour = 12;
+                    String label = hour == 23 ? '$displayHour:59 $period' : '$displayHour:00 $period';
+                    return Text(label,
+                        style: const TextStyle(color: Colors.white, fontSize: 10));
+                  }
                 }
-              } else if (_selectedRange == EnergyRange.monthly) {
-                int day = value.toInt();
-                if (day >= 1 && day <= spots.length) {
-                  return Text(day.toString(),
-                      style: const TextStyle(color: Colors.white, fontSize: 10));
-                }
-              } else {
-                int hour = value.toInt() - 1; // ✅ adjust for hours (1–24)
-                if (hour >= 0 && hour < 24) {
-                  return Text((hour + 1).toString(),
-                      style: const TextStyle(color: Colors.white, fontSize: 10));
-                }
-              }
-              return const SizedBox();
-            },
+                return const SizedBox();
+              },
+            ),
           ),
         ),
-      ),
-      lineBarsData: [
-        LineChartBarData(
-          spots: spots,
-          isCurved: true,
-          color: Colors.teal,
-          barWidth: 3,
-          belowBarData:
-              BarAreaData(show: true, color: Colors.teal.withAlpha((0.2 * 255).toInt())),
-          dotData: FlDotData(show: true),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            color: Colors.teal,
+            barWidth: 3,
+            belowBarData: BarAreaData(
+              show: true,
+              color: Colors.teal.withOpacity(0.2),
+            ),
+            dotData: FlDotData(show: true),
+          ),
+        ],
+        lineTouchData: LineTouchData(
+          handleBuiltInTouches: true,
+          touchTooltipData: LineTouchTooltipData(
+            tooltipBgColor: Colors.teal,
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots.map((touchedSpot) {
+                String label = '';
+                switch (_selectedRange) {
+                  case EnergyRange.daily:
+                    label = '${touchedSpot.x.toInt()}:00';
+                    break;
+                  case EnergyRange.weekly:
+                    DateTime date = _selectedWeekStart.add(Duration(days: touchedSpot.x.toInt()));
+                    label =
+                        '${_weekDays[date.weekday - 1]}, ${_monthNames[date.month - 1]} ${date.day}';
+                    break;
+                  case EnergyRange.monthly:
+                    DateTime date =
+                        DateTime(DateTime.now().year, _selectedMonth, touchedSpot.x.toInt());
+                    label = '${_monthNames[date.month - 1]} ${date.day}';
+                    break;
+                }
+                return LineTooltipItem(label, const TextStyle(color: Colors.white));
+              }).toList();
+            },
+          ),
+          touchCallback: (event, response) {
+            if (!event.isInterestedForInteractions ||
+                response == null ||
+                response.lineBarSpots == null) return;
+
+            setState(() {
+              final spot = response.lineBarSpots!.first;
+              if (_selectedRange == EnergyRange.monthly) {
+                _selectedDateFromChart =
+                    DateTime(DateTime.now().year, _selectedMonth, spot.x.toInt());
+              } else if (_selectedRange == EnergyRange.weekly) {
+                _selectedDateFromChart =
+                    _selectedWeekStart.add(Duration(days: spot.x.toInt()));
+              } else {
+                _selectedDateFromChart = DateTime(
+                    _selectedDate.year, _selectedDate.month, _selectedDate.day, spot.x.toInt());
+              }
+            });
+          },
         ),
-      ],
-      lineTouchData: LineTouchData(
-        handleBuiltInTouches: true,
-        touchCallback: (event, response) {
-          if (!event.isInterestedForInteractions ||
-              response == null ||
-              response.lineBarSpots == null ||
-              response.lineBarSpots!.isEmpty) {
-            return;
-          }
-
-          final spot = response.lineBarSpots!.first;
-          setState(() {
-            if (_selectedRange == EnergyRange.monthly) {
-              _selectedDateFromChart =
-                  DateTime(DateTime.now().year, _selectedMonth, spot.x.toInt());
-            } else if (_selectedRange == EnergyRange.weekly) {
-              _selectedDateFromChart =
-                  _selectedWeekStart.add(Duration(days: spot.x.toInt() - 1)); // ✅ offset -1
-            } else {
-              _selectedDateFromChart = DateTime(_selectedDate.year, _selectedDate.month,
-                  _selectedDate.day, spot.x.toInt() - 1); // ✅ offset -1
-            }
-          });
-        },
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   Widget breakdownTile(
       IconData icon, String label, String value, double percent, bool isGood, bool isOnline) {

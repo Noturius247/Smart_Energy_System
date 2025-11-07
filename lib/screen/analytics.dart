@@ -471,14 +471,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                       style: const TextStyle(
                           color: Colors.white, fontSize: 10));
                 }
-              } else {
-                int hour = value.toInt();
-                if (hour >= 0 && hour <= 23) {
-                  return Text(hour.toString(),
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 10));
-                }
-              }
+              }  else {
+    // Daily: show 12:00 AM → 11:59 PM
+    int hour = value.toInt();
+    if (hour >= 0 && hour < 24) {
+      String period = hour < 12 ? 'AM' : 'PM';
+      int displayHour = hour % 12;
+      if (displayHour == 0) displayHour = 12;
+
+      // Label for first hour is 12:00 AM, last hour shows 11:59 PM
+      String label = hour == 23
+          ? '$displayHour:59 $period'
+          : '$displayHour:00 $period';
+
+      return Text(
+        label,
+        style: const TextStyle(color: Colors.white, fontSize: 10),
+      );
+    }
+  }
               return const SizedBox();
             },
           ),
