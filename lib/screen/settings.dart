@@ -376,7 +376,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
           const Text(
             '7.4 kWh',
             style: TextStyle(
-              fontSize: 48,
+              fontSize: 40,
               fontWeight: FontWeight.w200,
               color: Colors.white,
             ),

@@ -223,76 +223,77 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                       setState(() => _isDarkMode = !_isDarkMode);
                     },
                   ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 20),
-                          const Text(
-                            'Analytics',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(child: summaryCard('Total Consumption', '${totalUsage.toStringAsFixed(1)} kWh', '+4.2%')),
-                              const SizedBox(width: 12),
-                              Expanded(child: summaryCard('Cost', '₱${(totalUsage * 0.188).toStringAsFixed(2)}', '+16.5%')),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
-                          const Text(
-                            'Energy Usage',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                          const SizedBox(height: 8),
-                          _rangeSelector(),
-                          const SizedBox(height: 12),
-                          _headerWidget(),
-                          const SizedBox(height: 12),
-                          SizedBox(height: 200, child: lineChart()),
-                          const SizedBox(height: 24),
-                          if (_selectedDateFromChart != null)
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Devices on ${_monthNames[_selectedDateFromChart!.month - 1]} ${_selectedDateFromChart!.day}, ${_selectedDateFromChart!.year}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Column(
-                                  children: connectedDevices.map((device) {
-                                    double adjustedUsage = device.usage;
-                                    bool isOnline = true;
-                                    String status = "Good";
+                 Expanded(
+  child: SingleChildScrollView(
+    padding: const EdgeInsets.all(8), // reduced padding
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 10), // smaller spacing
+        const Text(
+          'Analytics',
+          style: TextStyle(
+            fontSize: 20, // smaller font
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: summaryCard('Total Consumption', '${totalUsage.toStringAsFixed(1)} kWh', '+4.2%')),
+            const SizedBox(width: 8), // reduced width
+            Expanded(child: summaryCard('Cost', '₱${(totalUsage * 0.188).toStringAsFixed(2)}', '+16.5%')),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Energy Usage',
+          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+        ),
+        const SizedBox(height: 4),
+        _rangeSelector(),
+        const SizedBox(height: 8),
+        _headerWidget(),
+        const SizedBox(height: 8),
+        SizedBox(height: 150, child: lineChart()), // smaller chart height
+        const SizedBox(height: 16),
+        if (_selectedDateFromChart != null)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Devices on ${_monthNames[_selectedDateFromChart!.month - 1]} ${_selectedDateFromChart!.day}, ${_selectedDateFromChart!.year}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Column(
+                children: connectedDevices.map((device) {
+                  double adjustedUsage = device.usage;
+                  bool isOnline = true;
+                  String status = "Good";
 
-                                    return breakdownTile(
-                                      device.icon,
-                                      device.name,
-                                      '${adjustedUsage.toStringAsFixed(1)} kWh',
-                                      adjustedUsage / totalUsage,
-                                      isOnline,
-                                      status,
-                                    );
-                                  }).toList(),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  return breakdownTile(
+                    device.icon,
+                    device.name,
+                    '${adjustedUsage.toStringAsFixed(1)} kWh',
+                    adjustedUsage / totalUsage,
+                    isOnline,
+                    status,
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+      ],
+    ),
+  ),
+)
+
                 ],
               ),
               // Profile popup
