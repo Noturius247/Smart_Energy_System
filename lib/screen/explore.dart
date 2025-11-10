@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'chatbot.dart';
 import 'connected_devices.dart';
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
@@ -23,7 +22,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     filteredDevices = connectedDevices;
-
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -52,6 +50,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     final nameController = TextEditingController();
     String status = "off";
     String selectedIcon = "Devices";
+    int selectedPlug = 1;
 
     final Map<String, IconData> iconOptions = {
       "Devices": Icons.devices_other,
@@ -72,107 +71,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           backgroundColor: const Color(0xFF2A2F45),
           title: const Text(
             "Add Device",
-            style: TextStyle(color: Colors.white),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: "Device Name",
-                  labelStyle: TextStyle(color: Colors.white70),
-                  focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.teal)),
-                ),
-                style: const TextStyle(color: Colors.white),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: status,
-                dropdownColor: const Color(0xFF2A2F45),
-                decoration: const InputDecoration(
-                  labelText: "Status",
-                  labelStyle: TextStyle(color: Colors.white70),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                      value: "on",
-                      child: Text("On", style: TextStyle(color: Colors.white))),
-                  DropdownMenuItem(
-                      value: "off",
-                      child: Text("Off", style: TextStyle(color: Colors.white))),
-                ],
-                onChanged: (value) => status = value ?? "off",
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: selectedIcon,
-                dropdownColor: const Color(0xFF2A2F45),
-                decoration: const InputDecoration(
-                  labelText: "Device Icon",
-                  labelStyle: TextStyle(color: Colors.white70),
-                ),
-                items: iconOptions.keys.map((iconName) {
-                  return DropdownMenuItem(
-                    value: iconName,
-                    child: Row(
-                      children: [
-                        Icon(iconOptions[iconName], color: Colors.white),
-                        const SizedBox(width: 8),
-                        Text(iconName, style: const TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  selectedIcon = value ?? "Devices";
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
-              onPressed: () {
-                if (nameController.text.isNotEmpty) {
-                  setState(() {
-                    connectedDevices.add(ConnectedDevice(
-                      name: nameController.text,
-                      icon: iconOptions[selectedIcon] ?? Icons.devices_other,
-                      status: status,
-                      usage: 0.0,
-                      percent: 0.0,
-                    ));
-                    filteredDevices = List.from(connectedDevices);
-                  });
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text("Add"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _editDeviceDialog(ConnectedDevice device) {
-    final nameController = TextEditingController(text: device.name);
-    String status = device.status.toLowerCase();
-    IconData selectedIcon = device.icon;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF2A2F45),
-          title: const Text(
-            "Edit Device",
             style: TextStyle(color: Colors.white),
           ),
           content: SingleChildScrollView(
@@ -209,6 +107,129 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                   onChanged: (value) => status = value ?? "off",
                 ),
                 const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  value: selectedPlug,
+                  dropdownColor: const Color(0xFF2A2F45),
+                  decoration: const InputDecoration(
+                    labelText: "Plug Number",
+                    labelStyle: TextStyle(color: Colors.white70),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 1,
+                      child: Text("Plug 1", style: TextStyle(color: Colors.white)),
+                    ),
+                    DropdownMenuItem(
+                      value: 2,
+                      child: Text("Plug 2", style: TextStyle(color: Colors.white)),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    selectedPlug = value ?? 1;
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: selectedIcon,
+                  dropdownColor: const Color(0xFF2A2F45),
+                  decoration: const InputDecoration(
+                    labelText: "Device Icon",
+                    labelStyle: TextStyle(color: Colors.white70),
+                  ),
+                  items: iconOptions.keys.map((iconName) {
+                    return DropdownMenuItem(
+                      value: iconName,
+                      child: Row(
+                        children: [
+                          Icon(iconOptions[iconName], color: Colors.white),
+                          const SizedBox(width: 8),
+                          Text(iconName, style: const TextStyle(color: Colors.white)),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    selectedIcon = value ?? "Devices";
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              onPressed: () {
+                if (nameController.text.isNotEmpty) {
+                  setState(() {
+                    connectedDevices.add(ConnectedDevice(
+                      name: nameController.text,
+                      icon: iconOptions[selectedIcon] ?? Icons.devices_other,
+                      status: status,
+                      usage: 0.0,
+                      percent: 0.0,
+                      plug: selectedPlug,
+                    ));
+                    filteredDevices = List.from(connectedDevices);
+                  });
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text("Add"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _editDeviceDialog(ConnectedDevice device) {
+    final nameController = TextEditingController(text: device.name);
+    String status = device.status.toLowerCase();
+    IconData selectedIcon = device.icon;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2A2F45),
+          title: const Text("Edit Device", style: TextStyle(color: Colors.white)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: "Device Name",
+                    labelStyle: TextStyle(color: Colors.white70),
+                    focusedBorder:
+                        UnderlineInputBorder(borderSide: BorderSide(color: Colors.teal)),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: status,
+                  dropdownColor: const Color(0xFF2A2F45),
+                  decoration: const InputDecoration(
+                    labelText: "Status",
+                    labelStyle: TextStyle(color: Colors.white70),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: "on",
+                        child: Text("On", style: TextStyle(color: Colors.white))),
+                    DropdownMenuItem(
+                        value: "off",
+                        child: Text("Off", style: TextStyle(color: Colors.white))),
+                  ],
+                  onChanged: (value) => status = value ?? "off",
+                ),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<IconData>(
                   value: selectedIcon,
                   dropdownColor: const Color(0xFF2A2F45),
@@ -217,66 +238,20 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                     labelStyle: TextStyle(color: Colors.white70),
                   ),
                   items: const [
-                    DropdownMenuItem(
-                        value: Icons.kitchen,
-                        child: Row(children: [
-                          Icon(Icons.kitchen, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
+                    DropdownMenuItem(value: Icons.kitchen, child: Icon(Icons.kitchen)),
                     DropdownMenuItem(
                         value: Icons.local_laundry_service,
-                        child: Row(children: [
-                          Icon(Icons.local_laundry_service, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
+                        child: Icon(Icons.local_laundry_service)),
+                    DropdownMenuItem(value: Icons.tv, child: Icon(Icons.tv)),
+                    DropdownMenuItem(value: Icons.videocam, child: Icon(Icons.videocam)),
+                    DropdownMenuItem(value: Icons.lightbulb, child: Icon(Icons.lightbulb)),
+                    DropdownMenuItem(value: Icons.thermostat, child: Icon(Icons.thermostat)),
                     DropdownMenuItem(
-                        value: Icons.tv,
-                        child: Row(children: [
-                          Icon(Icons.tv, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
+                        value: Icons.phone_android, child: Icon(Icons.phone_android)),
+                    DropdownMenuItem(value: Icons.toys, child: Icon(Icons.toys)),
+                    DropdownMenuItem(value: Icons.laptop, child: Icon(Icons.laptop)),
                     DropdownMenuItem(
-                        value: Icons.videocam,
-                        child: Row(children: [
-                          Icon(Icons.videocam, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
-                    DropdownMenuItem(
-                        value: Icons.lightbulb,
-                        child: Row(children: [
-                          Icon(Icons.lightbulb, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
-                    DropdownMenuItem(
-                        value: Icons.thermostat,
-                        child: Row(children: [
-                          Icon(Icons.thermostat, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
-                    DropdownMenuItem(
-                        value: Icons.phone_android,
-                        child: Row(children: [
-                          Icon(Icons.phone_android, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
-                    DropdownMenuItem(
-                        value: Icons.toys,
-                        child: Row(children: [
-                          Icon(Icons.toys, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
-                    DropdownMenuItem(
-                        value: Icons.laptop,
-                        child: Row(children: [
-                          Icon(Icons.laptop, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
-                    DropdownMenuItem(
-                        value: Icons.devices_other,
-                        child: Row(children: [
-                          Icon(Icons.devices_other, color: Colors.white),
-                          SizedBox(width: 8),
-                        ])),
+                        value: Icons.devices_other, child: Icon(Icons.devices_other)),
                   ],
                   onChanged: (icon) => selectedIcon = icon ?? Icons.devices_other,
                 ),
@@ -308,16 +283,13 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    // Check screen width to determine layout
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 768;
-
     return Scaffold(
       body: isSmallScreen ? _buildMobileLayout() : _buildDesktopLayout(),
     );
   }
 
-  // Desktop Layout (Sidebar on Left)
   Widget _buildDesktopLayout() {
     return Row(
       children: [
@@ -337,7 +309,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     );
   }
 
-  // Mobile Layout (Bottom Navigation)
   Widget _buildMobileLayout() {
     return Column(
       children: [
@@ -395,49 +366,22 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // Search & Chat
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _searchController,
-                              onChanged: _filterDevices,
-                              decoration: InputDecoration(
-                                hintText: 'Search devices...',
-                                prefixIcon: const Icon(Icons.search, color: Colors.teal),
-                                filled: true,
-                                fillColor: Colors.white.withAlpha(200),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                            ),
+                      // ✅ Removed chat button from here - now only search bar
+                      TextField(
+                        controller: _searchController,
+                        onChanged: _filterDevices,
+                        decoration: InputDecoration(
+                          hintText: 'Search devices...',
+                          prefixIcon: const Icon(Icons.search, color: Colors.teal),
+                          filled: true,
+                          fillColor: Colors.white.withAlpha(200),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                            borderSide: BorderSide.none,
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.teal,
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: IconButton(
-                              icon: const Icon(Icons.chat, color: Colors.white),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) => const ChatbotScreen()),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-
                       const SizedBox(height: 16),
-
-                      // Header + Add button
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -467,7 +411,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                       ),
                       const SizedBox(height: 12),
 
-                      // Device cards
+                      // Device Cards
                       ...filteredDevices.map((device) {
                         return Card(
                           color: const Color(0xFF2A2F45),
@@ -495,11 +439,11 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                           ),
                                         ),
                                         Text(
-                                          "Status: ${device.status == "on" ? "On" : "Off"}",
+                                          device.status == "on"
+                                              ? "Status: On | Plug ${device.plug}"
+                                              : "Status: Off",
                                           style: TextStyle(
-                                            color: device.status == "on"
-                                                ? Colors.green
-                                                : Colors.red,
+                                            color: device.status == "on" ? Colors.green : Colors.red,
                                           ),
                                         ),
                                       ],
@@ -565,19 +509,14 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                     ),
                                     IconButton(
                                       icon: Icon(
-                                        device.status == "on"
-                                            ? Icons.toggle_on
-                                            : Icons.toggle_off,
-                                        color: device.status == "on"
-                                            ? Colors.green
-                                            : Colors.grey,
+                                        device.status == "on" ? Icons.toggle_on : Icons.toggle_off,
+                                        color: device.status == "on" ? Colors.green : Colors.grey,
                                         size: 36,
                                       ),
                                       tooltip: device.status == "on" ? "Turn Off" : "Turn On",
                                       onPressed: () {
                                         setState(() {
-                                          device.status =
-                                              device.status == "on" ? "off" : "on";
+                                          device.status = device.status == "on" ? "off" : "on";
                                         });
                                       },
                                     ),

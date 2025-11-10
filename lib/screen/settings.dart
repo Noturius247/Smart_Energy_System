@@ -362,39 +362,40 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Today's Energy Usage",
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[400],
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            '7.4 kWh',
-            style: TextStyle(
-              fontSize: 40,
-              fontWeight: FontWeight.w200,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: _navigateToSchedule,
-            child: Text(
-              'Next Task: 10:30 AM',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[500],
-                decoration: TextDecoration.underline,
-              ),
-            ),
-          ),
-        ],
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+    Text(
+      "Today's Energy Usage",
+      style: TextStyle(
+        fontSize: 14, // smaller
+        color: Colors.grey[400],
+        fontWeight: FontWeight.w400,
       ),
+    ),
+    const SizedBox(height: 4), // less spacing
+    const Text(
+      '7.4 kWh',
+      style: TextStyle(
+        fontSize: 28, // smaller
+        fontWeight: FontWeight.w200,
+        color: Colors.white,
+      ),
+    ),
+    const SizedBox(height: 4), // less spacing
+    GestureDetector(
+      onTap: _navigateToSchedule,
+      child: Text(
+        'Next Task: 10:30 AM',
+        style: TextStyle(
+          fontSize: 12, // smaller
+          color: Colors.grey[500],
+          decoration: TextDecoration.underline,
+        ),
+      ),
+    ),
+  ],
+)
+
     );
   }
 

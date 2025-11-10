@@ -6,6 +6,7 @@ class ConnectedDevice {
   IconData icon;
   double usage;
   double percent;
+   int plug;
 
   ConnectedDevice({
     required this.name,
@@ -13,6 +14,7 @@ class ConnectedDevice {
     required this.icon,
     required this.usage,
     required this.percent,
+     this.plug = 1,
   });
 }
 

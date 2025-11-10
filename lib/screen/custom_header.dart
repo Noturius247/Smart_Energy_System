@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'profile.dart'; // ✅ make sure this path is correct
+import 'profile.dart';
+import 'chatbot.dart'; // ✅ Import chatbot
 
 class CustomHeader extends StatelessWidget {
   final bool isDarkMode;
@@ -12,8 +13,24 @@ class CustomHeader extends StatelessWidget {
     required this.isDarkMode,
     required this.isSidebarOpen,
     required this.onToggleDarkMode,
-     this.userPhotoUrl,
+    this.userPhotoUrl,
   });
+
+  // ✅ Function to open Chatbot as side panel
+  void _openChatbotSidePanel(BuildContext context) {
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.black.withOpacity(0.3),
+      pageBuilder: (_, __, ___) => const ChatbotScreen(),
+      transitionsBuilder: (_, animation, __, child) {
+        const begin = Offset(1, 0); // slide from right
+        const end = Offset(0, 0);
+        final tween = Tween(begin: begin, end: end)
+            .chain(CurveTween(curve: Curves.easeInOut));
+        return SlideTransition(position: animation.drive(tween), child: child);
+      },
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +60,12 @@ class CustomHeader extends StatelessWidget {
                 ),
               ),
             ),
+            // ✅ Chat button added here
+            IconButton(
+              icon: const Icon(Icons.chat, color: Colors.teal),
+              onPressed: () => _openChatbotSidePanel(context),
+              tooltip: 'Open Chatbot',
+            ),
             IconButton(
               icon: const Icon(Icons.notifications, color: Colors.teal),
               onPressed: () {
@@ -56,7 +79,7 @@ class CustomHeader extends StatelessWidget {
               ),
               onPressed: onToggleDarkMode,
             ),
-             GestureDetector(
+            GestureDetector(
               onTap: () {
                 // Navigate to profile screen
                 Navigator.push(
@@ -65,10 +88,10 @@ class CustomHeader extends StatelessWidget {
                 );
               },
               child: CircleAvatar(
-                radius: 22, // Slightly larger for photo
+                radius: 22,
                 backgroundColor: Colors.teal,
                 backgroundImage: userPhotoUrl != null
-                    ? NetworkImage(userPhotoUrl!) // Use network photo if provided
+                    ? NetworkImage(userPhotoUrl!)
                     : null,
                 child: userPhotoUrl == null
                     ? const Icon(
@@ -76,7 +99,7 @@ class CustomHeader extends StatelessWidget {
                         color: Colors.white,
                         size: 28,
                       )
-                    : null, // Fallback icon if no photo
+                    : null,
               ),
             ),
             const SizedBox(width: 12),
