@@ -419,7 +419,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                 _navigateToSchedule();
               }
             },
-            activeColor: const Color(0xFF10b981),
+            activeThumbColor: const Color(0xFF10b981),
           ),
         ),
         _buildSettingItem(
@@ -433,7 +433,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                 peakHourAlerts = value;
               });
             },
-            activeColor: const Color(0xFF10b981),
+            activeThumbColor: const Color(0xFF10b981),
           ),
         ),
         _buildSettingItem(

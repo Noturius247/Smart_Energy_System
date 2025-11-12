@@ -1,0 +1,7 @@
+# Flutter Configuration for Development
+# Hardcode localhost:3000 for web development
+# Note: This file is for reference. To use port 3000, run:
+# flutter run -d chrome --web-port=3000
+
+# Alternative: Create a launch configuration in VS Code
+# Add this to .vscode/launch.json if you want to always use port 3000

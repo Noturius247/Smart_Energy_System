@@ -90,7 +90,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: status,
+                  initialValue: status,
                   dropdownColor: const Color(0xFF2A2F45),
                   decoration: const InputDecoration(
                     labelText: "Status",
@@ -108,7 +108,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  value: selectedPlug,
+                  initialValue: selectedPlug,
                   dropdownColor: const Color(0xFF2A2F45),
                   decoration: const InputDecoration(
                     labelText: "Plug Number",
@@ -130,7 +130,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedIcon,
+                  initialValue: selectedIcon,
                   dropdownColor: const Color(0xFF2A2F45),
                   decoration: const InputDecoration(
                     labelText: "Device Icon",
@@ -213,7 +213,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: status,
+                  initialValue: status,
                   dropdownColor: const Color(0xFF2A2F45),
                   decoration: const InputDecoration(
                     labelText: "Status",
@@ -231,7 +231,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<IconData>(
-                  value: selectedIcon,
+                  initialValue: selectedIcon,
                   dropdownColor: const Color(0xFF2A2F45),
                   decoration: const InputDecoration(
                     labelText: "Icon",
@@ -526,7 +526,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                             ),
                           ),
                         );
-                      }).toList(),
+                      }),
                     ],
                   ),
                 ),
