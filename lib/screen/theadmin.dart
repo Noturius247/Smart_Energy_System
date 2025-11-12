@@ -1,7 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'login.dart';
 
 class UserModel {
+  String uid;
   String name;
   String email;
   String status;
@@ -9,6 +13,7 @@ class UserModel {
   String address;
 
   UserModel({
+    required this.uid,
     required this.name,
     required this.email,
     required this.status,
@@ -25,33 +30,7 @@ class MyAdminScreen extends StatefulWidget {
 }
 
 class _MyAdminScreenState extends State<MyAdminScreen> {
-  List<UserModel> users = [
-    UserModel(
-        name: "Alice Johnson",
-        email: "alice@example.com",
-        status: "Active",
-        dateRegistered: "2025-09-01",
-        address: "123 Main St"),
-    UserModel(
-        name: "Bob Martinez",
-        email: "bob@example.com",
-        status: "Inactive",
-        dateRegistered: "2025-09-02",
-        address: "456 Oak Ave"),
-    UserModel(
-        name: "Charlie Gomez",
-        email: "charlie@example.com",
-        status: "Active",
-        dateRegistered: "2025-09-05",
-        address: "321 Elm St"),
-    UserModel(
-        name: "Diana Smith",
-        email: "diana@example.com",
-        status: "Inactive",
-        dateRegistered: "2025-09-07",
-        address: "789 Pine Rd"),
-  ];
-
+  List<UserModel> users = [];
   List<UserModel> allUsers = [];
   final TextEditingController _searchController = TextEditingController();
   bool _isDarkMode = false;
@@ -59,7 +38,29 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   @override
   void initState() {
     super.initState();
-    allUsers = List.from(users);
+    _fetchUsers();
+  }
+
+  Future<void> _fetchUsers() async {
+    final snapshot = await FirebaseFirestore.instance.collection('users').get();
+    final fetchedUsers = snapshot.docs.map((doc) {
+      final data = doc.data();
+      return UserModel(
+        uid: doc.id,
+        name: data['displayName'] ?? 'N/A',
+        email: data['email'] ?? 'N/A',
+        status: data['status'] ?? 'Active',
+        dateRegistered: data['createdAt'] != null
+            ? DateFormat('yyyy-MM-dd').format((data['createdAt'] as Timestamp).toDate())
+            : 'N/A',
+        address: data['address'] ?? 'N/A',
+      );
+    }).toList();
+
+    setState(() {
+      users = fetchedUsers;
+      allUsers = List.from(fetchedUsers);
+    });
   }
 
   void _applySearch(String query) {
@@ -81,6 +82,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
     TextEditingController nameController = TextEditingController();
     TextEditingController emailController = TextEditingController();
     TextEditingController addressController = TextEditingController();
+    TextEditingController passwordController = TextEditingController();
     String statusValue = "Active";
 
     showDialog(
@@ -97,6 +99,10 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                 controller: emailController,
                 decoration:
                     const InputDecoration(hintText: "Enter email address")),
+            TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(hintText: "Enter password")),
             TextField(
                 controller: addressController,
                 decoration: const InputDecoration(hintText: "Enter address")),
@@ -116,20 +122,34 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
-            onPressed: () {
-              setState(() {
-                String today = DateTime.now().toIso8601String().split('T').first;
-                final newUser = UserModel(
-                  name: nameController.text,
-                  email: emailController.text,
-                  status: statusValue,
-                  dateRegistered: today,
-                  address: addressController.text,
+            onPressed: () async {
+              try {
+                final UserCredential userCredential = await FirebaseAuth.instance
+                    .createUserWithEmailAndPassword(
+                        email: emailController.text,
+                        password: passwordController.text);
+
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(userCredential.user!.uid)
+                    .set({
+                  'displayName': nameController.text,
+                  'email': emailController.text,
+                  'address': addressController.text,
+                  'status': statusValue,
+                  'createdAt': FieldValue.serverTimestamp(),
+                });
+                _fetchUsers();
+                Navigator.pop(ctx);
+              } on FirebaseAuthException catch (e) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(e.message ?? 'Failed to create user.'),
+                    backgroundColor: Colors.red,
+                  ),
                 );
-                users.add(newUser);
-                allUsers.add(newUser);
-              });
-              Navigator.pop(ctx);
+              }
             },
             child: const Text("Add"),
           ),
@@ -176,14 +196,17 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
-            onPressed: () {
-              setState(() {
-                users[index].name = nameController.text;
-                users[index].email = emailController.text;
-                users[index].address = addressController.text;
-                users[index].status = statusValue;
-                allUsers[index] = users[index];
+            onPressed: () async {
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(users[index].uid)
+                  .update({
+                'displayName': nameController.text,
+                'email': emailController.text,
+                'address': addressController.text,
+                'status': statusValue,
               });
+              _fetchUsers();
               Navigator.pop(ctx);
             },
             child: const Text("Save"),
@@ -193,11 +216,9 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
     );
   }
 
-  void _deleteUser(int index) {
-    setState(() {
-      allUsers.remove(users[index]);
-      users.removeAt(index);
-    });
+  void _deleteUser(int index) async {
+    await FirebaseFirestore.instance.collection('users').doc(users[index].uid).delete();
+    _fetchUsers();
   }
 
   @override
