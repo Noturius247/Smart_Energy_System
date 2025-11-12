@@ -32,7 +32,7 @@ class _AuthPageState extends State<AuthPage> {
   // 4. Copy that Client ID (not the App ID)
   // Example format: 123456789-abc...xyz.apps.googleusercontent.com
   static const String _webClientId =
-      'Open: https://console.cloud.google.com/apis/credentials?project=smart-plug-and-energy-meter';
+      '250180058280-ssu2irem8j30omp2ogp0104u093bh35c.apps.googleusercontent.com';
   late final GoogleSignIn _googleSignIn;
 
   @override
