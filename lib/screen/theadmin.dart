@@ -108,7 +108,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                 decoration: const InputDecoration(hintText: "Enter address")),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              value: statusValue,
+              initialValue: statusValue,
               items: ["Active", "Inactive"]
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                   .toList(),
@@ -182,7 +182,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                 decoration: const InputDecoration(hintText: "Update address")),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              value: statusValue,
+              initialValue: statusValue,
               items: ["Active", "Inactive"]
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                   .toList(),
@@ -272,7 +272,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                       ),
                       Switch(
                           value: _isDarkMode,
-                          activeColor: Colors.teal,
+                          activeThumbColor: Colors.teal,
                           onChanged: (value) =>
                               setState(() => _isDarkMode = value)),
                       IconButton(
@@ -374,7 +374,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                                   dataRowHeight: 60,
                                   columnSpacing: 40,
                                   headingRowColor:
-                                      MaterialStateProperty.all(Colors.teal.shade700),
+                                      WidgetStateProperty.all(Colors.teal.shade700),
                                   columns: const [
                                     DataColumn(
                                         label: Text("Name",

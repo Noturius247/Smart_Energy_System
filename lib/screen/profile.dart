@@ -16,7 +16,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
   int _currentIndex = 5;
   late AnimationController _animationController;
   bool _isDarkMode = false;
-  bool _isSidebarOpen = false;
+  final bool _isSidebarOpen = false;
 
   @override
   void initState() {

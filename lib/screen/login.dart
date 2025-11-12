@@ -693,6 +693,8 @@ class _AuthPageState extends State<AuthPage> {
     });
 
     try {
+      debugPrint('🟢 Google Sign-In started...');
+      
       // Step 1: Sign in with Google
       // For web, try silent sign-in first (recommended approach)
       GoogleSignInAccount? googleUser;
@@ -700,27 +702,34 @@ class _AuthPageState extends State<AuthPage> {
         // Try silent sign-in first (no popup, uses existing session)
         try {
           googleUser = await _googleSignIn.signInSilently();
+          debugPrint('🟢 Silent sign-in result: ${googleUser?.email}');
         } catch (e) {
           // Silent sign-in failed, try regular sign-in
-          debugPrint('Silent sign-in failed: $e');
+          debugPrint('🟡 Silent sign-in failed: $e');
         }
         // If silent sign-in fails, use regular sign-in (shows deprecation warning)
         googleUser ??= await _googleSignIn.signIn();
+        debugPrint('🟢 Regular sign-in result: ${googleUser?.email}');
       } else {
         // For mobile/desktop, use regular sign-in
         googleUser = await _googleSignIn.signIn();
+        debugPrint('🟢 Mobile sign-in result: ${googleUser?.email}');
       }
 
       if (googleUser == null) {
         // User cancelled the sign-in
+        debugPrint('🔴 User cancelled sign-in');
         setState(() {
           _isLoading = false;
         });
         return;
       }
 
+      debugPrint('🟢 Google account: ${googleUser.email}');
+      
       // Step 2: Get authentication details from Google
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      debugPrint('🟢 Got Google Auth tokens');
 
       // Step 3: Create a new credential for Firebase Auth
       final credential = GoogleAuthProvider.credential(
@@ -732,18 +741,67 @@ class _AuthPageState extends State<AuthPage> {
       final UserCredential userCredential = 
           await FirebaseAuth.instance.signInWithCredential(credential);
       final User? firebaseUser = userCredential.user;
+      debugPrint('🟢 Firebase sign-in result: ${firebaseUser?.uid}');
 
       if (firebaseUser == null) {
+        debugPrint('🔴 Firebase authentication failed - user is null');
         throw Exception('Firebase authentication failed');
       }
 
-      _checkUserVerificationAndData(firebaseUser);
-
-    } catch (error) {
-      setState(() {
-        _isLoading = false;
-      });
+      debugPrint('🟢 Firebase user UID: ${firebaseUser.uid}');
       
+      // Step 5: Check if user exists in Firestore
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .get();
+
+      // Determine if this is a new user
+      final bool isNewUser = !userDoc.exists || 
+          (userCredential.additionalUserInfo?.isNewUser ?? false);
+
+      // If in sign-up mode and user already exists, show message
+      // (But allow sign-in mode to proceed - it will create the user if they don't exist)
+      if (!isLogin && userDoc.exists && 
+          (userCredential.additionalUserInfo?.isNewUser == false)) {
+        setState(() {
+          _isLoading = false;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('This account already exists. Please sign in instead.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Step 6: ALWAYS save/update user data in Firestore (on both sign-in and sign-up)
+      debugPrint('🔵 Starting Firestore save...');
+      debugPrint('🔵 User UID: ${firebaseUser.uid}');
+      debugPrint('🔵 Email: ${firebaseUser.email}');
+      debugPrint('🔵 isNewUser: $isNewUser');
+      
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .set({
+        'uid': firebaseUser.uid,
+        'email': firebaseUser.email ?? '',
+        'displayName': firebaseUser.displayName ?? googleUser.displayName ?? '',
+        'photoURL': firebaseUser.photoURL ?? googleUser.photoUrl ?? '',
+        'provider': 'google.com',
+        'createdAt': isNewUser ? FieldValue.serverTimestamp() : userDoc.data()?['createdAt'],
+        'lastLoginAt': FieldValue.serverTimestamp(),
+        'isNewUser': isNewUser,
+      }, SetOptions(merge: true));
+      
+      debugPrint('✅ Firestore save completed successfully!');
+
+      // Step 7: Show success message and navigate to home screen
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
