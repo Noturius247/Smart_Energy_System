@@ -572,7 +572,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         touchCallback: (event, response) {
           if (!event.isInterestedForInteractions ||
               response == null ||
-              response.lineBarSpots == null) return;
+              response.lineBarSpots == null) {
+            return;
+          }
 
           setState(() {
             final spot = response.lineBarSpots!.first;
