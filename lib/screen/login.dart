@@ -20,10 +20,12 @@ class _AuthPageState extends State<AuthPage> {
   bool isLogin = true;
   bool showForm = false; // <-- new: controls form visibility
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   // OAuth 2.0 Web Client ID - Get from the redirect URI configuration
   // Steps to find it:
   // 1. Go to: https://console.cloud.google.com/apis/credentials?project=smart-plug-and-energy-meter
@@ -32,7 +34,7 @@ class _AuthPageState extends State<AuthPage> {
   // 4. Copy that Client ID (not the App ID)
   // Example format: 123456789-abc...xyz.apps.googleusercontent.com
   static const String _webClientId =
-      'Open: https://console.cloud.google.com/apis/credentials?project=smart-plug-and-energy-meter';
+      '163950309353-9pu1nfnvfnkuacv3k27o1fe33bd3e6jr.apps.googleusercontent.com';
   late final GoogleSignIn _googleSignIn;
 
   @override
@@ -235,6 +237,10 @@ class _AuthPageState extends State<AuthPage> {
           isLogin = loginMode;
           showForm = true; // <-- show form when toggle tapped
         });
+        _emailController.clear();
+        _passwordController.clear();
+        _nameController.clear();
+        _confirmPasswordController.clear();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
@@ -296,15 +302,28 @@ class _AuthPageState extends State<AuthPage> {
           const SizedBox(height: 12),
           TextField(
             controller: _passwordController,
-            obscureText: true,
+            obscureText: _obscurePassword,
             style: const TextStyle(color: Colors.white),
-            decoration: _inputDecoration('Password', Icons.lock),
+            decoration: _inputDecoration('Password', Icons.lock).copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.white70,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              ),
+            ),
           ),
           const SizedBox(height: 12),
 
           if (!isLogin)
             TextField(
-              obscureText: true,
+              controller: _confirmPasswordController,
+              obscureText: _obscurePassword,
               style: const TextStyle(color: Colors.white),
               decoration:
                   _inputDecoration('Confirm Password', Icons.lock_outline),
@@ -314,7 +333,7 @@ class _AuthPageState extends State<AuthPage> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () {},
+                onPressed: _handlePasswordReset,
                 child: const Text('Forgot Password?',
                     style: TextStyle(color: Colors.white70)),
               ),
@@ -326,14 +345,11 @@ class _AuthPageState extends State<AuthPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
+              onPressed: _isLoading ? null : () {
                 if (isLogin) {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => const HomeScreen()),
-                  );
+                  _handleEmailPasswordLogin();
                 } else {
-                  // handle signup
+                  _handleEmailPasswordSignup();
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -342,43 +358,22 @@ class _AuthPageState extends State<AuthPage> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: Text(
-                isLogin ? 'Login' : 'Sign Up',
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold),
-              ),
+              child: _isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : Text(
+                      isLogin ? 'Login' : 'Sign Up',
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
             ),
           ),
-
-          if (isLogin) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const MyAdminScreen()),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white30),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.admin_panel_settings,
-                    color: Colors.white70),
-                label: const Text(
-                  'Admin Login',
-                  style: TextStyle(
-                      color: Colors.white70, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-
           const SizedBox(height: 20),
           const Text('Or continue with',
               style: TextStyle(color: Colors.white70)),
@@ -415,13 +410,273 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
+  Future<void> _handleEmailPasswordLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter email and password'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+      final signedInUser = userCredential.user;
+
+      if (signedInUser != null) {
+        _checkUserVerificationAndData(signedInUser);
+      }
+    } on FirebaseAuthException catch (firebaseError) {
+      setState(() {
+        _isLoading = false;
+      });
+      
+      String errorMessage = 'Authentication failed';
+      if (firebaseError.code == 'user-not-found') {
+        errorMessage = 'Email not registered';
+      } else if (firebaseError.code == 'wrong-password') {
+        errorMessage = 'Incorrect password';
+      } else if (firebaseError.code == 'invalid-email') {
+        errorMessage = 'Invalid email format';
+      } else if (firebaseError.code == 'user-disabled') {
+        errorMessage = 'Account has been disabled';
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      debugPrint('❌ Firebase auth error: $errorMessage');
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleEmailPasswordSignup() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirm = _confirmPasswordController.text.trim();
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty || confirm.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please fill name, email and password fields.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (password.length < 6) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password must be at least 6 characters.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
+    if (password != confirm) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Passwords do not match.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Create Firebase Auth user
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+      final user = userCredential.user;
+
+      if (user == null) {
+        throw Exception('Failed to create user account.');
+      }
+
+      // Save user info to Firestore
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'uid': user.uid,
+        'email': email,
+        'displayName': name,
+        'photoURL': user.photoURL ?? '',
+        'provider': 'password',
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastLoginAt': FieldValue.serverTimestamp(),
+      });
+
+      // Optionally send email verification (best practice)
+      try {
+        await user.sendEmailVerification();
+      } catch (e) {
+        debugPrint('Unable to send verification email: $e');
+      }
+      // After creating account, require email verification before granting access.
+      // Sign the user out so they cannot use the app until they verify their email.
+      try {
+        await FirebaseAuth.instance.signOut();
+      } catch (e) {
+        debugPrint('Error signing out after signup: $e');
+      }
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Verification email sent. Please verify your email before signing in.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (firebaseError) {
+      setState(() {
+        _isLoading = false;
+      });
+
+      String errorMessage = 'Registration failed';
+      if (firebaseError.code == 'email-already-in-use') {
+        errorMessage = 'Email is already in use';
+      } else if (firebaseError.code == 'invalid-email') {
+        errorMessage = 'Invalid email address';
+      } else if (firebaseError.code == 'weak-password') {
+        errorMessage = 'Password is too weak';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      debugPrint('❌ Firebase signup error: $firebaseError');
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _handlePasswordReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter your email address first.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password reset email sent. Please check your inbox.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String message;
+      if (e.code == 'user-not-found') {
+        message = 'No user found for that email.';
+      } else {
+        message = 'An error occurred. Please try again later.';
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('An unexpected error occurred.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _handleGoogleSignIn() async {
     // Check if Client ID is still placeholder
     if (kIsWeb && _webClientId.contains('REPLACE_WITH_YOUR_WEB_CLIENT_ID')) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
+            content:
+                Text(
               'Please configure your Google OAuth Client ID first!\nCheck login.dart and web/index.html',
               style: TextStyle(fontSize: 12),
             ),
@@ -474,7 +729,7 @@ class _AuthPageState extends State<AuthPage> {
       );
 
       // Step 4: Sign in to Firebase with Google credential
-      final UserCredential userCredential =
+      final UserCredential userCredential = 
           await FirebaseAuth.instance.signInWithCredential(credential);
       final User? firebaseUser = userCredential.user;
 
@@ -482,76 +737,8 @@ class _AuthPageState extends State<AuthPage> {
         throw Exception('Firebase authentication failed');
       }
 
-      // Step 5: Check if user exists in Firestore (sign-in vs sign-up)
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(firebaseUser.uid)
-          .get();
+      _checkUserVerificationAndData(firebaseUser);
 
-      // Determine if this is a new user
-      final bool isNewUser = !userDoc.exists || 
-          (userCredential.additionalUserInfo?.isNewUser ?? false);
-
-      // If in sign-up mode and user already exists, show message
-      if (!isLogin && userDoc.exists && 
-          (userCredential.additionalUserInfo?.isNewUser == false)) {
-        setState(() {
-          _isLoading = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This account already exists. Please sign in instead.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-        return;
-      }
-
-      // Step 6: Save/Update user data in Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(firebaseUser.uid)
-          .set({
-        'uid': firebaseUser.uid,
-        'email': firebaseUser.email ?? '',
-        'displayName': firebaseUser.displayName ?? googleUser.displayName ?? '',
-        'photoURL': firebaseUser.photoURL ?? googleUser.photoUrl ?? '',
-        'provider': 'google.com',
-        'createdAt': isNewUser ? FieldValue.serverTimestamp() : userDoc.data()?['createdAt'],
-        'lastLoginAt': FieldValue.serverTimestamp(),
-        'isNewUser': isNewUser,
-      }, SetOptions(merge: true));
-
-      // Step 7: Show success message and navigate to home screen
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isNewUser 
-                ? 'Account created successfully! Welcome!' 
-                : 'Signed in successfully!'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        
-        // Navigate to home screen after a brief delay
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const HomeScreen()),
-            );
-          }
-        });
-      }
     } catch (error) {
       setState(() {
         _isLoading = false;
@@ -564,6 +751,72 @@ class _AuthPageState extends State<AuthPage> {
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
+        );
+      }
+    }
+  }
+
+  Future<void> _checkUserVerificationAndData(User user) async {
+    // Admin user email - change this to your admin's email
+    const adminEmail = 'smartenergymeter11@gmail.com';
+
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+
+    if (!user.emailVerified && user.email != adminEmail) {
+      // Email is not verified
+      setState(() {
+        _isLoading = false;
+      });
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please verify your email before logging in.'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Resend',
+              textColor: Colors.white,
+              onPressed: () async {
+                await user.sendEmailVerification();
+              },
+            ),
+          ),
+        );
+      }
+    } else if (user.email == adminEmail) {
+      // User is admin, navigate to admin screen
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MyAdminScreen()),
+        );
+      }
+    } else if (userDoc.exists) {
+      // User is verified and data exists
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } else {
+      // User is verified but no data in Firestore
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'uid': user.uid,
+        'email': user.email,
+        'displayName': user.displayName ?? 'N/A',
+        'photoURL': user.photoURL ?? '',
+        'provider': user.providerData.first.providerId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastLoginAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
       }
     }

@@ -16,6 +16,12 @@
   -->
   <base href="$FLUTTER_BASE_HREF">
 
+  <!-- CRITICAL: Disable FedCM BEFORE any other scripts load -->
+  <script>
+    // Disable FedCM to force traditional OAuth popup flow
+    window.DISABLE_FEDCM = true;
+  </script>
+
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
@@ -29,7 +35,7 @@
   -->
   <meta
     name="google-signin-client_id"
-    content="Open: https://console.cloud.google.com/apis/credentials?project=smart-plug-and-energy-meter">
+    content="163950309353-9pu1nfnvfnkuacv3k27o1fe33bd3e6jr.apps.googleusercontent.com">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
