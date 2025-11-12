@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -19,6 +19,17 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 
+    OAuth 2.0 Web Client ID - Use the Client ID from your existing redirect URI configuration
+    Steps:
+    1. Go to: https://console.cloud.google.com/apis/credentials?project=smart-plug-and-energy-meter
+    2. Find OAuth 2.0 Client ID with redirect URI: http://localhost (or your domain)
+    3. Copy that Client ID (the one that matches your redirect URI, NOT the App ID)
+  -->
+  <meta
+    name="google-signin-client_id"
+    content="Open: https://console.cloud.google.com/apis/credentials?project=smart-plug-and-energy-meter">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -31,6 +42,31 @@
 
   <title>smartenergy_app</title>
   <link rel="manifest" href="manifest.json">
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics.js";
+
+    // TODO: Add SDKs for Firebase products that you want to use
+    // https://firebase.google.com/docs/web/setup#available-libraries
+
+    // Your web app's Firebase configuration
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+    const firebaseConfig = {
+      apiKey: "AIzaSyDBqcfwbFnu8GKAz5MMIhqRwUgMLjN0K-U",
+      authDomain: "smart-plug-and-energy-meter.firebaseapp.com",
+      databaseURL: "https://smart-plug-and-energy-meter-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "smart-plug-and-energy-meter",
+      storageBucket: "smart-plug-and-energy-meter.firebasestorage.app",
+      messagingSenderId: "163950309353",
+      appId: "1:163950309353:web:3b00a96478d7d0ce066578",
+      measurementId: "G-5Q92FQ78LZ"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
