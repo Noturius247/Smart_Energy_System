@@ -696,25 +696,11 @@ class _AuthPageState extends State<AuthPage> {
       debugPrint('🟢 Google Sign-In started...');
       
       // Step 1: Sign in with Google
-      // For web, try silent sign-in first (recommended approach)
       GoogleSignInAccount? googleUser;
-      if (kIsWeb) {
-        // Try silent sign-in first (no popup, uses existing session)
-        try {
-          googleUser = await _googleSignIn.signInSilently();
-          debugPrint('🟢 Silent sign-in result: ${googleUser?.email}');
-        } catch (e) {
-          // Silent sign-in failed, try regular sign-in
-          debugPrint('🟡 Silent sign-in failed: $e');
-        }
-        // If silent sign-in fails, use regular sign-in (shows deprecation warning)
-        googleUser ??= await _googleSignIn.signIn();
-        debugPrint('🟢 Regular sign-in result: ${googleUser?.email}');
-      } else {
-        // For mobile/desktop, use regular sign-in
-        googleUser = await _googleSignIn.signIn();
-        debugPrint('🟢 Mobile sign-in result: ${googleUser?.email}');
-      }
+      
+      // Always call interactive sign-in to prompt for account selection
+      googleUser = await _googleSignIn.signIn();
+      debugPrint('🟢 Google sign-in result: ${googleUser?.email}');
 
       if (googleUser == null) {
         // User cancelled the sign-in
