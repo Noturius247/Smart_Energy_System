@@ -419,6 +419,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                   debugPrint("Google sign out error: $e");
                 }
                 if (!mounted) return;
+                if (!mounted) return;
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => const AuthPage()),

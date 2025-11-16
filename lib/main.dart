@@ -1,16 +1,17 @@
-// main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart'; // Explicitly import widgets.dart
 import 'package:flutter/foundation.dart';
 import 'package:lottie/lottie.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'screen/login.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'screen/admin_home.dart';
+import 'screen/theadmin.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize Firebase
-  // Note: For web, you need to configure Firebase options properly
-  // For now, we'll try to initialize and catch any errors
   try {
     await Firebase.initializeApp(
       options: kIsWeb
@@ -24,10 +25,9 @@ void main() async {
               appId: "1:163950309353:web:3b00a96478d7d0ce066578",
               measurementId: "G-5Q92FQ78LZ",
             )
-          : null, // For mobile, use default options from firebase_options.dart or google-services.json
+          : null,
     );
   } catch (e) {
-    // Log error but continue - app might work without Firebase for some features
     debugPrint('Firebase initialization error: $e');
   }
   
@@ -43,7 +43,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Smart Energy System',
       theme: ThemeData(primarySwatch: Colors.blue),
-      home: const SplashScreen(),
+      home: const AuthWrapper(), // Use AuthWrapper as the home
       builder: (context, child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.0)),
@@ -54,26 +54,38 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // Show a loading screen while waiting for the auth state
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LoadingScreen();
+        }
+
+        // If the user is logged in, check if they are an admin
+        if (snapshot.hasData) {
+          final user = snapshot.data!; // user is guaranteed to be non-null here
+          if (user.email == 'smartenergymeter11@gmail.com') {
+            return const MyAdminScreen();
+          } else {
+            return const HomeScreen();
+          }
+        }
+
+        // If the user is not logged in, show the login page
+        return const AuthPage();
+      },
+    );
+  }
 }
 
-class _SplashScreenState extends State<SplashScreen> {
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(seconds: 6), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AuthPage()),
-        );
-      }
-    });
-  }
+class LoadingScreen extends StatelessWidget {
+  const LoadingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +114,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               const SizedBox(height: 20),
               const Text(
-                'Smart Energy System',
+                'Loading Smart Energy System...',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,

@@ -51,11 +51,21 @@ class _EnergyChartState extends State<EnergyChart> {
     }
   }
 
-  List<FlSpot> _getUsageData() {
+  List<FlSpot> _getUsageData(int hoursToShow) {
     switch (_selectedRange) {
       case EnergyRange.daily:
-        // ⏰ Start from 0 → 23 hours
-        return List.generate(24, (h) => FlSpot(h.toDouble(), 10 + (h % 6) * 3));
+        if (hoursToShow < 24) {
+          // For dynamic hours, show the last `hoursToShow`
+          final now = DateTime.now();
+          final currentHour = now.hour;
+          return List.generate(hoursToShow, (index) {
+            final hour = (currentHour - (hoursToShow - 1 - index) + 24) % 24; // Ensure hour is positive
+            return FlSpot(hour.toDouble(), 10 + (hour % 6) * 3); // Dummy data
+          });
+        } else {
+          // For 24 hours, show the full day
+          return List.generate(24, (h) => FlSpot(h.toDouble(), 10 + (h % 6) * 3));
+        }
 
       case EnergyRange.weekly:
         // 📅 Start from 0 → 6 (Mon → Sun)
@@ -88,6 +98,21 @@ class _EnergyChartState extends State<EnergyChart> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    
+    int hoursToShow;
+    if (size.width < 600) {
+      hoursToShow = 6;
+    } else if (size.width < 800) {
+      hoursToShow = 8;
+    } else if (size.width < 1000) {
+      hoursToShow = 12;
+    } else if (size.width < 1200) {
+      hoursToShow = 18;
+    } else {
+      hoursToShow = 24;
+    }
+
     double totalUsage = connectedDevices.fold(0, (sum, d) => sum + d.usage);
 
     return SingleChildScrollView(
@@ -133,7 +158,10 @@ class _EnergyChartState extends State<EnergyChart> {
           ),
 
           const SizedBox(height: 12),
-          SizedBox(height: 200, child: lineChart()),
+          SizedBox(
+            height: 200,
+            child: lineChart(hoursToShow), // Pass hoursToShow to lineChart
+          ),
           const SizedBox(height: 24),
 
           if (_selectedDateFromChart != null) ...{
@@ -191,16 +219,23 @@ class _EnergyChartState extends State<EnergyChart> {
     );
   }
 
-  Widget lineChart() {
-    final spots = _getUsageData();
+  Widget lineChart(int hoursToShow) {
+    final spots = _getUsageData(hoursToShow);
 
     double minX = 0;
     double maxX = 0;
 
     switch (_selectedRange) {
       case EnergyRange.daily:
-        minX = 0;
-        maxX = 23;
+        if (hoursToShow < 24) {
+          final now = DateTime.now();
+          final currentHour = now.hour;
+          minX = (currentHour - (hoursToShow - 1)).toDouble();
+          maxX = currentHour.toDouble();
+        } else {
+          minX = 0;
+          maxX = 23;
+        }
         break;
       case EnergyRange.weekly:
         minX = 0;
@@ -241,7 +276,8 @@ class _EnergyChartState extends State<EnergyChart> {
                   }
                 } else {
                   int hour = value.toInt();
-                  if (hour >= 0 && hour < 24) {
+                  // Only show titles for hours within the visible range
+                  if (hour >= minX.toInt() && hour <= maxX.toInt()) {
                     String period = hour < 12 ? 'AM' : 'PM';
                     int displayHour = hour % 12;
                     if (displayHour == 0) displayHour = 12;
@@ -263,7 +299,7 @@ class _EnergyChartState extends State<EnergyChart> {
             barWidth: 3,
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.teal.withValues(alpha: 0.2),
+              color: Colors.teal.withOpacity(0.2),
             ),
             dotData: FlDotData(show: true),
           ),

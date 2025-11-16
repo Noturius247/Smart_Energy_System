@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // Import for DateFormat
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
 import 'energy_chart.dart';
@@ -130,6 +131,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // ---------------------- Dashboard Cards & Sections ----------------------
 
   Widget _currentEnergyCard() {
+    final now = DateTime.now();
+    final formattedDate = DateFormat('EEEE, MMMM d, yyyy - hh:mm a').format(now);
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -141,11 +145,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text('Current Energy Usage', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                SizedBox(height: 6),
-                Text('24.8 kWh', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                Text('+2.5% less than yesterday', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              children: [
+                const Text('Current Energy Usage', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                const SizedBox(height: 2),
+                Text(
+                  formattedDate,
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                ),
+                const SizedBox(height: 6),
+                const Text('24.8 kWh', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                const Text('+2.5% less than yesterday', style: TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
           ),

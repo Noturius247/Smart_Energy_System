@@ -591,6 +591,7 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                   onTap: (index, page) {
                     setState(() => _currentIndex = index);
                     if (index != 3) {
+                      if (!mounted) return;
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(builder: (_) => page),
@@ -611,6 +612,7 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                 onTap: (index, page) {
                   setState(() => _currentIndex = index);
                   if (index != 3) {
+                    if (!mounted) return;
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(builder: (_) => page),
