@@ -801,16 +801,54 @@ class _AuthPageState extends State<AuthPage> {
       
       debugPrint('✅ Firestore save completed successfully!');
 
-      // Step 7: Show success message and navigate to home screen
+      // Step 7: Navigate to the appropriate screen
+      if (mounted) {
+        // Use the existing verification and navigation logic
+        await _checkUserVerificationAndData(firebaseUser);
+      }
+
+      // Step 8: Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Google sign-in successful!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      debugPrint('🔴 Firebase Google Auth Error: $e');
+      String errorMessage = 'Google sign-in failed. Please try again.';
+      if (e.code == 'account-exists-with-different-credential') {
+        errorMessage = 'An account already exists with the same email address but different sign-in credentials. Please sign in using your original method.';
+      } else if (e.code == 'invalid-credential') {
+        errorMessage = 'The credential is not valid or has expired.';
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Google sign-in failed: ${error.toString()}'),
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('🔴 Generic Google Sign-In Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google sign-in failed: ${e.toString()}'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
         );
       }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 

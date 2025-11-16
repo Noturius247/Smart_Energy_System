@@ -399,6 +399,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
               currentIndex: 2,
               onTap: (index, page) {
                 if (index != 2) {
+                  if (!mounted) return;
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (_) => page),
