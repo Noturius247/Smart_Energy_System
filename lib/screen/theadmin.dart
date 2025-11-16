@@ -143,6 +143,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                 Navigator.pop(ctx);
               } on FirebaseAuthException catch (e) {
                 Navigator.pop(ctx);
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(e.message ?? 'Failed to create user.'),
@@ -248,10 +249,10 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                 Container(
                   height: 60,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.8),
+                    color: Colors.white.withOpacity(0.8),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
+                          color: Colors.black.withOpacity(0.1),
                           blurRadius: 10,
                           offset: const Offset(0, 2))
                     ],
@@ -283,13 +284,15 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                             color: Colors.teal, size: 28),
                         onSelected: (value) {
                           if (value == 'view_profile') {
+                            if (!mounted) return;
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text("View Profile clicked")),
                             );
                             // TODO: Navigate to Profile screen
                           } else if (value == 'logout') {
+                            if (!mounted) return;
                             Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(builder: (context) => AuthPage()),
+                              MaterialPageRoute(builder: (context) => const AuthPage()),
                               (route) => false,
                             );
                           }
@@ -316,11 +319,11 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16.0),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.1),
+                        color: Colors.white.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
+                            color: Colors.black.withOpacity(0.2),
                             blurRadius: 6,
                             offset: const Offset(0, 3),
                           ),
@@ -340,7 +343,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                                     prefixIcon:
                                         const Icon(Icons.search, color: Colors.white70),
                                     filled: true,
-                                    fillColor: Colors.white.withValues(alpha: 0.05),
+                                    fillColor: Colors.white.withOpacity(0.05),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
                                       borderSide: BorderSide.none,

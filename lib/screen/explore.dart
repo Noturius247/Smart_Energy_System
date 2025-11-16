@@ -298,6 +298,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           isBottomNav: false,
           onTap: (index, page) {
             if (index == 1) return;
+            if (!mounted) return;
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => page),
@@ -318,6 +319,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           isBottomNav: true,
           onTap: (index, page) {
             if (index == 1) return;
+            if (!mounted) return;
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => page),
