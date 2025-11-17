@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart'; // Explicitly import widgets.dart
 import 'package:flutter/foundation.dart';
 import 'package:lottie/lottie.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 import 'screen/login.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'screen/admin_home.dart';
+
+
 import 'screen/theadmin.dart';
+import 'screen/explore.dart'; // Import DevicesTab (user home screen)
+import 'theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,8 +33,15 @@ void main() async {
   } catch (e) {
     debugPrint('Firebase initialization error: $e');
   }
+
+  final themeNotifier = await ThemeNotifier.create();
   
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider.value(
+      value: themeNotifier,
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -39,17 +49,24 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Smart Energy System',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const AuthWrapper(), // Use AuthWrapper as the home
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.0)),
-          child: child!,
-        );
-      },
+    return Consumer<ThemeNotifier>(
+      builder: (context, theme, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Smart Energy System',
+        theme: lightTheme,
+        darkTheme: darkTheme,
+        themeMode: theme.darkTheme ? ThemeMode.dark : ThemeMode.light,
+        home: ChangeNotifierProvider.value(
+          value: theme, // Use the existing ThemeNotifier
+          child: const AuthWrapper(), // Wrap AuthWrapper with ThemeNotifier
+        ),
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.0)),
+            child: child!,
+          );
+        },
+      ),
     );
   }
 }
@@ -62,22 +79,33 @@ class AuthWrapper extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Show a loading screen while waiting for the auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LoadingScreen();
         }
 
-        // If the user is logged in, check if they are an admin
         if (snapshot.hasData) {
-          final user = snapshot.data!; // user is guaranteed to be non-null here
-          if (user.email == 'smartenergymeter11@gmail.com') {
-            return const MyAdminScreen();
-          } else {
-            return const HomeScreen();
-          }
+          final user = snapshot.data!;
+          return FutureBuilder<IdTokenResult>(
+            future: user.getIdTokenResult(true), // Force refresh to get latest claims
+            builder: (context, tokenSnapshot) {
+              if (tokenSnapshot.connectionState == ConnectionState.waiting) {
+                return const LoadingScreen();
+              }
+
+              if (tokenSnapshot.hasData) {
+                final bool isAdmin = tokenSnapshot.data?.claims?['admin'] == true;
+                if (isAdmin) {
+                  return const MyAdminScreen();
+                } else {
+                  return const DevicesTab(); // Redirect to user home screen
+                }
+              }
+              // Fallback if token claims can't be fetched
+              return const AuthPage();
+            },
+          );
         }
 
-        // If the user is not logged in, show the login page
         return const AuthPage();
       },
     );
