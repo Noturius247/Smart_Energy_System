@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../theme_provider.dart';
 import 'connected_devices.dart';
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
@@ -11,7 +13,6 @@ class DevicesTab extends StatefulWidget {
 }
 
 class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
-  bool _isDarkMode = false;
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
 
@@ -68,10 +69,10 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF2A2F45),
-          title: const Text(
+          backgroundColor: Theme.of(context).cardColor,
+          title: Text(
             "Add Device",
-            style: TextStyle(color: Colors.white),
+            style: Theme.of(context).textTheme.bodyLarge,
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -79,49 +80,49 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
               children: [
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: "Device Name",
-                    labelStyle: TextStyle(color: Colors.white70),
+                    labelStyle: Theme.of(context).textTheme.bodyMedium,
                     focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.teal),
+                      borderSide: BorderSide(color: Theme.of(context).colorScheme.secondary),
                     ),
                   ),
-                  style: const TextStyle(color: Colors.white),
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: status,
-                  dropdownColor: const Color(0xFF2A2F45),
-                  decoration: const InputDecoration(
+                  dropdownColor: Theme.of(context).cardColor,
+                  decoration: InputDecoration(
                     labelText: "Status",
-                    labelStyle: TextStyle(color: Colors.white70),
+                    labelStyle: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                         value: "on",
-                        child: Text("On", style: TextStyle(color: Colors.white))),
+                        child: Text("On", style: Theme.of(context).textTheme.bodyLarge)),
                     DropdownMenuItem(
                         value: "off",
-                        child: Text("Off", style: TextStyle(color: Colors.white))),
+                        child: Text("Off", style: Theme.of(context).textTheme.bodyLarge)),
                   ],
                   onChanged: (value) => status = value ?? "off",
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   initialValue: selectedPlug,
-                  dropdownColor: const Color(0xFF2A2F45),
-                  decoration: const InputDecoration(
+                  dropdownColor: Theme.of(context).cardColor,
+                  decoration: InputDecoration(
                     labelText: "Plug Number",
-                    labelStyle: TextStyle(color: Colors.white70),
+                    labelStyle: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                       value: 1,
-                      child: Text("Plug 1", style: TextStyle(color: Colors.white)),
+                      child: Text("Plug 1", style: Theme.of(context).textTheme.bodyLarge),
                     ),
                     DropdownMenuItem(
                       value: 2,
-                      child: Text("Plug 2", style: TextStyle(color: Colors.white)),
+                      child: Text("Plug 2", style: Theme.of(context).textTheme.bodyLarge),
                     ),
                   ],
                   onChanged: (value) {
@@ -131,19 +132,19 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: selectedIcon,
-                  dropdownColor: const Color(0xFF2A2F45),
-                  decoration: const InputDecoration(
+                  dropdownColor: Theme.of(context).cardColor,
+                  decoration: InputDecoration(
                     labelText: "Device Icon",
-                    labelStyle: TextStyle(color: Colors.white70),
+                    labelStyle: Theme.of(context).textTheme.bodyMedium,
                   ),
                   items: iconOptions.keys.map((iconName) {
                     return DropdownMenuItem(
                       value: iconName,
                       child: Row(
                         children: [
-                          Icon(iconOptions[iconName], color: Colors.white),
+                          Icon(iconOptions[iconName], color: Theme.of(context).iconTheme.color),
                           const SizedBox(width: 8),
-                          Text(iconName, style: const TextStyle(color: Colors.white)),
+                          Text(iconName, style: Theme.of(context).textTheme.bodyLarge),
                         ],
                       ),
                     );
@@ -158,10 +159,10 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+              child: Text("Cancel", style: Theme.of(context).textTheme.bodyMedium),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.secondary),
               onPressed: () {
                 if (nameController.text.isNotEmpty) {
                   setState(() {
@@ -175,6 +176,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                     ));
                     filteredDevices = List.from(connectedDevices);
                   });
+                  if (!mounted) return;
                   Navigator.pop(context);
                 }
               },
@@ -195,63 +197,63 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF2A2F45),
-          title: const Text("Edit Device", style: TextStyle(color: Colors.white)),
+          backgroundColor: Theme.of(context).cardColor,
+          title: Text("Edit Device", style: Theme.of(context).textTheme.bodyLarge),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: "Device Name",
-                    labelStyle: TextStyle(color: Colors.white70),
+                    labelStyle: Theme.of(context).textTheme.bodyMedium,
                     focusedBorder:
-                        UnderlineInputBorder(borderSide: BorderSide(color: Colors.teal)),
+                        UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.secondary)),
                   ),
-                  style: const TextStyle(color: Colors.white),
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: status,
-                  dropdownColor: const Color(0xFF2A2F45),
-                  decoration: const InputDecoration(
+                  dropdownColor: Theme.of(context).cardColor,
+                  decoration: InputDecoration(
                     labelText: "Status",
-                    labelStyle: TextStyle(color: Colors.white70),
+                    labelStyle: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  items: const [
+                  items: [
                     DropdownMenuItem(
                         value: "on",
-                        child: Text("On", style: TextStyle(color: Colors.white))),
+                        child: Text("On", style: Theme.of(context).textTheme.bodyLarge)),
                     DropdownMenuItem(
                         value: "off",
-                        child: Text("Off", style: TextStyle(color: Colors.white))),
+                        child: Text("Off", style: Theme.of(context).textTheme.bodyLarge)),
                   ],
                   onChanged: (value) => status = value ?? "off",
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<IconData>(
                   initialValue: selectedIcon,
-                  dropdownColor: const Color(0xFF2A2F45),
-                  decoration: const InputDecoration(
+                  dropdownColor: Theme.of(context).cardColor,
+                  decoration: InputDecoration(
                     labelText: "Icon",
-                    labelStyle: TextStyle(color: Colors.white70),
+                    labelStyle: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  items: const [
-                    DropdownMenuItem(value: Icons.kitchen, child: Icon(Icons.kitchen)),
+                  items: [
+                    DropdownMenuItem(value: Icons.kitchen, child: Icon(Icons.kitchen, color: Theme.of(context).iconTheme.color)),
                     DropdownMenuItem(
                         value: Icons.local_laundry_service,
-                        child: Icon(Icons.local_laundry_service)),
-                    DropdownMenuItem(value: Icons.tv, child: Icon(Icons.tv)),
-                    DropdownMenuItem(value: Icons.videocam, child: Icon(Icons.videocam)),
-                    DropdownMenuItem(value: Icons.lightbulb, child: Icon(Icons.lightbulb)),
-                    DropdownMenuItem(value: Icons.thermostat, child: Icon(Icons.thermostat)),
+                        child: Icon(Icons.local_laundry_service, color: Theme.of(context).iconTheme.color)),
+                    DropdownMenuItem(value: Icons.tv, child: Icon(Icons.tv, color: Theme.of(context).iconTheme.color)),
+                    DropdownMenuItem(value: Icons.videocam, child: Icon(Icons.videocam, color: Theme.of(context).iconTheme.color)),
+                    DropdownMenuItem(value: Icons.lightbulb, child: Icon(Icons.lightbulb, color: Theme.of(context).iconTheme.color)),
+                    DropdownMenuItem(value: Icons.thermostat, child: Icon(Icons.thermostat, color: Theme.of(context).iconTheme.color)),
                     DropdownMenuItem(
-                        value: Icons.phone_android, child: Icon(Icons.phone_android)),
-                    DropdownMenuItem(value: Icons.toys, child: Icon(Icons.toys)),
-                    DropdownMenuItem(value: Icons.laptop, child: Icon(Icons.laptop)),
+                        value: Icons.phone_android, child: Icon(Icons.phone_android, color: Theme.of(context).iconTheme.color)),
+                    DropdownMenuItem(value: Icons.toys, child: Icon(Icons.toys, color: Theme.of(context).iconTheme.color)),
+                    DropdownMenuItem(value: Icons.laptop, child: Icon(Icons.laptop, color: Theme.of(context).iconTheme.color)),
                     DropdownMenuItem(
-                        value: Icons.devices_other, child: Icon(Icons.devices_other)),
+                        value: Icons.devices_other, child: Icon(Icons.devices_other, color: Theme.of(context).iconTheme.color)),
                   ],
                   onChanged: (icon) => selectedIcon = icon ?? Icons.devices_other,
                 ),
@@ -261,16 +263,17 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+              child: Text("Cancel", style: Theme.of(context).textTheme.bodyMedium),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.secondary),
               onPressed: () {
                 setState(() {
                   device.name = nameController.text;
                   device.status = status;
                   device.icon = selectedIcon;
                 });
+                if (!mounted) return;
                 Navigator.pop(context);
               },
               child: const Text("Save"),
@@ -331,212 +334,193 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   }
 
   Widget _buildMainContent() {
-    return Stack(
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-            ),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.surface,
+            Theme.of(context).primaryColor,
+          ],
         ),
-        SafeArea(
-          child: Column(
-            children: [
-              CustomHeader(
-                isDarkMode: _isDarkMode,
-                isSidebarOpen: true,
-                onToggleDarkMode: () {
-                  setState(() => _isDarkMode = !_isDarkMode);
-                },
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    children: [
-                      const Text(
-                        'Devices',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            CustomHeader(
+              isSidebarOpen: true,
+              isDarkMode: Provider.of<ThemeNotifier>(context).darkTheme,
+              onToggleDarkMode: () {
+                Provider.of<ThemeNotifier>(context, listen: false).toggleTheme();
+              },
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  children: [
+                    Text(
+                      'Devices',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 24, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    // ✅ Removed chat button from here - now only search bar
+                    TextField(
+                      controller: _searchController,
+                      onChanged: _filterDevices,
+                      decoration: InputDecoration(
+                        hintText: 'Search devices...',
+                        prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.secondary),
+                        filled: true,
+                        fillColor: Theme.of(context).primaryColor.withAlpha(200),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      // ✅ Removed chat button from here - now only search bar
-                      TextField(
-                        controller: _searchController,
-                        onChanged: _filterDevices,
-                        decoration: InputDecoration(
-                          hintText: 'Search devices...',
-                          prefixIcon: const Icon(Icons.search, color: Colors.teal),
-                          filled: true,
-                          fillColor: Colors.white.withAlpha(200),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide.none,
-                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Connected Devices',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.bold),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Connected Devices',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                        FloatingActionButton.extended(
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          onPressed: _addDeviceDialog,
+                          label: Text(
+                            "Add Device",
+                            style: Theme.of(context).textTheme.bodyLarge,
                           ),
-                          FloatingActionButton.extended(
-                            backgroundColor: Colors.transparent,
-                            elevation: 0,
-                            onPressed: _addDeviceDialog,
-                            label: const Text(
-                              "Add Device",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            icon: const Icon(Icons.add, color: Colors.white, size: 16),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
+                          icon: Icon(Icons.add, color: Theme.of(context).iconTheme.color, size: 16),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
 
-                      // Device Cards
-                      ...filteredDevices.map((device) {
-                        return Card(
-                          color: const Color(0xFF2A2F45),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          margin: const EdgeInsets.symmetric(vertical: 6),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(device.icon, color: Colors.teal, size: 32),
-                                    const SizedBox(width: 12),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          device.name,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                    // Device Cards
+                    ...filteredDevices.map((device) {
+                      return Card(
+                        color: Theme.of(context).cardColor,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(device.icon, color: Theme.of(context).colorScheme.secondary, size: 32),
+                                  const SizedBox(width: 12),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        device.name,
+                                        style: Theme.of(context).textTheme.bodyLarge,
+                                      ),
+                                      Text(
+                                        device.status == "on"
+                                            ? "Status: On | Plug ${device.plug}"
+                                            : "Status: Off",
+                                        style: TextStyle(
+                                          color: device.status == "on" ? Colors.green : Colors.red,
                                         ),
-                                        Text(
-                                          device.status == "on"
-                                              ? "Status: On | Plug ${device.plug}"
-                                              : "Status: Off",
-                                          style: TextStyle(
-                                            color: device.status == "on" ? Colors.green : Colors.red,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                                    tooltip: "Edit Device",
+                                    onPressed: () => _editDeviceDialog(device),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                                    tooltip: "Delete Device",
+                                    onPressed: () async {
+                                      final confirmDelete = await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          backgroundColor: Theme.of(context).cardColor,
+                                          title: Text(
+                                            "Delete Device",
+                                            style: Theme.of(context).textTheme.bodyLarge,
                                           ),
+                                          content: Text(
+                                            "Are you sure you want to delete '${device.name}'?",
+                                            style: Theme.of(context).textTheme.bodyMedium,
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context, false),
+                                              child: Text("Cancel",
+                                                  style: Theme.of(context).textTheme.bodyMedium),
+                                            ),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.redAccent),
+                                              onPressed: () => Navigator.pop(context, true),
+                                              child: const Text("Delete"),
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                                Row(
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, color: Colors.blueAccent),
-                                      tooltip: "Edit Device",
-                                      onPressed: () => _editDeviceDialog(device),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.redAccent),
-                                      tooltip: "Delete Device",
-                                      onPressed: () async {
-                                        final confirmDelete = await showDialog<bool>(
-                                          context: context,
-                                          builder: (context) => AlertDialog(
-                                            backgroundColor: const Color(0xFF2A2F45),
-                                            title: const Text(
-                                              "Delete Device",
-                                              style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold),
-                                            ),
-                                            content: Text(
-                                              "Are you sure you want to delete '${device.name}'?",
-                                              style: const TextStyle(color: Colors.white70),
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(context, false),
-                                                child: const Text("Cancel",
-                                                    style: TextStyle(color: Colors.grey)),
-                                              ),
-                                              ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                    backgroundColor: Colors.redAccent),
-                                                onPressed: () => Navigator.pop(context, true),
-                                                child: const Text("Delete"),
-                                              ),
-                                            ],
+                                      );
+
+                                      if (confirmDelete == true) {
+                                        setState(() {
+                                          connectedDevices.remove(device);
+                                          filteredDevices = List.from(connectedDevices);
+                                        });
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text("${device.name} has been deleted."),
+                                            backgroundColor: Colors.redAccent,
+                                            duration: const Duration(seconds: 2),
                                           ),
                                         );
-
-                                        if (confirmDelete == true) {
-                                          setState(() {
-                                            connectedDevices.remove(device);
-                                            filteredDevices = List.from(connectedDevices);
-                                          });
-
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text("${device.name} has been deleted."),
-                                              backgroundColor: Colors.redAccent,
-                                              duration: const Duration(seconds: 2),
-                                            ),
-                                          );
-                                        }
-                                      },
+                                      }
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: Icon(
+                                      device.status == "on" ? Icons.toggle_on : Icons.toggle_off,
+                                      color: device.status == "on" ? Colors.green : Colors.grey,
+                                      size: 36,
                                     ),
-                                    IconButton(
-                                      icon: Icon(
-                                        device.status == "on" ? Icons.toggle_on : Icons.toggle_off,
-                                        color: device.status == "on" ? Colors.green : Colors.grey,
-                                        size: 36,
-                                      ),
-                                      tooltip: device.status == "on" ? "Turn Off" : "Turn On",
-                                      onPressed: () {
-                                        setState(() {
-                                          device.status = device.status == "on" ? "off" : "on";
-                                        });
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                                    tooltip: device.status == "on" ? "Turn Off" : "Turn On",
+                                    onPressed: () {
+                                      setState(() {
+                                        device.status = device.status == "on" ? "off" : "on";
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        );
-                      }),
-                    ],
-                  ),
+                        ),
+                      );
+                    }),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

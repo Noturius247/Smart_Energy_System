@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:provider/provider.dart';
+import '../theme_provider.dart';
 import 'login.dart';
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
@@ -15,7 +18,6 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     with SingleTickerProviderStateMixin {
   int _currentIndex = 5;
   late AnimationController _animationController;
-  bool _isDarkMode = false;
   final bool _isSidebarOpen = false;
 
   @override
@@ -78,50 +80,47 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
           currentIndex: _currentIndex,
           isBottomNav: true,
           onTap: _onTabTapped,
-        ),
+  ),
       ],
     );
   }
 
   Widget _buildMainContent() {
-    return Stack(
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-            ),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.surface,
+            Theme.of(context).primaryColor,
+          ],
         ),
-        SafeArea(
-          child: Column(
-            children: [
-              CustomHeader(
-                isDarkMode: _isDarkMode,
-                isSidebarOpen: _isSidebarOpen,
-                onToggleDarkMode: () {
-                  setState(() {
-                    _isDarkMode = !_isDarkMode;
-                  });
-                },
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildProfileCard(),
-                      const SizedBox(height: 20),
-                      _buildMenuOptions(),
-                    ],
-                  ),
+      ),
+      child: SafeArea(
+        child: Column(
+          children: [
+            CustomHeader(
+              isSidebarOpen: _isSidebarOpen,
+              isDarkMode: Provider.of<ThemeNotifier>(context).darkTheme,
+              onToggleDarkMode: () {
+                Provider.of<ThemeNotifier>(context, listen: false).toggleTheme();
+              },
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _buildProfileCard(),
+                    const SizedBox(height: 20),
+                    _buildMenuOptions(),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -130,14 +129,15 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     margin: const EdgeInsets.all(20),
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(20),
-      gradient: const LinearGradient(
-        colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+      gradient: LinearGradient(
+        colors: [
+          Theme.of(context).cardColor,
+          Theme.of(context).primaryColor,
+        ],
       ),
       boxShadow: [
         BoxShadow(
-          // Fixed a compilation error here by removing .withValues(alpha: 0.3)
-          // and using a direct opacity value which is common practice.
-          color: Colors.black.withValues(alpha: 0.3), 
+          color: Colors.black.withAlpha((255 * 0.3).round()), 
           blurRadius: 15,
           offset: const Offset(0, 10),
         ),
@@ -154,15 +154,15 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                 height: 80,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0xFF4ECDC4), width: 3),
+                  border: Border.all(color: Theme.of(context).colorScheme.secondary, width: 3),
                 ),
                 child: ClipOval(
                   child: Image.asset(
                     'assets/images/profile_avatar.jpg',
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
-                      return const CircleAvatar(
-                        backgroundColor: Color(0xFF4ECDC4),
+                      return CircleAvatar(
+                        backgroundColor: Theme.of(context).colorScheme.secondary,
                         child: Icon(Icons.person, size: 40, color: Colors.white),
                       );
                     },
@@ -174,42 +174,30 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Marie Fe Tapales',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 22, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 5),
                     Text(
                       'Home Owner',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[400],
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 16),
                     ),
                   ],
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.edit, color: Colors.grey[400]),
+                icon: Icon(Icons.edit, color: Theme.of(context).iconTheme.color),
                 onPressed: () {},
               ),
             ],
           ),
           const SizedBox(height: 30),
-          const Align(
+          Align(
             alignment: Alignment.centerLeft,
             child: Text(
               'Energy Stats',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 20),
@@ -232,33 +220,26 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  SizedBox(
+                  SizedBox( // Removed const here
   width: 60,
   height: 60,
   child: CircularProgressIndicator(
     value: 0.7,
     strokeWidth: 7,
-    backgroundColor: Colors.white.withValues(alpha: 0.2),
-    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10b981)),
+    backgroundColor: Theme.of(context).primaryColor.withAlpha((255 * 0.2).round()),
+    valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.secondary),
   ),
 ),
 
                   Column(
                     children: [
-                      const Text(
+                      Text(
                         '120',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
                       ),
                       Text(
                         'kg CO₂',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey[400],
-                        ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 10),
                       ),
                     ],
                   ),
@@ -276,14 +257,10 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[400])),
+        Text(label, style: Theme.of(context).textTheme.bodyMedium),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
       ],
     );
@@ -294,12 +271,15 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).cardColor,
+            Theme.of(context).primaryColor,
+          ],
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
+            color: Colors.black.withAlpha((255 * 0.3).round()),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -328,7 +308,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                   onPressed: () {},
                   child: Text(
                     'Help & Support',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),
                 ElevatedButton(
@@ -361,20 +341,16 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.teal,
+          color: Theme.of(context).colorScheme.secondary,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(icon, color: Colors.white, size: 20),
       ),
       title: Text(
         title,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-          color: Colors.white,
-        ),
+        style: Theme.of(context).textTheme.bodyLarge,
       ),
-      trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
+      trailing: Icon(Icons.arrow_forward_ios, color: Theme.of(context).iconTheme.color, size: 16),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 25),
     );
@@ -384,7 +360,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 25),
       child: Divider(
-        color: Colors.white.withValues(alpha: 0.2),
+        color: Theme.of(context).dividerColor,
         height: 1,
       ),
     );
@@ -395,33 +371,37 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          backgroundColor: const Color(0xFF1e293b),
+          backgroundColor: Theme.of(context).cardColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
-          title: const Text('Logout', style: TextStyle(color: Colors.white)),
-          content: const Text(
+          title: Text('Logout', style: Theme.of(context).textTheme.bodyLarge),
+          content: Text(
             'Are you sure you want to logout?',
-            style: TextStyle(color: Colors.grey),
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel', style: TextStyle(color: Colors.grey[400])),
+              child: Text('Cancel', style: Theme.of(context).textTheme.bodyMedium),
             ),
             ElevatedButton(
               onPressed: () async {
                 Navigator.of(context).pop();
+                final navigatorContext = context; // Store context before async gap
                 try {
+                  // Sign out from Firebase
+                  await FirebaseAuth.instance.signOut();
+                  
+                  // Sign out from Google
                   final googleSignIn = GoogleSignIn();
                   await googleSignIn.signOut();
                 } catch (e) {
-                  debugPrint("Google sign out error: $e");
+                  debugPrint("Sign out error: $e");
                 }
-                if (!mounted) return;
-                if (!mounted) return;
+                if (!navigatorContext.mounted) return;
                 Navigator.pushAndRemoveUntil(
-                  context,
+                  navigatorContext,
                   MaterialPageRoute(builder: (_) => const AuthPage()),
                   (route) => false,
                 );

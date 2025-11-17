@@ -299,9 +299,9 @@ class _EnergyChartState extends State<EnergyChart> {
             barWidth: 3,
             belowBarData: BarAreaData(
               show: true,
-              color: Colors.teal.withOpacity(0.2),
+              color: Colors.teal.withAlpha((255 * 0.2).round()),
             ),
-            dotData: FlDotData(show: true),
+            dotData: const FlDotData(show: true),
           ),
         ],
         lineTouchData: LineTouchData(

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // Import provider
+import '../theme_provider.dart'; // Import ThemeNotifier
 import 'profile.dart';
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
@@ -13,7 +15,7 @@ class EnergySchedulingScreen extends StatefulWidget {
 
 class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
     with TickerProviderStateMixin {
-  bool _isDarkMode = false;
+  // Removed _isDarkMode internal state
   int _currentIndex = 3;
 
   late AnimationController _profileController;
@@ -344,6 +346,7 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
   // --- BEGIN MODIFIED BUILD METHOD ---
   @override
   Widget build(BuildContext context) {
+    final themeNotifier = Provider.of<ThemeNotifier>(context); // Access ThemeNotifier
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -354,11 +357,14 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
             children: [
               // Background
               Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
+                    colors: [
+                      Theme.of(context).colorScheme.surface, // Use theme colors
+                      Theme.of(context).primaryColor, // Use theme colors
+                    ],
                   ),
                 ),
               ),
@@ -407,17 +413,17 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                               style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.grey[400])),
+                                  color: Theme.of(context).textTheme.bodyMedium?.color)), // Use theme color
                           const SizedBox(height: 8),
                           _buildTaskCard(_scheduledTasks[0], 0),
                         ],
 
                         const SizedBox(height: 18),
-                        const Text("Upcoming Tasks",
+                        Text("Upcoming Tasks",
                             style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white)),
+                                color: Theme.of(context).textTheme.bodyLarge?.color)), // Use theme color
                         const SizedBox(height: 6),
 
                         Column(
@@ -430,10 +436,10 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                                       entry.value, entry.key + 1))
                                   .toList()
                               : [
-                                  const Text(
+                                  Text(
                                     "No upcoming tasks.",
                                     style: TextStyle(
-                                        color: Colors.white70,
+                                        color: Theme.of(context).textTheme.bodyMedium?.color, // Use theme color
                                         fontSize: 12),
                                   )
                                 ],
@@ -472,13 +478,9 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                 left: 0,
                 right: 0,
                 child: CustomHeader(
-                  isDarkMode: _isDarkMode,
+                  isDarkMode: themeNotifier.darkTheme, // Pass global theme state
                   isSidebarOpen: false,
-                  onToggleDarkMode: () {
-                    setState(() {
-                      _isDarkMode = !_isDarkMode;
-                    });
-                  },
+                  onToggleDarkMode: themeNotifier.toggleTheme, // Pass global toggle method
                 ),
               ),
 
@@ -497,10 +499,13 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                         width: 200,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
+                          gradient: LinearGradient(
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
-                            colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+                            colors: [
+                              Theme.of(context).cardColor, // Use theme colors
+                              Theme.of(context).primaryColor, // Use theme colors
+                            ],
                           ),
                           borderRadius: BorderRadius.circular(10),
                           boxShadow: [
@@ -516,28 +521,29 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                           crossAxisAlignment:
                               CrossAxisAlignment.start,
                           children: [
-                            const Text('Profile',
+                            Text('Profile',
                                 style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.white)),
+                                    color: Theme.of(context).textTheme.bodyLarge?.color)), // Use theme color
                             const SizedBox(height: 8),
-                            const CircleAvatar(
+                            CircleAvatar(
                               radius: 22,
-                              backgroundColor: Colors.teal,
+                              backgroundColor: Theme.of(context).colorScheme.secondary,
                               child: Icon(Icons.person,
-                                  size: 18, color: Colors.white),
+                                  size: 18, color: Theme.of(context).colorScheme.onSecondary), // Use theme color
                             ),
                             const SizedBox(height: 8),
-                            const Text('Marie Fe Tapales',
+                            Text('Marie Fe Tapales',
                                 style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.white,
+                                    color: Theme.of(context).textTheme.bodyLarge?.color, // Use theme color
                                     fontWeight: FontWeight.bold)),
                             const SizedBox(height: 4),
-                            const Text('marie@example.com',
+                            Text('marie@example.com',
                                 style: TextStyle(
-                                    color: Colors.white70, fontSize: 11)),
+                                    color: Theme.of(context).textTheme.bodyMedium?.color, // Use theme color
+                                    fontSize: 11)),
                             const SizedBox(height: 10),
                             InkWell(
                               onTap: () {
@@ -554,10 +560,10 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                                               const EnergyProfileScreen()));
                                 });
                               },
-                              child: const Text('View Profile',
+                              child: Text('View Profile',
                                   style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.white,
+                                      color: Theme.of(context).textTheme.bodyLarge?.color, // Use theme color
                                       fontWeight: FontWeight.bold)),
                             ),
                             const SizedBox(height: 8),
@@ -594,7 +600,7 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                       if (!mounted) return;
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => page),
+                        MaterialPageRoute(builder: (_) => page), 
                       );
                     }
                   },

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../theme_provider.dart';
 import 'admin_home.dart';
 import 'explore.dart';
-import 'analytics.dart';
 import 'schedule.dart';
 import 'profile.dart';
 import 'custom_sidebar_nav.dart';
@@ -19,7 +20,6 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   bool smartScheduling = true;
   bool peakHourAlerts = true;
   double powerSavingLevel = 0.6;
-  bool _isDarkMode = false;
   int _currentIndex = 4;
   bool _breakerStatus = false;
 
@@ -76,13 +76,6 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const DevicesTab()),
-    );
-  }
-
-  void _navigateToThemeSettings() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const AnalyticsScreen()),
     );
   }
 
@@ -170,11 +163,11 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     return Stack(
       children: [
         Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
+              colors: [Theme.of(context).colorScheme.surface, Theme.of(context).scaffoldBackgroundColor],
             ),
           ),
           child: SafeArea(
@@ -204,13 +197,9 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
 
         // Top Header
         CustomHeader(
-          isDarkMode: _isDarkMode,
           isSidebarOpen: false,
-          onToggleDarkMode: () {
-            setState(() {
-              _isDarkMode = !_isDarkMode;
-            });
-          },
+          // isDarkMode and onToggleDarkMode are now handled internally by CustomHeader
+          // showChatIcon, showNotificationIcon, showProfileIcon default to true
         ),
 
         // Profile Popover
@@ -228,15 +217,15 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                   width: 220,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+                      colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
                     ),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withAlpha(150),
+                        color: Theme.of(context).shadowColor.withAlpha(150),
                         blurRadius: 10,
                         offset: const Offset(2, 2),
                       ),
@@ -246,32 +235,29 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Profile',
-                        style: TextStyle(
-                          fontSize: 18,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const CircleAvatar(
+                      CircleAvatar(
                         radius: 30,
-                        backgroundColor: Colors.teal,
-                        child: Icon(Icons.person, size: 30, color: Colors.white),
+                        backgroundColor: Theme.of(context).colorScheme.secondary,
+                        child: Icon(Icons.person, size: 30, color: Theme.of(context).colorScheme.onSecondary),
                       ),
                       const SizedBox(height: 12),
-                      const Text(
+                      Text(
                         'Marie Fe Tapales',
-                        style: TextStyle(
-                          color: Colors.white,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
+                      Text(
                         'marie@example.com',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 12),
                       InkWell(
@@ -286,20 +272,19 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                             );
                           });
                         },
-                        child: const Text(
+                        child: Text(
                           'View Profile',
-                          style: TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),
                       const SizedBox(height: 8),
                       ElevatedButton(
                         onPressed: _profileController.reverse,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.teal,
+                          backgroundColor: Theme.of(context).colorScheme.secondary,
                           minimumSize: const Size.fromHeight(36),
                         ),
-                        child: const Text('Close'),
+                        child: Text('Close', style: TextStyle(color: Theme.of(context).colorScheme.onSecondary)),
                       ),
                     ],
                   ),
@@ -313,14 +298,12 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   }
 
   Widget _buildHeader() {
-    return const Padding(
-      padding: EdgeInsets.only(top: 80, bottom: 12),
+    return Padding(
+      padding: const EdgeInsets.only(top: 80, bottom: 12),
       child: Text(
         'Settings',
-        style: TextStyle(
-          fontSize: 30,
+        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
           fontWeight: FontWeight.w300,
-          color: Colors.white,
         ),
       ),
     );
@@ -350,12 +333,12 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
       padding: const EdgeInsets.all(25),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
+        gradient: LinearGradient(
+          colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(80),
+            color: Theme.of(context).shadowColor.withAlpha(80),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -366,19 +349,15 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   children: [
     Text(
       "Today's Energy Usage",
-      style: TextStyle(
-        fontSize: 14, // smaller
-        color: Colors.grey[400],
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
         fontWeight: FontWeight.w400,
       ),
     ),
     const SizedBox(height: 4), // less spacing
-    const Text(
+    Text(
       '7.4 kWh',
-      style: TextStyle(
-        fontSize: 28, // smaller
+      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
         fontWeight: FontWeight.w200,
-        color: Colors.white,
       ),
     ),
     const SizedBox(height: 4), // less spacing
@@ -386,9 +365,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
       onTap: _navigateToSchedule,
       child: Text(
         'Next Task: 10:30 AM',
-        style: TextStyle(
-          fontSize: 12, // smaller
-          color: Colors.grey[500],
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
           decoration: TextDecoration.underline,
         ),
       ),
@@ -407,7 +384,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
         const SizedBox(height: 20),
         _buildSettingItem(
           icon: Icons.schedule,
-          iconColor: const Color(0xFF10b981),
+          iconColor: Theme.of(context).colorScheme.secondary,
           title: 'Smart Scheduling',
           trailing: Switch(
             value: smartScheduling,
@@ -419,12 +396,12 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                 _navigateToSchedule();
               }
             },
-            activeThumbColor: const Color(0xFF10b981),
+            activeColor: Theme.of(context).colorScheme.secondary,
           ),
         ),
         _buildSettingItem(
           icon: Icons.notifications,
-          iconColor: const Color(0xFFf59e0b),
+          iconColor: Theme.of(context).colorScheme.primary,
           title: 'Peak Hour Alerts',
           trailing: Switch(
             value: peakHourAlerts,
@@ -433,12 +410,12 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                 peakHourAlerts = value;
               });
             },
-            activeThumbColor: const Color(0xFF10b981),
+            activeColor: Theme.of(context).colorScheme.secondary,
           ),
         ),
         _buildSettingItem(
           icon: Icons.power_settings_new,
-          iconColor: const Color(0xFF10b981),
+          iconColor: Theme.of(context).colorScheme.secondary,
           title: 'Power Saving Mode',
         ),
         const SizedBox(height: 15),
@@ -452,10 +429,10 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
       children: [
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            activeTrackColor: const Color(0xFF10b981),
-            inactiveTrackColor: const Color(0xFF1e293b),
-            thumbColor: const Color(0xFF10b981),
-            overlayColor: const Color(0xFF10b981).withAlpha(80),
+            activeTrackColor: Theme.of(context).colorScheme.secondary,
+            inactiveTrackColor: Theme.of(context).cardColor,
+            thumbColor: Theme.of(context).colorScheme.secondary,
+            overlayColor: Theme.of(context).colorScheme.secondary.withAlpha(80),
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
           ),
@@ -473,17 +450,16 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Low', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
-              Text('High', style: TextStyle(fontSize: 14, color: Colors.grey[500])),
+              Text('Low', style: Theme.of(context).textTheme.bodySmall),
+              Text('High', style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
         ),
         const SizedBox(height: 8),
         Text(
           powerSavingText,
-          style: const TextStyle(
-            fontSize: 16,
-            color: Color(0xFF10b981),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).colorScheme.secondary,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -494,8 +470,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   Widget _buildBreakerControl() {
     return Container(
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1A1F36), Color(0xFF111629)],
+        gradient: LinearGradient(
+          colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -508,17 +484,15 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
           Icon(
             Icons.power,
             color: _breakerStatus
-                ? const Color.fromARGB(255, 25, 207, 98)
-                : Colors.grey.shade400,
+                ? Theme.of(context).colorScheme.secondary
+                : Theme.of(context).disabledColor,
             size: 36,
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Breaker',
-            style: TextStyle(
-              color: Colors.white,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              fontSize: 18,
             ),
           ),
           const SizedBox(height: 16),
@@ -534,14 +508,14 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
               height: 70,
               decoration: BoxDecoration(
                 color: _breakerStatus
-                    ? const Color.fromARGB(255, 110, 219, 168)
-                    : Colors.grey[800],
+                    ? Theme.of(context).colorScheme.secondary
+                    : Theme.of(context).disabledColor,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
                     color: _breakerStatus
-                        ? const Color.fromARGB(255, 60, 197, 108).withAlpha(150)
-                        : Colors.black26,
+                        ? Theme.of(context).colorScheme.secondary.withAlpha(150)
+                        : Theme.of(context).shadowColor.withAlpha(150),
                     blurRadius: 12,
                     spreadRadius: 2,
                   ),
@@ -550,8 +524,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
               alignment: Alignment.center,
               child: Text(
                 _breakerStatus ? 'ON' : 'OFF',
-                style: const TextStyle(
-                  color: Colors.white,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSecondary,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -570,16 +544,16 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
         const SizedBox(height: 20),
         _buildSettingItem(
           icon: Icons.devices,
-          iconColor: const Color(0xFF3b82f6),
+          iconColor: Theme.of(context).colorScheme.primary,
           title: 'Connected Devices',
-          trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 24),
+          trailing: Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color, size: 24),
           onTap: _navigateToConnectedDevices,
         ),
         _buildSettingItem(
           icon: Icons.add,
-          iconColor: const Color(0xFF10b981),
+          iconColor: Theme.of(context).colorScheme.secondary,
           title: 'Add New Device',
-          trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 24),
+          trailing: Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color, size: 24),
           onTap: _navigateToAddDevice,
         ),
       ],
@@ -587,43 +561,46 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   }
 
   Widget _buildPreferences() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('PREFERENCES & ACCOUNT'),
-        const SizedBox(height: 20),
-        _buildSettingItem(
-          icon: Icons.palette,
-          iconColor: const Color(0xFF06b6d4),
-          title: 'Theme & Units',
-          trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 24),
-          onTap: _navigateToThemeSettings,
-        ),
-        _buildSettingItem(
-          icon: Icons.person,
-          iconColor: const Color(0xFF8b5cf6),
-          title: 'Profile Settings',
-          trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 24),
-          onTap: _navigateToProfileSettings,
-        ),
-        _buildSettingItem(
-          icon: Icons.home,
-          iconColor: const Color(0xFF10b981),
-          title: 'Back to Home',
-          trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 24),
-          onTap: _navigateToMain,
-        ),
-      ],
+    return Consumer<ThemeNotifier>(
+      builder: (context, theme, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('PREFERENCES & ACCOUNT'),
+          const SizedBox(height: 20),
+          _buildSettingItem(
+            icon: Icons.palette,
+            iconColor: Theme.of(context).colorScheme.tertiary,
+            title: 'Dark Mode',
+            trailing: Switch(
+              value: theme.darkTheme,
+              onChanged: (value) {
+                theme.toggleTheme();
+              },
+            ),
+          ),
+          _buildSettingItem(
+            icon: Icons.person,
+            iconColor: Theme.of(context).colorScheme.primary,
+            title: 'Profile Settings',
+            trailing: Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color, size: 24),
+            onTap: _navigateToProfileSettings,
+          ),
+          _buildSettingItem(
+            icon: Icons.home,
+            iconColor: Theme.of(context).colorScheme.secondary,
+            title: 'Back to Home',
+            trailing: Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color, size: 24),
+            onTap: _navigateToMain,
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        color: Colors.grey[400],
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
         letterSpacing: 1,
       ),
     );
@@ -640,8 +617,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 18),
-        decoration: const BoxDecoration(
-          border: Border(bottom: BorderSide(color: Color(0xFF1e293b), width: 1)),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
         ),
         child: Row(
           children: [
@@ -652,14 +629,13 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                 borderRadius: BorderRadius.circular(8),
                 color: iconColor,
               ),
-              child: Icon(icon, color: Colors.white, size: 18),
+              child: Icon(icon, color: Theme.of(context).colorScheme.onSecondary, size: 18),
             ),
             const SizedBox(width: 15),
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(
-                    fontSize: 18, color: Colors.white, fontWeight: FontWeight.w400),
+                style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
             if (trailing != null) trailing,

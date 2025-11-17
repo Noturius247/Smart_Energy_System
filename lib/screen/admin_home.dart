@@ -1,6 +1,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Import for DateFormat
+import 'package:provider/provider.dart'; // Import provider
+import '../theme_provider.dart'; // Import ThemeNotifier
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
 import 'energy_chart.dart';
@@ -15,7 +17,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late int _currentIndex;
-  bool _isDarkMode = false;
 
   @override
   void initState() {
@@ -77,54 +78,48 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildMainContent() {
-    return Stack(
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-            ),
-          ),
-        ),
-
-        Column(
-          children: [
-            CustomHeader(
-              isDarkMode: _isDarkMode,
-              isSidebarOpen: false,
-              onToggleDarkMode: () {
-                setState(() {
-                  _isDarkMode = !_isDarkMode;
-                });
-              },
-            ),
-
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: _currentEnergyCard()),
-                        const SizedBox(width: 10),
-                        _solarProductionCard(),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _energyConsumptionChart(),
-                    const SizedBox(height: 12),
-                    _energyTipsSection(),
-                  ],
-                ),
-              ),
-            ),
+    final themeNotifier = Provider.of<ThemeNotifier>(context); // Access ThemeNotifier
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.surface,
+            Theme.of(context).primaryColor,
           ],
         ),
-      ],
+      ),
+      child: Column(
+        children: [
+          CustomHeader(
+            isSidebarOpen: false,
+            isDarkMode: themeNotifier.darkTheme, // Pass global theme state
+            onToggleDarkMode: themeNotifier.toggleTheme, // Pass global toggle method
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _currentEnergyCard()),
+                      const SizedBox(width: 10),
+                      _solarProductionCard(),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _energyConsumptionChart(),
+                  const SizedBox(height: 12),
+                  _energyTipsSection(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -137,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF1e293b), Color(0xFF0f172a)]),
+        gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -146,15 +141,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Current Energy Usage', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                Text('Current Energy Usage', style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 2),
                 Text(
                   formattedDate,
-                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 6),
-                const Text('24.8 kWh', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                const Text('+2.5% less than yesterday', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Text('24.8 kWh', style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text('+2.5% less than yesterday', style: Theme.of(context).textTheme.bodyMedium),
               ],
             ),
           ),
@@ -166,12 +161,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 width: 50,
                 child: CircularProgressIndicator(
                   value: 0.7,
-                  color: Colors.greenAccent,
-                  backgroundColor: Colors.white24,
+                  color: Theme.of(context).colorScheme.secondary,
+                  backgroundColor: Theme.of(context).primaryColor.withAlpha((255 * 0.2).round()),
                   strokeWidth: 5,
                 ),
               ),
-              const Text('70%', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+              Text('70%', style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 12, fontWeight: FontWeight.bold)),
             ],
           ),
         ],
@@ -184,19 +179,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       width: 110,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF1e293b), Color(0xFF0f172a)]),
+        gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Text('Monthly Consumption', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70, fontSize: 12)),
-          SizedBox(height: 6),
-          Text('8.2 kWh', style: TextStyle(fontSize: 16, color: Colors.tealAccent, fontWeight: FontWeight.bold)),
-          SizedBox(height: 3),
-          LinearProgressIndicator(value: 0.7, backgroundColor: Colors.white24, color: Colors.orangeAccent, minHeight: 5),
-          SizedBox(height: 3),
-          Text('Consume hours: 5.2 hrs', style: TextStyle(fontSize: 11, color: Colors.white70)),
+        children: [
+          Text('Monthly Consumption', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text('8.2 kWh', style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.secondary, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 3),
+          LinearProgressIndicator(value: 0.7, backgroundColor: Theme.of(context).primaryColor.withAlpha((255 * 0.2).round()), color: Theme.of(context).colorScheme.secondary, minHeight: 5),
+          const SizedBox(height: 3),
+          Text('Consume hours: 5.2 hrs', style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
     );
@@ -207,22 +202,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF1e293b), Color(0xFF0f172a)]),
+        gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Text(
             "Energy Consumption",
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
-          SizedBox(height: 10),
-          EnergyChart(),
+          const SizedBox(height: 10),
+          const EnergyChart(),
         ],
       ),
     );
@@ -233,21 +224,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1e293b),
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.tealAccent, size: 20),
+          Icon(icon, color: Theme.of(context).colorScheme.secondary, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 3),
-                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
               ],
             ),
           ),
@@ -260,8 +251,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Smart Energy Tips',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+        Text('Smart Energy Tips',
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
         _tipTile(Icons.battery_charging_full, 'Unplug Chargers',
             'Unplug devices once fully charged to avoid phantom load.'),

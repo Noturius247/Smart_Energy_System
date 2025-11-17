@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme_provider.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -126,28 +127,33 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
       position: _slideAnimation,
       child: Align(
         alignment: Alignment.centerRight,
-        child: Material(
-          elevation: 16,
-          shadowColor: Colors.black45,
-          child: Container(
-            width: panelWidth,
-            height: double.infinity,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
+        child: Theme(
+          data: darkTheme, // Apply the dark theme explicitly
+          child: Material(
+            elevation: 16,
+            shadowColor: Colors.black45,
+            child: Container(
+              width: panelWidth,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Theme.of(context).cardColor,
+                    Theme.of(context).scaffoldBackgroundColor
+                  ],
+                ),
               ),
-            ),
-            child: Column(
-              children: [
+              child: Column(
+                children: [
                 // Header
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2A2F45),
+                    color: Theme.of(context).cardColor,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withAlpha((255 * 0.3).round()),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -162,7 +168,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.teal.withOpacity(0.2),
+                              color: Colors.teal.withAlpha((255 * 0.2).round()),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
@@ -172,13 +178,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Column(
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 "Smart Assistant",
-                                style: TextStyle(
-                                  color: Colors.white,
+                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -186,7 +191,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                               Text(
                                 "Online",
                                 style: TextStyle(
-                                  color: Colors.greenAccent,
+                                  color: Colors.green,
                                   fontSize: 12,
                                 ),
                               ),
@@ -194,7 +199,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                           ),
                           const Spacer(),
                           IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white70),
+                            icon: Icon(Icons.close, color: Theme.of(context).iconTheme.color),
                             onPressed: () {
                               _slideController.reverse().then((_) {
                                 Navigator.of(context).pop();
@@ -217,13 +222,13 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                               Icon(
                                 Icons.chat_bubble_outline,
                                 size: 64,
-                                color: Colors.white.withOpacity(0.3),
+                                color: Theme.of(context).textTheme.bodyLarge?.color?.withAlpha(77),
                               ),
                               const SizedBox(height: 16),
                               Text(
                                 "Start a conversation",
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.5),
+                                  color: Theme.of(context).textTheme.bodyLarge?.color?.withAlpha(128),
                                   fontSize: 16,
                                 ),
                               ),
@@ -238,6 +243,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                             final msg = _messages[index];
                             final isUser = msg["sender"] == "user";
                             return _buildMessageBubble(
+                              context,
                               msg["message"]!,
                               isUser,
                             );
@@ -277,10 +283,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                 // Input field
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2A2F45),
+                    color: Theme.of(context).cardColor,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withAlpha((255 * 0.3).round()),
                         blurRadius: 8,
                         offset: const Offset(0, -2),
                       ),
@@ -295,14 +301,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                           Expanded(
                             child: TextField(
                               controller: _controller,
-                              style: const TextStyle(color: Colors.white),
+                              style: Theme.of(context).textTheme.bodyLarge,
                               decoration: InputDecoration(
                                 hintText: "Type your message...",
                                 hintStyle: TextStyle(
-                                  color: Colors.white.withOpacity(0.5),
+                                  color: Theme.of(context).textTheme.bodyLarge?.color?.withAlpha(128),
                                 ),
                                 filled: true,
-                                fillColor: const Color(0xFF1a2332),
+                                fillColor: Theme.of(context).scaffoldBackgroundColor,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(24),
                                   borderSide: BorderSide.none,
@@ -319,13 +325,16 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                           const SizedBox(width: 8),
                           Container(
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Colors.teal, Colors.tealAccent],
+                              gradient: LinearGradient(
+                                colors: [
+                                  Theme.of(context).colorScheme.secondary,
+                                  Theme.of(context).colorScheme.secondary.withAlpha(150)
+                                ],
                               ),
                               borderRadius: BorderRadius.circular(24),
                             ),
                             child: IconButton(
-                              icon: const Icon(Icons.send, color: Colors.white),
+                              icon: Icon(Icons.send, color: Theme.of(context).iconTheme.color),
                               onPressed: _sendMessage,
                             ),
                           ),
@@ -339,10 +348,11 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+} 
 
-  Widget _buildMessageBubble(String message, bool isUser) {
+  Widget _buildMessageBubble(BuildContext context, String message, bool isUser) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -354,12 +364,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.2),
+                color: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.2).round()),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.smart_toy,
-                color: Colors.teal,
+                color: Theme.of(context).colorScheme.secondary,
                 size: 20,
               ),
             ),
@@ -373,11 +383,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
               ),
               decoration: BoxDecoration(
                 gradient: isUser
-                    ? const LinearGradient(
-                        colors: [Colors.teal, Colors.tealAccent],
+                    ? LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.secondary,
+                          Theme.of(context).colorScheme.secondary.withAlpha(150)
+                        ],
                       )
                     : null,
-                color: isUser ? null : const Color(0xFF2A2F45),
+                color: isUser ? null : Theme.of(context).cardColor,
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
@@ -386,7 +399,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
+                    color: Colors.black.withAlpha((255 * 0.2).round()),
                     blurRadius: 4,
                     offset: const Offset(0, 2),
                   ),
@@ -394,8 +407,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
               ),
               child: Text(
                 message,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontSize: 15,
                   height: 1.4,
                 ),
@@ -407,12 +419,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.2),
+                color: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.2).round()),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.person,
-                color: Colors.teal,
+                color: Theme.of(context).colorScheme.secondary,
                 size: 20,
               ),
             ),
@@ -436,8 +448,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
           child: Container(
             width: 8,
             height: 8,
-            decoration: const BoxDecoration(
-              color: Colors.teal,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.secondary,
               shape: BoxShape.circle,
             ),
           ),
