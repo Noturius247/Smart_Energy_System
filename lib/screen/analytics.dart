@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import '../theme_provider.dart';
 import 'connected_devices.dart';
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
-import 'profile.dart';
 
 enum EnergyRange { daily, weekly, monthly }
 
@@ -16,14 +17,10 @@ class AnalyticsScreen extends StatefulWidget {
 
 class _AnalyticsScreenState extends State<AnalyticsScreen>
     with TickerProviderStateMixin {
-  bool _isDarkMode = false;
   EnergyRange _selectedRange = EnergyRange.daily;
   DateTime? _selectedDateFromChart;
 
   late AnimationController _profileController;
-  late Animation<Offset> _profileSlideAnimation;
-  late Animation<double> _profileScaleAnimation;
-  late Animation<double> _profileFadeAnimation;
 
   int _selectedMonth = DateTime.now().month;
   DateTime _selectedDate = DateTime.now();
@@ -44,15 +41,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    _profileSlideAnimation = Tween<Offset>(
-      begin: const Offset(0.2, -0.2),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _profileController, curve: Curves.easeOutBack));
-
-    _profileScaleAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _profileController, curve: Curves.easeOutBack),
-    );
-    _profileFadeAnimation = CurvedAnimation(parent: _profileController, curve: Curves.easeInOut);
   }
 
   @override
@@ -81,13 +69,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: sel ? Colors.teal : Colors.grey[800],
+          color: sel ? Theme.of(context).colorScheme.secondary : Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: Colors.white,
+            color: Theme.of(context).textTheme.bodyLarge?.color,
             fontWeight: sel ? FontWeight.bold : FontWeight.normal,
           ),
         ),
@@ -103,11 +91,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           children: [
             Text(
               '${_monthNames[_selectedDate.month - 1]} ${_selectedDate.day}, ${_selectedDate.year}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.calendar_today, color: Colors.white, size: 20),
+              icon: Icon(Icons.calendar_today, color: Theme.of(context).iconTheme.color, size: 20),
               onPressed: () async {
                 final picked = await showDatePicker(
                   context: context,
@@ -129,11 +117,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           children: [
             Text(
               '${_monthNames[_selectedWeekStart.month - 1]} ${_selectedWeekStart.day} – ${_monthNames[end.month - 1]} ${end.day}, ${end.year}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.calendar_month, color: Colors.white, size: 20),
+              icon: Icon(Icons.calendar_month, color: Theme.of(context).iconTheme.color, size: 20),
               onPressed: () async {
                 final picked = await showDatePicker(
                   context: context,
@@ -155,11 +143,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           children: [
             Text(
               '${_monthNames[_selectedMonth - 1]}, ${DateTime.now().year}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(width: 8),
             IconButton(
-              icon: const Icon(Icons.calendar_view_month, color: Colors.white, size: 20),
+              icon: Icon(Icons.calendar_view_month, color: Theme.of(context).iconTheme.color, size: 20),
               onPressed: () async {
                 final picked = await showDatePicker(
                   context: context,
@@ -203,40 +191,36 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
         // The main content widget (excluding the nav)
         final mainContent = Expanded(
-          child: Stack(
-            children: [
-              Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-                  ),
-                ),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.surface,
+                  Theme.of(context).primaryColor,
+                ],
               ),
-              Column(
-                children: [
-                  CustomHeader(
-                    isDarkMode: _isDarkMode,
-                    isSidebarOpen: true,
-                    onToggleDarkMode: () {
-                      setState(() => _isDarkMode = !_isDarkMode);
-                    },
-                  ),
-                 Expanded(
+            ),
+            child: Column(
+              children: [
+                CustomHeader(
+                  isSidebarOpen: true,
+                  isDarkMode: Provider.of<ThemeNotifier>(context).darkTheme,
+                  onToggleDarkMode: () {
+                    Provider.of<ThemeNotifier>(context, listen: false).toggleTheme();
+                  },
+                ),
+               Expanded(
   child: SingleChildScrollView(
     padding: const EdgeInsets.all(8), // reduced padding
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 10), // smaller spacing
-        const Text(
+        Text(
           'Analytics',
-          style: TextStyle(
-            fontSize: 20, // smaller font
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         Row(
@@ -247,9 +231,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           ],
         ),
         const SizedBox(height: 16),
-        const Text(
+        Text(
           'Energy Usage',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         const SizedBox(height: 4),
         _rangeSelector(),
@@ -264,11 +248,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             children: [
               Text(
                 'Devices on ${_monthNames[_selectedDateFromChart!.month - 1]} ${_selectedDateFromChart!.day}, ${_selectedDateFromChart!.year}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontSize: 16,
-                ),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 8),
               Column(
@@ -294,99 +274,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   ),
 )
 
-                ],
-              ),
-              // Profile popup
-              Positioned(
-                top: 70,
-                right: 12,
-                child: FadeTransition(
-                  opacity: _profileFadeAnimation,
-                  child: SlideTransition(
-                    position: _profileSlideAnimation,
-                    child: ScaleTransition(
-                      scale: _profileScaleAnimation,
-                      alignment: Alignment.topRight,
-                      child: Container(
-                        width: 220,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xFF1e293b), Color(0xFF0f172a)],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.6),
-                              blurRadius: 10,
-                              offset: const Offset(2, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Profile',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white),
-                            ),
-                            const SizedBox(height: 12),
-                            const CircleAvatar(
-                                radius: 30,
-                                backgroundColor: Colors.teal,
-                                child: Icon(Icons.person,
-                                    size: 30, color: Colors.white)),
-                            const SizedBox(height: 12),
-                            const Text(
-                              'Marie Fe Tapales',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text('marie@example.com',
-                                style: TextStyle(
-                                    color: Colors.white70, fontSize: 12)),
-                            const SizedBox(height: 12),
-                            InkWell(
-                              onTap: () async {
-                                _profileController.reverse();
-                                await Future.delayed(
-                                    const Duration(milliseconds: 300));
-                                if (!mounted) return;
-                                Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (_) =>
-                                            const EnergyProfileScreen()));
-                              },
-                              child: const Text('View Profile',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: _profileController.reverse,
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.teal,
-                                  minimumSize: const Size.fromHeight(36)),
-                              child: const Text('Close'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
 
@@ -442,17 +331,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(colors: [Color(0xFF1e293b), Color(0xFF0f172a)]),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
+        gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.3).round()), blurRadius: 20, offset: const Offset(0, 10))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(fontSize: 16, color: Colors.grey[400], fontWeight: FontWeight.w400)),
+          Text(title, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: Colors.white)),
+          Text(value, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 28, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
-          Text(change, style: const TextStyle(fontSize: 14, color: Color(0xFF10b981), fontWeight: FontWeight.w500)),
+          Text(change, style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.secondary, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -496,15 +385,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 int idx = value.toInt();
                 if (idx >= 0 && idx < 7) {
                   return Text(_weekDays[idx],
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 12));
+                      style: Theme.of(context).textTheme.bodyMedium);
                 }
               } else if (_selectedRange == EnergyRange.monthly) {
                 int day = value.toInt();
                 if (day >= 1 && day <= spots.length) {
                   return Text(day.toString(),
-                      style: const TextStyle(
-                          color: Colors.white, fontSize: 10));
+                      style: Theme.of(context).textTheme.bodyMedium);
                 }
               }  else {
     // Daily: show 12:00 AM → 11:59 PM
@@ -521,7 +408,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
       return Text(
         label,
-        style: const TextStyle(color: Colors.white, fontSize: 10),
+        style: Theme.of(context).textTheme.bodyMedium,
       );
     }
   }
@@ -534,11 +421,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         LineChartBarData(
           spots: spots,
           isCurved: true,
-          color: Colors.teal,
+          color: Theme.of(context).colorScheme.secondary,
           barWidth: 3,
           belowBarData: BarAreaData(
             show: true,
-            color: Colors.teal.withOpacity(0.2),
+            color: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.2).round()),
           ),
           dotData: FlDotData(show: true),
         ),
@@ -546,7 +433,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       lineTouchData: LineTouchData(
         handleBuiltInTouches: true,
         touchTooltipData: LineTouchTooltipData(
-          tooltipBgColor: Colors.teal,
+          tooltipBgColor: Theme.of(context).colorScheme.secondary,
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((touchedSpot) {
               String label = '';
@@ -608,9 +495,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(colors: [Color(0xFF1e293b), Color(0xFF0f172a)]),
-        border: Border.all(color: isOnline ? Colors.teal.withOpacity(0.3) : Colors.grey.withOpacity(0.3)),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 6))],
+        gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
+        border: Border.all(color: isOnline ? Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.3).round()) : Colors.grey.withAlpha((255 * 0.3).round())),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.3).round()), blurRadius: 15, offset: const Offset(0, 6))],
       ),
       child: Column(
         children: [
@@ -620,7 +507,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: isOnline ? Colors.teal : Colors.grey[700],
+                  color: isOnline ? Theme.of(context).colorScheme.secondary : Colors.grey[700],
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: Icon(icon, color: Colors.white, size: 24),
@@ -630,7 +517,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16)),
+                    Text(label, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -645,11 +532,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.teal.withOpacity(0.2),
+                  color: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.2).round()),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.teal.withOpacity(0.3)),
+                  border: Border.all(color: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.3).round())),
                 ),
-                child: Text(value, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.teal, fontSize: 14)),
+                child: Text(value, style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.secondary, fontSize: 14)),
               ),
             ],
           ),
@@ -658,23 +545,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Usage Progress', style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500)),
-                Text('${(percent * 100).toStringAsFixed(1)}%', style: TextStyle(color: Colors.grey[400], fontSize: 12, fontWeight: FontWeight.w500)),
+                Text('Usage Progress', style: Theme.of(context).textTheme.bodyMedium),
+                Text('${(percent * 100).toStringAsFixed(1)}%', style: Theme.of(context).textTheme.bodyMedium),
               ]),
               const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: LinearProgressIndicator(value: percent, color: Colors.teal, backgroundColor: Colors.grey[700], minHeight: 8),
+                child: LinearProgressIndicator(value: percent, color: Theme.of(context).colorScheme.secondary, backgroundColor: Colors.grey[700], minHeight: 8),
               ),
             ],
           ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[800]!)),
+            decoration: BoxDecoration(color: Colors.black.withAlpha((255 * 0.2).round()), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[800]!)),
             child: Column(
               children: [
-                Text('Cost Breakdown', style: TextStyle(color: Colors.grey[300], fontSize: 14, fontWeight: FontWeight.w600)),
+                Text('Cost Breakdown', style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -698,11 +585,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     return Expanded(
       child: Column(
         children: [
-          Text(period, style: TextStyle(color: Colors.grey[400], fontSize: 11, fontWeight: FontWeight.w500)),
+          Text(period, style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 4),
-          Text(cost, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          Text(cost, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
-          Text(kwh, style: TextStyle(color: Colors.teal[300], fontSize: 10, fontWeight: FontWeight.w500)),
+          Text(kwh, style: TextStyle(color: Theme.of(context).colorScheme.secondary, fontSize: 10, fontWeight: FontWeight.w500)),
         ],
       ),
     );

@@ -1,19 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // Import provider
+import '../theme_provider.dart'; // Import ThemeNotifier
 import 'profile.dart';
 import 'chatbot.dart'; // ✅ Import chatbot
 
 class CustomHeader extends StatelessWidget {
-  final bool isDarkMode;
   final bool isSidebarOpen;
-  final VoidCallback onToggleDarkMode;
-  final String? userPhotoUrl; 
+  final String? userPhotoUrl;
+  // Make these optional, as the Consumer will handle the actual theme state
+  final bool? isDarkMode;
+  final VoidCallback? onToggleDarkMode;
+  final bool showChatIcon;
+  final bool showNotificationIcon;
+  final bool showProfileIcon;
 
   const CustomHeader({
     super.key,
-    required this.isDarkMode,
     required this.isSidebarOpen,
-    required this.onToggleDarkMode,
     this.userPhotoUrl,
+    this.isDarkMode, // Now optional
+    this.onToggleDarkMode, // Now optional
+    this.showChatIcon = true, // Default to true
+    this.showNotificationIcon = true, // Default to true
+    this.showProfileIcon = true, // Default to true
   });
 
   // ✅ Function to open Chatbot as side panel
@@ -38,7 +47,7 @@ class CustomHeader extends StatelessWidget {
       child: Container(
         height: 60,
         decoration: BoxDecoration(
-          color: Colors.white.withAlpha(200),
+          color: Theme.of(context).primaryColor.withAlpha(200), // Use theme color
           boxShadow: [
             BoxShadow(
               color: Colors.black.withAlpha(25),
@@ -50,58 +59,66 @@ class CustomHeader extends StatelessWidget {
         child: Row(
           children: [
             const SizedBox(width: 16),
-            const Expanded(
+            Expanded(
               child: Text(
                 'Smart Energy System',
-                style: TextStyle(
-                  color: Colors.black87,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith( // Use theme text style
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),
               ),
             ),
             // ✅ Chat button added here
-            IconButton(
-              icon: const Icon(Icons.chat, color: Colors.teal),
-              onPressed: () => _openChatbotSidePanel(context),
-              tooltip: 'Open Chatbot',
-            ),
-            IconButton(
-              icon: const Icon(Icons.notifications, color: Colors.teal),
-              onPressed: () {
-                // Optional: Add notifications page navigation here
-              },
-            ),
-            IconButton(
-              icon: Icon(
-                isDarkMode ? Icons.dark_mode : Icons.light_mode,
-                color: Colors.teal,
+            if (showChatIcon)
+              IconButton(
+                icon: Icon(Icons.chat, color: Theme.of(context).colorScheme.secondary), // Use theme color
+                onPressed: () => _openChatbotSidePanel(context),
+                tooltip: 'Open Chatbot',
               ),
-              onPressed: onToggleDarkMode,
-            ),
-            GestureDetector(
-              onTap: () {
-                // Navigate to profile screen
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => EnergyProfileScreen()),
-                );
-              },
-              child: CircleAvatar(
-                radius: 22,
-                backgroundColor: Colors.teal,
-                backgroundImage: userPhotoUrl != null
-                    ? NetworkImage(userPhotoUrl!)
-                    : null,
-                child: userPhotoUrl == null
-                    ? const Icon(
-                        Icons.person,
-                        color: Colors.white,
-                        size: 28,
-                      )
-                    : null,
+            if (showNotificationIcon)
+              IconButton(
+                icon: Icon(Icons.notifications, color: Theme.of(context).colorScheme.secondary), // Use theme color
+                onPressed: () {
+                  // Optional: Add notifications page navigation here
+                },
+              ),
+            // Theme Toggle (always present, self-managed)
+            Consumer<ThemeNotifier>(
+              builder: (context, notifier, child) => IconButton(
+                icon: Icon(
+                  notifier.darkTheme ? Icons.dark_mode : Icons.light_mode,
+                  color: Theme.of(context).colorScheme.secondary, // Use theme color
+                ),
+                onPressed: () {
+                  notifier.toggleTheme();
+                },
+                tooltip: notifier.darkTheme ? 'Switch to Light Mode' : 'Switch to Dark Mode',
               ),
             ),
+            if (showProfileIcon)
+              GestureDetector(
+                onTap: () {
+                  // Navigate to profile screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const EnergyProfileScreen()),
+                  );
+                },
+                child: CircleAvatar(
+                  radius: 22,
+                  backgroundColor: Theme.of(context).colorScheme.secondary, // Use theme color
+                  backgroundImage: userPhotoUrl != null
+                      ? NetworkImage(userPhotoUrl!)
+                      : null,
+                  child: userPhotoUrl == null
+                      ? Icon(
+                          Icons.person,
+                          color: Theme.of(context).colorScheme.onSecondary, // Use theme color
+                          size: 28,
+                        )
+                      : null,
+                ),
+              ),
             const SizedBox(width: 12),
           ],
         ),
