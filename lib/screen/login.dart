@@ -7,7 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'admin_home.dart';
-import 'theadmin.dart';
+import 'login_header.dart'; // Import CustomHeader
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -18,9 +18,8 @@ class AuthPage extends StatefulWidget {
 
 class _AuthPageState extends State<AuthPage> {
   bool isLogin = true;
-  bool showForm = false; // <-- new: controls form visibility
+  bool showForm = true; // <-- new: controls form visibility
   bool _isLoading = false;
-  bool _obscurePassword = true;
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -46,6 +45,66 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
+  Future<void> _resendVerificationEmail() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please enter your email and password to resend verification.'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+      final user = cred.user;
+      if (user == null) throw Exception('Unable to sign in to resend verification');
+      if (user.emailVerified) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Email already verified. Please sign in.'),
+              backgroundColor: Theme.of(context).colorScheme.secondary,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        await FirebaseAuth.instance.signOut();
+        return;
+      }
+
+      await user.sendEmailVerification();
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Verification email resent. Check your inbox.'),
+            backgroundColor: Theme.of(context).colorScheme.secondary,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error resending verification email: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to resend verification email: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     try {
@@ -54,40 +113,53 @@ class _AuthPageState extends State<AuthPage> {
       final isTablet = size.width >= 600 && size.width < 1000;
 
       return Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 1100),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: const Color.fromARGB(255, 55, 143, 206)
-                            .withOpacity(0.07),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.white30),
+        body: Stack( // Use Stack to place CustomHeader on top
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.surface,
+                    Theme.of(context).primaryColor,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1100),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+                          ),
+                          child: isMobile
+                              ? _buildVerticalLayout(context)
+                              : _buildHorizontalLayout(context, isTablet),
+                        ),
                       ),
-                      child: isMobile
-                          ? _buildVerticalLayout(context)
-                          : _buildHorizontalLayout(context, isTablet),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
+            // CustomHeader at the top
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LoginHeader(),
+            ),
+          ],
         ),
       );
     } catch (e, stackTrace) {
@@ -95,9 +167,12 @@ class _AuthPageState extends State<AuthPage> {
       debugPrint('Stack trace: $stackTrace');
       return Scaffold(
         body: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF1a2332), Color(0xFF0f1419)],
+              colors: [
+                Theme.of(context).colorScheme.primary,
+                Theme.of(context).colorScheme.surface,
+              ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -106,16 +181,16 @@ class _AuthPageState extends State<AuthPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, color: Colors.white, size: 64),
+                Icon(Icons.error_outline, color: Theme.of(context).colorScheme.onSurface, size: 64),
                 const SizedBox(height: 20),
-                const Text(
+                Text(
                   'Error loading login page',
-                  style: TextStyle(color: Colors.white, fontSize: 20),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 20),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   e.toString(),
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7), fontSize: 12),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -173,37 +248,37 @@ class _AuthPageState extends State<AuthPage> {
                 width: 250,
                 height: 250,
                 errorBuilder: (context, error, stackTrace) {
-                  return const Icon(
+                  return Icon(
                     Icons.bolt,
                     size: 250,
-                    color: Colors.white54,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
                   );
                 },
               );
             } catch (e) {
-              return const Icon(
+              return Icon(
                 Icons.bolt,
                 size: 250,
-                color: Colors.white54,
+                color: Theme.of(context).colorScheme.onBackground.withOpacity(0.54),
               );
             }
           },
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'Welcome Back!',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 28,
-            color: Colors.white,
+            color: Theme.of(context).textTheme.headlineSmall?.color,
             fontWeight: FontWeight.w700,
           ),
         ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'We are delighted to have you here.\nPlease enter personal details to your user account.\nIf you need any assistance feel free to reach out.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 15, color: Colors.white70, height: 1.4),
+          style: TextStyle(fontSize: 15, color: Theme.of(context).textTheme.bodyMedium?.color, height: 1.4),
         ),
         const SizedBox(height: 25),
         _buildToggleButtons(),
@@ -216,9 +291,9 @@ class _AuthPageState extends State<AuthPage> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: Colors.white30),
+        border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -237,24 +312,20 @@ class _AuthPageState extends State<AuthPage> {
           isLogin = loginMode;
           showForm = true; // <-- show form when toggle tapped
         });
-        _emailController.clear();
-        _passwordController.clear();
-        _nameController.clear();
-        _confirmPasswordController.clear();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         decoration: BoxDecoration(
           color: isLogin == loginMode
-              ? Colors.white.withOpacity(0.25)
+              ? Theme.of(context).colorScheme.secondary
               : Colors.transparent,
           borderRadius: BorderRadius.circular(50),
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: Theme.of(context).textTheme.labelLarge?.color,
             fontWeight: FontWeight.w600,
             fontSize: 16,
           ),
@@ -268,19 +339,19 @@ class _AuthPageState extends State<AuthPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 17, 13, 128).withOpacity(0.05),
+        gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white24),
+        border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.24)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
             isLogin ? 'Log in to your account' : 'Create Account',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: Theme.of(context).textTheme.titleLarge?.color,
             ),
           ),
           const SizedBox(height: 25),
@@ -288,7 +359,7 @@ class _AuthPageState extends State<AuthPage> {
           if (!isLogin) ...[
             TextField(
               controller: _nameController,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               decoration: _inputDecoration('Full Name', Icons.person),
             ),
             const SizedBox(height: 12),
@@ -296,35 +367,23 @@ class _AuthPageState extends State<AuthPage> {
 
           TextField(
             controller: _emailController,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
             decoration: _inputDecoration('Email', Icons.email),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _passwordController,
-            obscureText: _obscurePassword,
-            style: const TextStyle(color: Colors.white),
-            decoration: _inputDecoration('Password', Icons.lock).copyWith(
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.white70,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _obscurePassword = !_obscurePassword;
-                  });
-                },
-              ),
-            ),
+            obscureText: true,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+            decoration: _inputDecoration('Password', Icons.lock),
           ),
           const SizedBox(height: 12),
 
           if (!isLogin)
             TextField(
               controller: _confirmPasswordController,
-              obscureText: _obscurePassword,
-              style: const TextStyle(color: Colors.white),
+              obscureText: true,
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               decoration:
                   _inputDecoration('Confirm Password', Icons.lock_outline),
             ),
@@ -333,9 +392,9 @@ class _AuthPageState extends State<AuthPage> {
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: _handlePasswordReset,
-                child: const Text('Forgot Password?',
-                    style: TextStyle(color: Colors.white70)),
+                onPressed: () {},
+                child: Text('Forgot Password?',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7))),
               ),
             ),
 
@@ -347,36 +406,43 @@ class _AuthPageState extends State<AuthPage> {
             child: ElevatedButton(
               onPressed: _isLoading ? null : () {
                 if (isLogin) {
+                  // Sign-in mode: validate email exists in database
                   _handleEmailPasswordLogin();
                 } else {
+                  // Sign-up mode: create account, save to Firestore and authenticate
                   _handleEmailPasswordSignup();
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.tealAccent.shade700,
+                backgroundColor: Theme.of(context).colorScheme.secondary,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
               child: _isLoading
-                  ? const SizedBox(
+                  ? SizedBox(
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onSecondary),
                       ),
                     )
                   : Text(
                       isLogin ? 'Login' : 'Sign Up',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSecondary),
                     ),
             ),
           ),
+
+
+
           const SizedBox(height: 20),
-          const Text('Or continue with',
-              style: TextStyle(color: Colors.white70)),
+          Text('Or sign in/up with',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7))),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -387,20 +453,20 @@ class _AuthPageState extends State<AuthPage> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(50),
-                    border: Border.all(color: Colors.white30),
+                    border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
                   ),
                   child: _isLoading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onSecondary),
                           ),
                         )
-                      : const Icon(FontAwesomeIcons.google, color: Colors.white, size: 24),
+                      : Icon(FontAwesomeIcons.google, color: Theme.of(context).colorScheme.onSurface, size: 24),
                 ),
               ),
             ],
@@ -410,6 +476,26 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
+  Future<bool> _validateEmailInDatabase(String email) async {
+    try {
+      debugPrint('🔍 Checking if email exists in database: $email');
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email.toLowerCase().trim())
+          .limit(1)
+          .get();
+
+      final exists = querySnapshot.docs.isNotEmpty;
+      debugPrint('✅ Email check result: exists=$exists');
+      return exists;
+    } catch (e) {
+      debugPrint('❌ Error checking email: $e');
+      return false;
+    }
+  }
+
+
+
   Future<void> _handleEmailPasswordLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -417,10 +503,10 @@ class _AuthPageState extends State<AuthPage> {
     if (email.isEmpty || password.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter email and password'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: const Text('Please enter email and password'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -432,39 +518,101 @@ class _AuthPageState extends State<AuthPage> {
     });
 
     try {
-      final userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: email, password: password);
-      final signedInUser = userCredential.user;
+      // In sign-in mode, verify email exists in database
+      if (isLogin) {
+        debugPrint('🔵 Sign-in mode: Checking if email exists...');
+        final emailExists = await _validateEmailInDatabase(email);
 
-      if (signedInUser != null) {
-        _checkUserVerificationAndData(signedInUser);
+        if (!emailExists) {
+          setState(() {
+            _isLoading = false;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Email not found. Please sign up or use Google Sign-In.'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
       }
-    } on FirebaseAuthException catch (firebaseError) {
-      setState(() {
-        _isLoading = false;
-      });
+
+      // Proceed with email/password authentication via Firebase
+      debugPrint('🔵 Authenticating with Firebase...');
       
-      String errorMessage = 'Authentication failed';
-      if (firebaseError.code == 'user-not-found') {
-        errorMessage = 'Email not registered';
-      } else if (firebaseError.code == 'wrong-password') {
-        errorMessage = 'Incorrect password';
-      } else if (firebaseError.code == 'invalid-email') {
-        errorMessage = 'Invalid email format';
-      } else if (firebaseError.code == 'user-disabled') {
-        errorMessage = 'Account has been disabled';
+      try {
+        final userCredential = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(email: email, password: password);
+        
+        debugPrint('✅ Firebase authentication successful: ${userCredential.user?.uid}');
+        final signedInUser = userCredential.user;
+        // Enforce email verification for password accounts
+  if (signedInUser != null && !signedInUser.emailVerified) {
+          // Not verified: sign out and ask user to verify first
+          await FirebaseAuth.instance.signOut();
+          setState(() {
+            _isLoading = false;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Please verify your email before logging in.'),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                duration: const Duration(seconds: 5),
+                action: SnackBarAction(
+                  label: 'Resend',
+                  textColor: Theme.of(context).colorScheme.onPrimary,
+                  onPressed: () async {
+                    // Attempt to resend verification email
+                    await _resendVerificationEmail();
+                  },
+                ),
+              ),
+            );
+          }
+          return;
+        }
+
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+          );
+        }
+      } on FirebaseAuthException catch (firebaseError) {
+        setState(() {
+          _isLoading = false;
+        });
+        
+        String errorMessage = 'Authentication failed';
+        if (firebaseError.code == 'user-not-found') {
+          errorMessage = 'Email not registered';
+        } else if (firebaseError.code == 'wrong-password') {
+          errorMessage = 'Incorrect password';
+        } else if (firebaseError.code == 'invalid-email') {
+          errorMessage = 'Invalid email format';
+        } else if (firebaseError.code == 'user-disabled') {
+          errorMessage = 'Account has been disabled';
+        }
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        debugPrint('❌ Firebase auth error: $errorMessage');
       }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-      debugPrint('❌ Firebase auth error: $errorMessage');
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -618,65 +766,13 @@ class _AuthPageState extends State<AuthPage> {
     }
   }
 
-  Future<void> _handlePasswordReset() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please enter your email address first.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-      return;
-    }
-
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password reset email sent. Please check your inbox.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      String message;
-      if (e.code == 'user-not-found') {
-        message = 'No user found for that email.';
-      } else {
-        message = 'An error occurred. Please try again later.';
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('An unexpected error occurred.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   Future<void> _handleGoogleSignIn() async {
     // Check if Client ID is still placeholder
     if (kIsWeb && _webClientId.contains('REPLACE_WITH_YOUR_WEB_CLIENT_ID')) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content:
-                Text(
+            content: Text(
               'Please configure your Google OAuth Client ID first!\nCheck login.dart and web/index.html',
               style: TextStyle(fontSize: 12),
             ),
@@ -693,29 +789,33 @@ class _AuthPageState extends State<AuthPage> {
     });
 
     try {
-      debugPrint('🟢 Google Sign-In started...');
-      
+      // Step 0: Sign out any previously signed-in Google user to force account selection
+      await _googleSignIn.signOut();
+
       // Step 1: Sign in with Google
       GoogleSignInAccount? googleUser;
-      
-      // Always call interactive sign-in to prompt for account selection
-      googleUser = await _googleSignIn.signIn();
-      debugPrint('🟢 Google sign-in result: ${googleUser?.email}');
+      if (kIsWeb) {
+        // Try silent sign-in first (no popup, uses existing session)
+        try {
+          googleUser = await _googleSignIn.signInSilently();
+        } catch (e) {
+          // Silent sign-in failed, try regular sign-in
+          debugPrint('Silent sign-in failed: $e');
+        }
+        // If silent sign-in fails, use regular sign-in (shows deprecation warning)
+        googleUser ??= await _googleSignIn.signIn();
+      } else {
+        // For mobile/desktop, use regular sign-in
+        googleUser = await _googleSignIn.signIn();
+      }
 
       if (googleUser == null) {
         // User cancelled the sign-in
-        debugPrint('🔴 User cancelled sign-in');
-        setState(() {
-          _isLoading = false;
-        });
-        return;
+        return; // _isLoading will be reset in finally block
       }
 
-      debugPrint('🟢 Google account: ${googleUser.email}');
-      
       // Step 2: Get authentication details from Google
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      debugPrint('🟢 Got Google Auth tokens');
 
       // Step 3: Create a new credential for Firebase Auth
       final credential = GoogleAuthProvider.credential(
@@ -724,54 +824,88 @@ class _AuthPageState extends State<AuthPage> {
       );
 
       // Step 4: Sign in to Firebase with Google credential
-      final UserCredential userCredential = 
+      final UserCredential userCredential =
           await FirebaseAuth.instance.signInWithCredential(credential);
       final User? firebaseUser = userCredential.user;
-      debugPrint('🟢 Firebase sign-in result: ${firebaseUser?.uid}');
 
       if (firebaseUser == null) {
-        debugPrint('🔴 Firebase authentication failed - user is null');
         throw Exception('Firebase authentication failed');
       }
 
-      debugPrint('🟢 Firebase user UID: ${firebaseUser.uid}');
+            // Step 5: Check if user exists in Firestore (sign-in vs sign-up)
+            final userDoc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(firebaseUser.uid)
+                .get();
       
-      // Step 5: Check if user exists in Firestore
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(firebaseUser.uid)
-          .get();
-
-      // Determine if this is a new user
-      final bool isNewUser = !userDoc.exists || 
-          (userCredential.additionalUserInfo?.isNewUser ?? false);
-
-      // If in sign-up mode and user already exists, show message
-      // (But allow sign-in mode to proceed - it will create the user if they don't exist)
-      if (!isLogin && userDoc.exists && 
-          (userCredential.additionalUserInfo?.isNewUser == false)) {
-        setState(() {
-          _isLoading = false;
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This account already exists. Please sign in instead.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-        return;
-      }
-
-      // Step 6: ALWAYS save/update user data in Firestore (on both sign-in and sign-up)
-      debugPrint('🔵 Starting Firestore save...');
-      debugPrint('🔵 User UID: ${firebaseUser.uid}');
-      debugPrint('🔵 Email: ${firebaseUser.email}');
-      debugPrint('🔵 isNewUser: $isNewUser');
+            // Determine if this is a new user
+            final bool isNewUser = !userDoc.exists ||
+                (userCredential.additionalUserInfo?.isNewUser ?? false);
       
-      await FirebaseFirestore.instance
+            // If in sign-in mode (isLogin == true) and it's a new user for the app,
+            // ask for confirmation to create a new account.
+            if (isLogin && isNewUser) {
+              final bool? confirmCreate = await showDialog<bool>(
+                context: context,
+                builder: (BuildContext dialogContext) {
+                  return AlertDialog(
+                    title: const Text('Create New Account?'),
+                    content: Text(
+                        'This Google account is not yet registered with Smart Energy System. Would you like to create a new account using ${firebaseUser.email}?'),
+                    actions: <Widget>[
+                      TextButton(
+                        child: const Text('Cancel'),
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop(false); // User declined
+                        },
+                      ),
+                      TextButton(
+                        child: const Text('Create Account'),
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop(true); // User confirmed
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+      
+              if (confirmCreate == false || confirmCreate == null) {
+                // User cancelled or dismissed the dialog, sign out from Firebase and Google
+                await FirebaseAuth.instance.signOut();
+                await _googleSignIn.signOut();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Account creation cancelled.'),
+                      backgroundColor: Colors.orange,
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+                return; // Stop the sign-in process
+              }
+            }
+      
+            // If in sign-up mode and user already exists, show message
+            if (!isLogin && userDoc.exists &&
+                (userCredential.additionalUserInfo?.isNewUser == false)) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('This account already exists. Please sign in instead.'),
+                    backgroundColor: Colors.orange,
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              }
+              // Sign out from Firebase and Google if the user tried to sign up with an existing account
+              await FirebaseAuth.instance.signOut();
+              await _googleSignIn.signOut();
+              return; // _isLoading will be reset in finally block
+            }
+      
+            // Step 6: Save/Update user data in Firestore      await FirebaseFirestore.instance
           .collection('users')
           .doc(firebaseUser.uid)
           .set({
@@ -784,122 +918,45 @@ class _AuthPageState extends State<AuthPage> {
         'lastLoginAt': FieldValue.serverTimestamp(),
         'isNewUser': isNewUser,
       }, SetOptions(merge: true));
-      
-      debugPrint('✅ Firestore save completed successfully!');
 
-      // Step 7: Navigate to the appropriate screen
+      // Step 7: Show success message and navigate to home screen
       if (mounted) {
-        // Use the existing verification and navigation logic
-        await _checkUserVerificationAndData(firebaseUser);
-      }
-
-      // Step 8: Show success message
-      if (mounted) {
+        // Show success message
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Google sign-in successful!'),
+          SnackBar(
+            content: Text(isNewUser 
+                ? 'Account created successfully! Welcome!' 
+                : 'Signed in successfully!'),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 4),
+            duration: const Duration(seconds: 2),
           ),
         );
+        
+        // Navigate to home screen after a brief delay
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            // The AuthWrapper in main.dart will handle navigation based on auth state
+            // No explicit navigation needed here.
+          }
+        });
       }
-    } on FirebaseAuthException catch (e) {
-      debugPrint('🔴 Firebase Google Auth Error: $e');
-      String errorMessage = 'Google sign-in failed. Please try again.';
-      if (e.code == 'account-exists-with-different-credential') {
-        errorMessage = 'An account already exists with the same email address but different sign-in credentials. Please sign in using your original method.';
-      } else if (e.code == 'invalid-credential') {
-        errorMessage = 'The credential is not valid or has expired.';
-      }
+    } catch (error) {
+      debugPrint('Google sign-in error: $error');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('🔴 Generic Google Sign-In Error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Google sign-in failed: ${e.toString()}'),
+            content: Text('Google sign-in failed: ${error.toString()}'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 4),
           ),
         );
       }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _checkUserVerificationAndData(User user) async {
-    // Admin user email - change this to your admin's email
-    const adminEmail = 'smartenergymeter11@gmail.com';
-
-    final userDoc =
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-
-    if (!user.emailVerified && user.email != adminEmail) {
-      // Email is not verified
-      setState(() {
-        _isLoading = false;
-      });
-      await FirebaseAuth.instance.signOut();
+      // Ensure loading state is always reset
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Please verify your email before logging in.'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'Resend',
-              textColor: Colors.white,
-              onPressed: () async {
-                await user.sendEmailVerification();
-              },
-            ),
-          ),
-        );
-      }
-    } else if (user.email == adminEmail) {
-      // User is admin, navigate to admin screen
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MyAdminScreen()),
-        );
-      }
-    } else if (userDoc.exists) {
-      // User is verified and data exists
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-      }
-    } else {
-      // User is verified but no data in Firestore
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'uid': user.uid,
-        'email': user.email,
-        'displayName': user.displayName ?? 'N/A',
-        'photoURL': user.photoURL ?? '',
-        'provider': user.providerData.first.providerId,
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastLoginAt': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -907,18 +964,18 @@ class _AuthPageState extends State<AuthPage> {
   InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
-      prefixIcon: Icon(icon, color: Colors.white70),
+      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+      prefixIcon: Icon(icon, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
       filled: true,
-      fillColor: Colors.white10,
+      fillColor: Theme.of(context).cardColor.withOpacity(0.7),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.white30),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.tealAccent),
+        borderSide: BorderSide(color: Theme.of(context).colorScheme.secondary),
       ),
     );
   }
