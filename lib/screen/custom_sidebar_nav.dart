@@ -46,9 +46,9 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
     // Bottom Navigation (mobile)
     if (widget.isBottomNav) {
       return Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF1e293b),
-          border: Border(top: BorderSide(color: Colors.white24, width: 1)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).primaryColor,
+          border: Border(top: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
         ),
         child: SafeArea(
           child: Padding(
@@ -67,14 +67,14 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                     children: [
                       Icon(
                         item['icon'],
-                        color: isSelected ? Colors.tealAccent : Colors.white70,
+                        color: isSelected ? Theme.of(context).colorScheme.secondary : Theme.of(context).iconTheme.color,
                         size: 24,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         item['label'],
                         style: TextStyle(
-                          color: isSelected ? Colors.tealAccent : Colors.white70,
+                          color: isSelected ? Theme.of(context).colorScheme.secondary : Theme.of(context).textTheme.bodyMedium?.color,
                           fontSize: 10,
                         ),
                       ),
@@ -92,9 +92,9 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       width: isCollapsed ? 80 : 200,
-      decoration: const BoxDecoration(
-        color: Color(0xFF1e293b),
-        border: Border(right: BorderSide(color: Colors.white24, width: 1)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).primaryColor,
+        border: Border(right: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -145,9 +145,9 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? Colors.tealAccent.withValues(alpha: 0.2)
+                            ? Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.2).round())
                             : _hoverStates[index]!
-                                ? Colors.white24
+                                ? Theme.of(context).primaryColor.withAlpha((255 * 0.5).round())
                                 : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -159,8 +159,8 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                           Icon(
                             navItems[index]['icon'],
                             color: isSelected || _hoverStates[index]!
-                                ? Colors.tealAccent
-                                : Colors.white70,
+                                ? Theme.of(context).colorScheme.secondary
+                                : Theme.of(context).iconTheme.color,
                           ),
                           if (!isCollapsed) ...[
                             const SizedBox(width: 10),
@@ -168,8 +168,8 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                               navItems[index]['label'],
                               style: TextStyle(
                                 color: isSelected || _hoverStates[index]!
-                                    ? Colors.tealAccent
-                                    : Colors.white70,
+                                    ? Theme.of(context).colorScheme.secondary
+                                    : Theme.of(context).textTheme.bodyMedium?.color,
                                 fontSize: 12,
                               ),
                             ),
@@ -195,7 +195,7 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF334155),
+                      color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -208,13 +208,13 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                               ? Icons.arrow_forward_ios
                               : Icons.arrow_back_ios_new,
                           size: 16,
-                          color: Colors.white70,
+                          color: Theme.of(context).iconTheme.color,
                         ),
                         if (!isCollapsed) ...[
                           const SizedBox(width: 8),
-                          const Text(
+                          Text(
                             "Collapse",
-                            style: TextStyle(color: Colors.white, fontSize: 12),
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
                       ],
@@ -234,7 +234,7 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
                     decoration: BoxDecoration(
-                      color: Colors.redAccent,
+                      color: Theme.of(context).colorScheme.error,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -242,12 +242,12 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                           ? MainAxisAlignment.center
                           : MainAxisAlignment.start,
                       children: [
-                        const Icon(Icons.logout, color: Colors.white, size: 16),
+                        Icon(Icons.logout, color: Theme.of(context).colorScheme.onError, size: 16),
                         if (!isCollapsed) ...[
                           const SizedBox(width: 8),
-                          const Text(
+                          Text(
                             "Logout",
-                            style: TextStyle(color: Colors.white, fontSize: 12),
+                            style: TextStyle(color: Theme.of(context).colorScheme.onError, fontSize: 12),
                           ),
                         ],
                       ],

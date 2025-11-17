@@ -7,7 +7,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'admin_home.dart';
-import 'login_header.dart'; // Import CustomHeader
+import 'login_header.dart'; // Import LoginHeader
+import 'theadmin.dart';
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -18,8 +19,9 @@ class AuthPage extends StatefulWidget {
 
 class _AuthPageState extends State<AuthPage> {
   bool isLogin = true;
-  bool showForm = true; // <-- new: controls form visibility
   bool _isLoading = false;
+  bool _obscurePassword = true; // New state for password visibility
+  bool _obscureConfirmPassword = true; // New state for confirm password visibility
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -97,7 +99,7 @@ class _AuthPageState extends State<AuthPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to resend verification email: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
             duration: const Duration(seconds: 3),
           ),
         );
@@ -208,16 +210,10 @@ class _AuthPageState extends State<AuthPage> {
       children: [
         Expanded(flex: isTablet ? 1 : 2, child: _buildLeftPanel()),
         const SizedBox(width: 20),
-        if (showForm)
-          Expanded(
-  flex: 2,
-  child: AnimatedSlide(
-    offset: showForm ? Offset(0, 0) : Offset(1.0, 0), // slide from right
-    duration: Duration(milliseconds: 800),
-    curve: Curves.easeInOut,
-    child: _buildRightPanel(context),
-  ),
-),
+        Expanded(
+          flex: 2,
+          child: _buildRightPanel(context),
+        ),
  // <-- conditional
       ],
     );
@@ -229,7 +225,7 @@ class _AuthPageState extends State<AuthPage> {
       children: [
         _buildLeftPanel(),
         const SizedBox(height: 30),
-        if (showForm) _buildRightPanel(context), // <-- conditional
+        _buildRightPanel(context),
       ],
     );
   }
@@ -259,7 +255,7 @@ class _AuthPageState extends State<AuthPage> {
               return Icon(
                 Icons.bolt,
                 size: 250,
-                color: Theme.of(context).colorScheme.onBackground.withOpacity(0.54),
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
               );
             }
           },
@@ -310,7 +306,11 @@ class _AuthPageState extends State<AuthPage> {
       onTap: () {
         setState(() {
           isLogin = loginMode;
-          showForm = true; // <-- show form when toggle tapped
+          // Clear all controllers when switching between login and signup
+          _emailController.clear();
+          _passwordController.clear();
+          _nameController.clear();
+          _confirmPasswordController.clear();
         });
       },
       child: AnimatedContainer(
@@ -373,26 +373,50 @@ class _AuthPageState extends State<AuthPage> {
           const SizedBox(height: 12),
           TextField(
             controller: _passwordController,
-            obscureText: true,
+            obscureText: _obscurePassword,
             style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-            decoration: _inputDecoration('Password', Icons.lock),
+            decoration: _inputDecoration('Password', Icons.lock).copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              ),
+            ),
           ),
           const SizedBox(height: 12),
 
           if (!isLogin)
             TextField(
               controller: _confirmPasswordController,
-              obscureText: true,
+              obscureText: _obscureConfirmPassword,
               style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               decoration:
-                  _inputDecoration('Confirm Password', Icons.lock_outline),
+                  _inputDecoration('Confirm Password', Icons.lock_outline).copyWith(
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscureConfirmPassword = !_obscureConfirmPassword;
+                    });
+                  },
+                ),
+              ),
             ),
 
           if (isLogin)
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () {},
+                onPressed: _handlePasswordReset,
                 child: Text('Forgot Password?',
                     style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7))),
               ),
@@ -476,23 +500,7 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
-  Future<bool> _validateEmailInDatabase(String email) async {
-    try {
-      debugPrint('🔍 Checking if email exists in database: $email');
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: email.toLowerCase().trim())
-          .limit(1)
-          .get();
 
-      final exists = querySnapshot.docs.isNotEmpty;
-      debugPrint('✅ Email check result: exists=$exists');
-      return exists;
-    } catch (e) {
-      debugPrint('❌ Error checking email: $e');
-      return false;
-    }
-  }
 
 
 
@@ -518,75 +526,18 @@ class _AuthPageState extends State<AuthPage> {
     });
 
     try {
-      // In sign-in mode, verify email exists in database
-      if (isLogin) {
-        debugPrint('🔵 Sign-in mode: Checking if email exists...');
-        final emailExists = await _validateEmailInDatabase(email);
-
-        if (!emailExists) {
-          setState(() {
-            _isLoading = false;
-          });
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Email not found. Please sign up or use Google Sign-In.'),
-                backgroundColor: Theme.of(context).colorScheme.error,
-                duration: const Duration(seconds: 3),
-              ),
-            );
-          }
-          return;
-        }
-      }
-
-      // Proceed with email/password authentication via Firebase
-      debugPrint('🔵 Authenticating with Firebase...');
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
       
-      try {
-        final userCredential = await FirebaseAuth.instance
-            .signInWithEmailAndPassword(email: email, password: password);
-        
-        debugPrint('✅ Firebase authentication successful: ${userCredential.user?.uid}');
-        final signedInUser = userCredential.user;
-        // Enforce email verification for password accounts
-  if (signedInUser != null && !signedInUser.emailVerified) {
-          // Not verified: sign out and ask user to verify first
-          await FirebaseAuth.instance.signOut();
-          setState(() {
-            _isLoading = false;
-          });
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Please verify your email before logging in.'),
-                backgroundColor: Theme.of(context).colorScheme.error,
-                duration: const Duration(seconds: 5),
-                action: SnackBarAction(
-                  label: 'Resend',
-                  textColor: Theme.of(context).colorScheme.onPrimary,
-                  onPressed: () async {
-                    // Attempt to resend verification email
-                    await _resendVerificationEmail();
-                  },
-                ),
-              ),
-            );
-          }
-          return;
-        }
-
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
-          );
-        }
-      } on FirebaseAuthException catch (firebaseError) {
+      debugPrint('✅ Firebase authentication successful: ${userCredential.user?.uid}');
+      final signedInUser = userCredential.user;
+      if (signedInUser != null) {
+        setState(() {
+          _isLoading = false;
+        });
+        await _checkUserVerificationAndData(signedInUser);
+      }
+    } on FirebaseAuthException catch (firebaseError) {
         setState(() {
           _isLoading = false;
         });
@@ -612,8 +563,7 @@ class _AuthPageState extends State<AuthPage> {
           );
         }
         debugPrint('❌ Firebase auth error: $errorMessage');
-      }
-    } catch (e) {
+      } catch (e) { // General catch for any other exceptions
       setState(() {
         _isLoading = false;
       });
@@ -625,6 +575,12 @@ class _AuthPageState extends State<AuthPage> {
             duration: const Duration(seconds: 3),
           ),
         );
+      }
+    } finally { // Always executes after try/catch
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -720,9 +676,9 @@ class _AuthPageState extends State<AuthPage> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Verification email sent. Please verify your email before signing in.'),
+            content: Text('A verification email has been sent to your address. Please verify your email to activate your Smart Energy Meter account.'),
             backgroundColor: Colors.green,
-            duration: Duration(seconds: 4),
+            duration: Duration(seconds: 6),
           ),
         );
       }
@@ -750,16 +706,70 @@ class _AuthPageState extends State<AuthPage> {
         );
       }
       debugPrint('❌ Firebase signup error: $firebaseError');
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+    } catch (e) { // General catch for any other exceptions
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally { // Always executes after try/catch
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handlePasswordReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please enter your email address first.'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Password reset email sent. Please check your inbox.'),
+            backgroundColor: Theme.of(context).colorScheme.secondary,
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String message;
+      if (e.code == 'user-not-found') {
+        message = 'No user found for that email.';
+      } else {
+        message = 'An error occurred. Please try again later.';
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('An unexpected error occurred.'),
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -832,113 +842,9 @@ class _AuthPageState extends State<AuthPage> {
         throw Exception('Firebase authentication failed');
       }
 
-            // Step 5: Check if user exists in Firestore (sign-in vs sign-up)
-            final userDoc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(firebaseUser.uid)
-                .get();
-      
-            // Determine if this is a new user
-            final bool isNewUser = !userDoc.exists ||
-                (userCredential.additionalUserInfo?.isNewUser ?? false);
-      
-            // If in sign-in mode (isLogin == true) and it's a new user for the app,
-            // ask for confirmation to create a new account.
-            if (isLogin && isNewUser) {
-              final bool? confirmCreate = await showDialog<bool>(
-                context: context,
-                builder: (BuildContext dialogContext) {
-                  return AlertDialog(
-                    title: const Text('Create New Account?'),
-                    content: Text(
-                        'This Google account is not yet registered with Smart Energy System. Would you like to create a new account using ${firebaseUser.email}?'),
-                    actions: <Widget>[
-                      TextButton(
-                        child: const Text('Cancel'),
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop(false); // User declined
-                        },
-                      ),
-                      TextButton(
-                        child: const Text('Create Account'),
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop(true); // User confirmed
-                        },
-                      ),
-                    ],
-                  );
-                },
-              );
-      
-              if (confirmCreate == false || confirmCreate == null) {
-                // User cancelled or dismissed the dialog, sign out from Firebase and Google
-                await FirebaseAuth.instance.signOut();
-                await _googleSignIn.signOut();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Account creation cancelled.'),
-                      backgroundColor: Colors.orange,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-                return; // Stop the sign-in process
-              }
-            }
-      
-            // If in sign-up mode and user already exists, show message
-            if (!isLogin && userDoc.exists &&
-                (userCredential.additionalUserInfo?.isNewUser == false)) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('This account already exists. Please sign in instead.'),
-                    backgroundColor: Colors.orange,
-                    duration: Duration(seconds: 3),
-                  ),
-                );
-              }
-              // Sign out from Firebase and Google if the user tried to sign up with an existing account
-              await FirebaseAuth.instance.signOut();
-              await _googleSignIn.signOut();
-              return; // _isLoading will be reset in finally block
-            }
-      
-            // Step 6: Save/Update user data in Firestore      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(firebaseUser.uid)
-          .set({
-        'uid': firebaseUser.uid,
-        'email': firebaseUser.email ?? '',
-        'displayName': firebaseUser.displayName ?? googleUser.displayName ?? '',
-        'photoURL': firebaseUser.photoURL ?? googleUser.photoUrl ?? '',
-        'provider': 'google.com',
-        'createdAt': isNewUser ? FieldValue.serverTimestamp() : userDoc.data()?['createdAt'],
-        'lastLoginAt': FieldValue.serverTimestamp(),
-        'isNewUser': isNewUser,
-      }, SetOptions(merge: true));
-
-      // Step 7: Show success message and navigate to home screen
+      // Step 5: Use the existing verification and navigation logic
       if (mounted) {
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(isNewUser 
-                ? 'Account created successfully! Welcome!' 
-                : 'Signed in successfully!'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-        
-        // Navigate to home screen after a brief delay
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            // The AuthWrapper in main.dart will handle navigation based on auth state
-            // No explicit navigation needed here.
-          }
-        });
+        await _checkUserVerificationAndData(firebaseUser);
       }
     } catch (error) {
       debugPrint('Google sign-in error: $error');
@@ -957,6 +863,72 @@ class _AuthPageState extends State<AuthPage> {
         setState(() {
           _isLoading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _checkUserVerificationAndData(User user) async {
+    final idTokenResult = await user.getIdTokenResult();
+    final isAdmin = idTokenResult.claims?['admin'] == true;
+
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+
+    if (!user.emailVerified && !isAdmin) { // Only check email verification for non-admins
+      // Email is not verified
+      setState(() {
+        _isLoading = false;
+      });
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please verify your email before logging in.'),
+            backgroundColor: Theme.of(context).colorScheme.error, // Themed color
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Resend',
+              textColor: Theme.of(context).colorScheme.onPrimary, // Themed color
+              onPressed: () async {
+                await user.sendEmailVerification();
+              },
+            ),
+          ),
+        );
+      }
+    } else if (isAdmin) {
+      // User is admin, navigate to admin screen
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MyAdminScreen()),
+        );
+      }
+    } else if (userDoc.exists) {
+      // User is verified and data exists
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      }
+    } else {
+      // User is verified but no data in Firestore, create it
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'uid': user.uid,
+        'email': user.email,
+        'displayName': user.displayName ?? 'N/A',
+        'photoURL': user.photoURL ?? '',
+        'provider': user.providerData.first.providerId,
+        'createdAt': FieldValue.serverTimestamp(),
+        'lastLoginAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
       }
     }
   }
