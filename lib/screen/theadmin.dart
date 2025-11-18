@@ -11,6 +11,39 @@ import '../theme_provider.dart';
 import 'login.dart';
 import 'profile.dart';
 
+// ------------------ DEVICE MODEL ------------------
+class DeviceModel {
+  String id;
+  String name;
+  String status;
+  double power;
+  double voltage;
+  double current;
+  double energy;
+
+  DeviceModel({
+    required this.id,
+    required this.name,
+    required this.status,
+    this.power = 0.0,
+    this.voltage = 0.0,
+    this.current = 0.0,
+    this.energy = 0.0,
+  });
+
+  factory DeviceModel.fromMap(String id, Map<dynamic, dynamic> map) {
+    return DeviceModel(
+      id: id,
+      name: map['name'] ?? 'N/A',
+      status: map['status'] ?? 'N/A',
+      power: (map['power'] as num?)?.toDouble() ?? 0.0,
+      voltage: (map['voltage'] as num?)?.toDouble() ?? 0.0,
+      current: (map['current'] as num?)?.toDouble() ?? 0.0,
+      energy: (map['energy'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
 // ------------------ USER MODEL ------------------
 class UserModel {
   String uid;
@@ -19,6 +52,7 @@ class UserModel {
   String status;
   String dateRegistered;
   String address;
+  List<DeviceModel> devices; // New field for devices
 
   UserModel({
     required this.uid,
@@ -27,6 +61,7 @@ class UserModel {
     required this.status,
     required this.dateRegistered,
     required this.address,
+    this.devices = const [], // Initialize with an empty list
   });
 }
 
@@ -94,12 +129,39 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
     final snapshot = await FirebaseFirestore.instance.collection('users').get();
     print('Fetched ${snapshot.docs.length} documents.');
 
-    final fetchedUsers = snapshot.docs.map((doc) {
+    final fetchedUsers = await Future.wait(snapshot.docs.map((doc) async {
       final data = doc.data();
+      final userEmail = data['email'] ?? 'N/A';
+      final String safeUserEmail = userEmail.replaceAll('.', ','); // Firebase RTDB key cannot contain '.'
+
+      List<DeviceModel> userDevices = [];
+      if (userEmail != 'N/A') {
+        final hubRef = FirebaseDatabase.instance.ref().child('users').child(safeUserEmail).child('hubs');
+        final hubSnapshot = await hubRef.get();
+
+        if (hubSnapshot.exists && hubSnapshot.value is Map<dynamic, dynamic>) {
+          final hubs = hubSnapshot.value as Map<dynamic, dynamic>;
+          for (var hubEntry in hubs.entries) {
+            final hubId = hubEntry.key;
+            if (hubEntry.value is Map<dynamic, dynamic>) {
+              final hubData = hubEntry.value as Map<dynamic, dynamic>;
+              if (hubData.containsKey('plugs') && hubData['plugs'] is Map<dynamic, dynamic>) {
+                final plugs = hubData['plugs'] as Map<dynamic, dynamic>;
+                plugs.forEach((plugId, plugData) {
+                  if (plugData is Map<dynamic, dynamic>) {
+                    userDevices.add(DeviceModel.fromMap(plugId, plugData));
+                  }
+                });
+              }
+            }
+          }
+        }
+      }
+
       return UserModel(
         uid: doc.id,
         name: data['displayName'] ?? 'N/A',
-        email: data['email'] ?? 'N/A',
+        email: userEmail,
         status: data['status'] ?? 'Active',
         dateRegistered: data['createdAt'] != null
             ? DateFormat('yyyy-MM-dd').format(
@@ -107,8 +169,9 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
               )
             : 'N/A',
         address: data['address'] ?? 'N/A',
+        devices: userDevices,
       );
-    }).toList();
+    }).toList());
     print('Mapped ${fetchedUsers.length} users.');
 
     setState(() {
@@ -153,44 +216,44 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
-        title: const Text(
+        title: Text(
           "Add User",
-          style: TextStyle(color: Colors.white),
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Enter full name",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
               ),
             ),
             TextField(
               controller: emailController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Enter email",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
               ),
             ),
             TextField(
               controller: passwordController,
-              style: const TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.bodyMedium,
               obscureText: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: "Enter password",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
               ),
             ),
             TextField(
               controller: addressController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Enter address",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
               ),
             ),
             const SizedBox(height: 10),
@@ -203,15 +266,15 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                       value: s,
                       child: Text(
                         s,
-                        style: const TextStyle(color: Colors.white),
+                        style: Theme.of(context).textTheme.bodyMedium,
                       )))
                   .toList(),
               onChanged: (val) {
                 if (val != null) statusValue = val;
               },
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: "Select Status",
-                labelStyle: TextStyle(color: Colors.white),
+                labelStyle: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
           ],
@@ -219,11 +282,12 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
+            child: Text(
               "Cancel",
-              style: TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.onSurface),
             ),
           ),
+
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor:
@@ -282,9 +346,9 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                 Navigator.pop(ctx); // Pop the dialog on error
               }
             },
-            child: const Text(
+            child: Text(
               "Add",
-              style: TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
             ),
           ),
         ],
@@ -307,35 +371,35 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
-        title: const Text(
+        title: Text(
           "Edit User",
-          style: TextStyle(color: Colors.white),
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Update full name",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
               ),
             ),
             TextField(
               controller: emailController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Update email",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
               ),
             ),
             TextField(
               controller: addressController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Update address",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
               ),
             ),
             const SizedBox(height: 10),
@@ -348,25 +412,24 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                       value: s,
                       child: Text(
                         s,
-                        style: const TextStyle(color: Colors.white),
+                        style: Theme.of(context).textTheme.bodyMedium,
                       )))
                   .toList(),
               onChanged: (val) {
                 if (val != null) statusValue = val;
               },
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: "Update Status",
-                labelStyle: TextStyle(color: Colors.white),
+                labelStyle: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
-          ],
-        ),
+        ]),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
+            child: Text(
               "Cancel",
-              style: TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.onSurface),
             ),
           ),
           ElevatedButton(
@@ -389,9 +452,9 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
               Navigator.pop(ctx);
               _fetchUsers();
             },
-            child: const Text(
+            child: Text(
               "Save",
-              style: TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
             ),
           ),
         ],
@@ -481,34 +544,31 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       child: Row(
         children: [
           const SizedBox(width: 16),
-          const Icon(Icons.admin_panel_settings, color: Colors.white),
+          const Icon(Icons.admin_panel_settings),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
               'Admin Monitoring List',
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
             ),
           ),
           IconButton(
             icon: const Icon(
               Icons.notifications,
-              color: Colors.white,
             ),
             onPressed: () {},
           ),
           IconButton(
             icon: Icon(
               themeNotifier.darkTheme ? Icons.dark_mode : Icons.light_mode,
-              color: Colors.white,
             ),
             onPressed: () => themeNotifier.toggleTheme(),
           ),
           PopupMenuButton<String>(
             icon: const Icon(
               Icons.account_circle,
-              color: Colors.white,
             ),
             onSelected: (value) {
               if (value == 'view_profile') {
@@ -559,17 +619,16 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
     return Row(
       children: [
         Expanded(
-          child: TextField(
-            controller: _searchController,
-            onSubmitted: (q) => _applySearch(q),
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: "Search user...",
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
-              prefixIcon:
-                  Icon(Icons.search, color: Colors.white.withOpacity(0.8)),
-              filled: true,
-              fillColor: Theme.of(context).primaryColor.withOpacity(0.8),
+                      child: TextField(
+                        controller: _searchController,
+                        onSubmitted: (q) => _applySearch(q),
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        decoration: InputDecoration(
+                          hintText: "Search user...",
+                          hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                          prefixIcon:
+                              Icon(Icons.search, color: Theme.of(context).iconTheme.color?.withOpacity(0.8)),
+                          filled: true,              fillColor: Theme.of(context).primaryColor.withOpacity(0.8),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
@@ -587,10 +646,10 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
             ),
           ),
           onPressed: () => _applySearch(_searchController.text),
-          child: const Text(
+          child: Text(
             "Enter",
-            style: TextStyle(
-              color: Colors.white,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: Theme.of(context).colorScheme.onPrimary,
             ),
           ),
         ),
@@ -612,48 +671,55 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
           headingRowColor: WidgetStateProperty.all(
             Theme.of(context).primaryColor.withOpacity(0.8),
           ),
-          columns: const [
+          columns: [
             DataColumn(
                 label: Padding(
                     padding: EdgeInsets.all(8.0),
                     child: Text(
                       "Name",
-                      style: TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
                     ))),
             DataColumn(
                 label: Padding(
                     padding: EdgeInsets.all(8.0),
                     child: Text(
                       "Email",
-                      style: TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
                     ))),
             DataColumn(
                 label: Padding(
                     padding: EdgeInsets.all(8.0),
                     child: Text(
                       "Address",
-                      style: TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
                     ))),
             DataColumn(
                 label: Padding(
                     padding: EdgeInsets.all(8.0),
                     child: Text(
                       "Status",
-                      style: TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
                     ))),
             DataColumn(
                 label: Padding(
                     padding: EdgeInsets.all(8.0),
                     child: Text(
                       "Date Registered",
-                      style: TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
+                    ))),
+            DataColumn(
+                label: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text(
+                      "Devices",
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
                     ))),
             DataColumn(
                 label: Padding(
                     padding: EdgeInsets.all(8.0),
                     child: Text(
                       "Actions",
-                      style: TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.onPrimary),
                     ))),
           ],
           rows: List.generate(users.length, (index) {
@@ -664,19 +730,19 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       user.name,
-                      style: const TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ))),
                 DataCell(Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       user.email,
-                      style: const TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ))),
                 DataCell(Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       user.address,
-                      style: const TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ))),
                 DataCell(
                   Padding(
@@ -696,7 +762,16 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       user.dateRegistered,
-                      style: const TextStyle(color: Colors.amber),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.amber),
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      '${user.devices.length} Devices: ${user.devices.map((e) => e.name).join(', ')}',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
                 ),
@@ -760,19 +835,17 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
 
             children: [
 
-                            Text(
+                                                        Text(
 
-                              'Live Energy Consumption (Plugs)',
+                                                          'Live Energy Consumption (Plugs)',
 
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
 
-                                    fontWeight: FontWeight.bold,
+                                                                fontWeight: FontWeight.bold,
 
-                                    color: Colors.white,
+                                                              ),
 
-                                  ),
-
-                            ),
+                                                        ),
 
                             const SizedBox(height: 16),
 
@@ -782,17 +855,13 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
 
                               children: [
 
-                                Text(
+                                                                Text(
 
-                                  'Pause Data Reception',
+                                                                  'Pause Data Reception',
 
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                                  style: Theme.of(context).textTheme.titleMedium,
 
-                                        color: Colors.white,
-
-                                      ),
-
-                                ),
+                                                                ),
 
                                 Switch(
 
@@ -861,37 +930,25 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                                   children: [
                                     Text(
                                       plugData['name'] ?? 'N/A',
-                                      style: const TextStyle(
-                                        fontSize: 18,
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.white,
                                       ),
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
                                         'Status: ${plugData['status'] ?? 'N/A'}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
+                                        style: Theme.of(context).textTheme.bodyMedium),
                                     Text('Power: ${plugData['power'] ?? 0} W',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
+                                        style: Theme.of(context).textTheme.bodyMedium),
                                     Text(
                                         'Voltage: ${plugData['voltage'] ?? 0} V',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
+                                        style: Theme.of(context).textTheme.bodyMedium),
                                     Text(
                                         'Current: ${plugData['current'] ?? 0} A',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
+                                        style: Theme.of(context).textTheme.bodyMedium),
                                     Text(
                                         'Energy: ${plugData['energy'] ?? 0} kWh',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
+                                        style: Theme.of(context).textTheme.bodyMedium),
                                   ],
                                 ),
                               ),
