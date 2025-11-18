@@ -1,8 +1,11 @@
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_database/firebase_database.dart'; // Import for Realtime Database
+import 'dart:async'; // Import for StreamSubscription
 
 import '../theme_provider.dart';
 import 'login.dart';
@@ -39,12 +42,49 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   List<UserModel> users = [];
   List<UserModel> allUsers = [];
   final TextEditingController _searchController = TextEditingController();
+  bool _isCentralHubPaused = false; // New state variable
+  final DatabaseReference _centralHubStatusRef =
+      FirebaseDatabase.instance.ref().child('central_hub/data_reception_paused'); // New database reference
+  StreamSubscription? _centralHubStatusSubscription; // New stream subscription
+
+  String _currentHubSerialNumber = "default_hub_serial"; // Placeholder, needs to be dynamic
 
   @override
   void initState() {
     super.initState();
     _fetchUsers();
+    _listenToCentralHubStatus(); // Listen to central hub status on init
   }
+
+  @override
+  void dispose() {
+    _centralHubStatusSubscription?.cancel(); // Cancel subscription
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // --------------------------------------------------
+  // LISTEN TO CENTRAL HUB STATUS
+  // --------------------------------------------------
+  void _listenToCentralHubStatus() {
+    _centralHubStatusSubscription = _centralHubStatusRef.onValue.listen((event) {
+      if (event.snapshot.exists && event.snapshot.value is bool) {
+        setState(() {
+          _isCentralHubPaused = event.snapshot.value as bool;
+        });
+      } else {
+        // If no status exists, set a default in the database
+        _centralHubStatusRef.set(false);
+        setState(() {
+          _isCentralHubPaused = false;
+        });
+      }
+    }, onError: (error) {
+      print("Error listening to central hub status: $error");
+    });
+  }
+
+
 
   // --------------------------------------------------
   // FETCH USERS
@@ -112,50 +152,88 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Add User"),
+        backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
+        title: const Text(
+          "Add User",
+          style: TextStyle(color: Colors.white),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(hintText: "Enter full name"),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: "Enter full name",
+                hintStyle: TextStyle(color: Colors.white),
+              ),
             ),
             TextField(
               controller: emailController,
-              decoration: const InputDecoration(hintText: "Enter email"),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: "Enter email",
+                hintStyle: TextStyle(color: Colors.white),
+              ),
             ),
             TextField(
               controller: passwordController,
+              style: const TextStyle(color: Colors.white),
               obscureText: true,
-              decoration: const InputDecoration(hintText: "Enter password"),
+              decoration: const InputDecoration(
+                hintText: "Enter password",
+                hintStyle: TextStyle(color: Colors.white),
+              ),
             ),
             TextField(
               controller: addressController,
-              decoration: const InputDecoration(hintText: "Enter address"),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: "Enter address",
+                hintStyle: TextStyle(color: Colors.white),
+              ),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
+              dropdownColor:
+                  Theme.of(context).primaryColor.withOpacity(0.8),
               initialValue: statusValue,
               items: ["Active", "Inactive"]
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                  .map((s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(
+                        s,
+                        style: const TextStyle(color: Colors.white),
+                      )))
                   .toList(),
               onChanged: (val) {
                 if (val != null) statusValue = val;
               },
-              decoration: const InputDecoration(labelText: "Select Status"),
+              decoration: const InputDecoration(
+                labelText: "Select Status",
+                labelStyle: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
+            child: const Text(
+              "Cancel",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  Theme.of(context).primaryColor.withOpacity(0.8),
+            ),
             onPressed: () async {
               try {
                 final auth = FirebaseAuth.instance;
-                final userCredential = await auth.createUserWithEmailAndPassword(
+                final userCredential =
+                    await auth.createUserWithEmailAndPassword(
                   email: emailController.text,
                   password: passwordController.text,
                 );
@@ -196,14 +274,18 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('An unexpected error occurred: ${e.toString()}'),
+                    content: Text(
+                        'An unexpected error occurred: ${e.toString()}'),
                     backgroundColor: Colors.red,
                   ),
                 );
                 Navigator.pop(ctx); // Pop the dialog on error
               }
             },
-            child: const Text("Add"),
+            child: const Text(
+              "Add",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -216,48 +298,82 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   void _editUser(int index) {
     final nameController = TextEditingController(text: users[index].name);
     final emailController = TextEditingController(text: users[index].email);
-    final addressController = TextEditingController(text: users[index].address);
+    final addressController =
+        TextEditingController(text: users[index].address);
 
     String statusValue = users[index].status;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Edit User"),
+        backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
+        title: const Text(
+          "Edit User",
+          style: TextStyle(color: Colors.white),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(hintText: "Update full name"),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: "Update full name",
+                hintStyle: TextStyle(color: Colors.white),
+              ),
             ),
             TextField(
               controller: emailController,
-              decoration: const InputDecoration(hintText: "Update email"),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: "Update email",
+                hintStyle: TextStyle(color: Colors.white),
+              ),
             ),
             TextField(
               controller: addressController,
-              decoration: const InputDecoration(hintText: "Update address"),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: "Update address",
+                hintStyle: TextStyle(color: Colors.white),
+              ),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
+              dropdownColor:
+                  Theme.of(context).primaryColor.withOpacity(0.8),
               initialValue: statusValue,
               items: ["Active", "Inactive"]
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                  .map((s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(
+                        s,
+                        style: const TextStyle(color: Colors.white),
+                      )))
                   .toList(),
               onChanged: (val) {
                 if (val != null) statusValue = val;
               },
-              decoration: const InputDecoration(labelText: "Update Status"),
+              decoration: const InputDecoration(
+                labelText: "Update Status",
+                labelStyle: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
+            child: const Text(
+              "Cancel",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  Theme.of(context).primaryColor.withOpacity(0.8),
+            ),
             onPressed: () async {
               await FirebaseFirestore.instance
                   .collection('users')
@@ -273,7 +389,10 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
               Navigator.pop(ctx);
               _fetchUsers();
             },
-            child: const Text("Save"),
+            child: const Text(
+              "Save",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -293,6 +412,27 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   }
 
   // --------------------------------------------------
+  // TOGGLE CENTRAL HUB STATUS
+  // --------------------------------------------------
+  Future<void> _toggleCentralHubStatus(bool newValue) async {
+    setState(() {
+      _isCentralHubPaused = newValue;
+    });
+    await _centralHubStatusRef.set(newValue);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          newValue
+              ? 'Central Hub data reception paused.'
+              : 'Central Hub data reception resumed.',
+        ),
+        backgroundColor: newValue ? Colors.orange : Colors.green,
+      ),
+    );
+  }
+
+  // --------------------------------------------------
   // UI
   // --------------------------------------------------
   @override
@@ -302,8 +442,11 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         onPressed: _addUser,
-        backgroundColor: Theme.of(context).colorScheme.secondary,
-        child: const Icon(Icons.add),
+        backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
+        child: const Icon(
+          Icons.add,
+          color: Colors.white,
+        ),
       ),
 
       body: SafeArea(
@@ -312,6 +455,8 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
             _buildHeader(themeNotifier),
             const SizedBox(height: 16),
             Expanded(child: _buildTableContainer()),
+            const SizedBox(height: 16), // Add some spacing
+            Flexible(child: _buildPlugsSection()), // Add the plugs section here
           ],
         ),
       ),
@@ -336,33 +481,34 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       child: Row(
         children: [
           const SizedBox(width: 16),
-          Icon(Icons.admin_panel_settings,
-              color: Theme.of(context).colorScheme.secondary),
+          const Icon(Icons.admin_panel_settings, color: Colors.white),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
               'Admin Monitoring List',
-              style: Theme.of(context).textTheme.bodyLarge,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Colors.white,
+                  ),
             ),
           ),
           IconButton(
-            icon: Icon(
+            icon: const Icon(
               Icons.notifications,
-              color: Theme.of(context).colorScheme.secondary,
+              color: Colors.white,
             ),
             onPressed: () {},
           ),
           IconButton(
             icon: Icon(
               themeNotifier.darkTheme ? Icons.dark_mode : Icons.light_mode,
-              color: Theme.of(context).colorScheme.secondary,
+              color: Colors.white,
             ),
             onPressed: () => themeNotifier.toggleTheme(),
           ),
           PopupMenuButton<String>(
-            icon: Icon(
+            icon: const Icon(
               Icons.account_circle,
-              color: Theme.of(context).colorScheme.secondary,
+              color: Colors.white,
             ),
             onSelected: (value) {
               if (value == 'view_profile') {
@@ -395,7 +541,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
+          color: Theme.of(context).primaryColor.withOpacity(0.8),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -416,12 +562,14 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
           child: TextField(
             controller: _searchController,
             onSubmitted: (q) => _applySearch(q),
+            style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
               hintText: "Search user...",
-              prefixIcon: Icon(Icons.search,
-                  color: Theme.of(context).iconTheme.color),
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
+              prefixIcon:
+                  Icon(Icons.search, color: Colors.white.withOpacity(0.8)),
               filled: true,
-              fillColor: Theme.of(context).cardColor.withOpacity(0.05),
+              fillColor: Theme.of(context).primaryColor.withOpacity(0.8),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
@@ -432,14 +580,19 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
         const SizedBox(width: 8),
         ElevatedButton(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.secondary,
+            backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
           ),
           onPressed: () => _applySearch(_searchController.text),
-          child: const Text("Enter"),
+          child: const Text(
+            "Enter",
+            style: TextStyle(
+              color: Colors.white,
+            ),
+          ),
         ),
       ],
     );
@@ -457,23 +610,74 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
           columnSpacing: 20, // Add some spacing
           horizontalMargin: 10, // Add some margin
           headingRowColor: WidgetStateProperty.all(
-            Theme.of(context).colorScheme.secondary.withOpacity(0.5),
+            Theme.of(context).primaryColor.withOpacity(0.8),
           ),
           columns: const [
-            DataColumn(label: Padding(padding: EdgeInsets.all(8.0), child: Text("Name"))),
-            DataColumn(label: Padding(padding: EdgeInsets.all(8.0), child: Text("Email"))),
-            DataColumn(label: Padding(padding: EdgeInsets.all(8.0), child: Text("Address"))),
-            DataColumn(label: Padding(padding: EdgeInsets.all(8.0), child: Text("Status"))),
-            DataColumn(label: Padding(padding: EdgeInsets.all(8.0), child: Text("Date Registered"))),
-            DataColumn(label: Padding(padding: EdgeInsets.all(8.0), child: Text("Actions"))),
+            DataColumn(
+                label: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text(
+                      "Name",
+                      style: TextStyle(color: Colors.white),
+                    ))),
+            DataColumn(
+                label: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text(
+                      "Email",
+                      style: TextStyle(color: Colors.white),
+                    ))),
+            DataColumn(
+                label: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text(
+                      "Address",
+                      style: TextStyle(color: Colors.white),
+                    ))),
+            DataColumn(
+                label: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text(
+                      "Status",
+                      style: TextStyle(color: Colors.white),
+                    ))),
+            DataColumn(
+                label: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text(
+                      "Date Registered",
+                      style: TextStyle(color: Colors.white),
+                    ))),
+            DataColumn(
+                label: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Text(
+                      "Actions",
+                      style: TextStyle(color: Colors.white),
+                    ))),
           ],
           rows: List.generate(users.length, (index) {
             final user = users[index];
             return DataRow(
               cells: [
-                DataCell(Padding(padding: const EdgeInsets.all(8.0), child: Text(user.name))),
-                DataCell(Padding(padding: const EdgeInsets.all(8.0), child: Text(user.email))),
-                DataCell(Padding(padding: const EdgeInsets.all(8.0), child: Text(user.address))),
+                DataCell(Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      user.name,
+                      style: const TextStyle(color: Colors.white),
+                    ))),
+                DataCell(Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      user.email,
+                      style: const TextStyle(color: Colors.white),
+                    ))),
+                DataCell(Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      user.address,
+                      style: const TextStyle(color: Colors.white),
+                    ))),
                 DataCell(
                   Padding(
                     padding: const EdgeInsets.all(8.0),
@@ -502,11 +706,13 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                     child: Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.blueAccent),
+                          icon: const Icon(Icons.edit,
+                              color: Colors.blueAccent),
                           onPressed: () => _editUser(index),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.redAccent),
+                          icon: const Icon(Icons.delete,
+                              color: Colors.redAccent),
                           onPressed: () => _deleteUser(index),
                         ),
                       ],
@@ -520,4 +726,195 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       ),
     );
   }
+
+    Widget _buildPlugsSection() {
+      // Construct the correct database reference for plugs under the hardcoded user's default hub
+      final dbRef = FirebaseDatabase.instance.ref()
+          .child('users')
+          .child('espthesisbmn_at_gmail_com') // Hardcoded email as per user's request
+          .child('hubs')
+          .child(_currentHubSerialNumber) // Using the placeholder serial number
+          .child('plugs');
+
+  
+
+      return Padding(
+
+        padding: const EdgeInsets.all(16.0),
+
+        child: Container(
+
+          padding: const EdgeInsets.all(16),
+
+          decoration: BoxDecoration(
+
+            color: Theme.of(context).primaryColor.withOpacity(0.8),
+
+            borderRadius: BorderRadius.circular(12),
+
+          ),
+
+          child: Column(
+
+            crossAxisAlignment: CrossAxisAlignment.start,
+
+            children: [
+
+                            Text(
+
+                              'Live Energy Consumption (Plugs)',
+
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+
+                                    fontWeight: FontWeight.bold,
+
+                                    color: Colors.white,
+
+                                  ),
+
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            Row(
+
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                              children: [
+
+                                Text(
+
+                                  'Pause Data Reception',
+
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+
+                                        color: Colors.white,
+
+                                      ),
+
+                                ),
+
+                                Switch(
+
+                                  value: _isCentralHubPaused,
+
+                                  onChanged: (value) {
+
+                                    _toggleCentralHubStatus(value);
+
+                                  },
+
+                                  activeColor: Colors.greenAccent,
+
+                                  inactiveThumbColor: Colors.redAccent,
+
+                                  inactiveTrackColor: Colors.redAccent.withOpacity(0.5),
+
+                                ),
+
+                              ],
+
+                            ),
+
+                            const SizedBox(height: 16),
+
+              Expanded(
+
+                child: StreamBuilder(
+                  stream: dbRef.onValue,
+                  builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    } else if (snapshot.hasError) {
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    } else if (!snapshot.hasData ||
+                        snapshot.data!.snapshot.value == null) {
+                      return const Center(child: Text('No data available'));
+                    } else {
+                      final data = snapshot.data!.snapshot.value;
+                      if (data is Map<dynamic, dynamic>) {
+                        final plugs = <String, dynamic>{};
+                        data.forEach((key, value) {
+                          plugs[key] = value;
+                        });
+
+                        return ListView.builder(
+                          itemCount: plugs.length,
+                          itemBuilder: (context, index) {
+                            final plugId = plugs.keys.elementAt(index);
+                            final plugData = plugs[plugId];
+
+                            return Card(
+                              elevation: 5,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              color: Theme.of(context)
+                                  .primaryColor
+                                  .withOpacity(0.8),
+                              margin: const EdgeInsets.symmetric(
+                                  vertical: 8, horizontal: 10),
+                              child: Padding(
+                                padding: const EdgeInsets.all(15),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      plugData['name'] ?? 'N/A',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                        'Status: ${plugData['status'] ?? 'N/A'}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                        )),
+                                    Text('Power: ${plugData['power'] ?? 0} W',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                        )),
+                                    Text(
+                                        'Voltage: ${plugData['voltage'] ?? 0} V',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                        )),
+                                    Text(
+                                        'Current: ${plugData['current'] ?? 0} A',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                        )),
+                                    Text(
+                                        'Energy: ${plugData['energy'] ?? 0} kWh',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                        )),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      } else {
+                        return const Center(
+                            child: Text('Invalid data format'));
+                      }
+                    }
+                  },
+                ),
+
+              ),
+
+            ],
+
+          ),
+
+        ),
+
+      );
+
+    }
 }

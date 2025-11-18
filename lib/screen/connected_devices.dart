@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 
+// Existing ConnectedDevice class (kept for potential future use or if other parts of the app depend on it)
 class ConnectedDevice {
   String name;
   String status; // ✅ make it mutable
   IconData icon;
   double usage;
   double percent;
-   int plug;
+  String? plug;
   String? serialNumber; // Added serial number field
+  double? current; // New field for current
+  double? energy; // New field for energy
+  double? power; // New field for power
+  double? voltage; // New field for voltage
 
   ConnectedDevice({
     required this.name,
@@ -15,9 +20,11 @@ class ConnectedDevice {
     required this.icon,
     required this.usage,
     required this.percent,
-     this.plug = 1,
+    this.plug,
     this.serialNumber, // Initialize serial number
+    this.current,
+    this.energy,
+    this.power,
+    this.voltage,
   });
 }
-
-

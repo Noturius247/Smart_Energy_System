@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme_provider.dart';
+import '../theme_provider.dart' show darkTheme;
+
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -117,11 +119,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
     });
   }
 
+  bool _isSmallScreen(BuildContext context) {
+    return MediaQuery.of(context).size.width < 600; // Define your small screen breakpoint
+  }
+
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 768;
-    final panelWidth = isSmallScreen ? screenWidth : screenWidth * 0.4;
+    final isSmallScreen = _isSmallScreen(context);
+    final panelWidth = isSmallScreen ? MediaQuery.of(context).size.width : MediaQuery.of(context).size.width * 0.4;
 
     return SlideTransition(
       position: _slideAnimation,

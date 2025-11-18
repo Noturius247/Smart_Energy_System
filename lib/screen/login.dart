@@ -47,65 +47,7 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
-  Future<void> _resendVerificationEmail() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Please enter your email and password to resend verification.'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-      return;
-    }
-
-    try {
-      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
-      final user = cred.user;
-      if (user == null) throw Exception('Unable to sign in to resend verification');
-      if (user.emailVerified) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Email already verified. Please sign in.'),
-              backgroundColor: Theme.of(context).colorScheme.secondary,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-        await FirebaseAuth.instance.signOut();
-        return;
-      }
-
-      await user.sendEmailVerification();
-      await FirebaseAuth.instance.signOut();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Verification email resent. Check your inbox.'),
-            backgroundColor: Theme.of(context).colorScheme.secondary,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error resending verification email: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to resend verification email: ${e.toString()}'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

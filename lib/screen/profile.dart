@@ -7,6 +7,7 @@ import 'login.dart';
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
 
+
 class EnergyProfileScreen extends StatefulWidget {
   const EnergyProfileScreen({super.key});
 
@@ -46,11 +47,14 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     );
   }
 
+  bool _isSmallScreen(BuildContext context) {
+    return MediaQuery.of(context).size.width < 600; // Define your small screen breakpoint
+  }
+
   @override
   Widget build(BuildContext context) {
     // Check screen width to determine layout
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 768;
+    final isSmallScreen = _isSmallScreen(context);
 
     return Scaffold(
       body: isSmallScreen ? _buildMobileLayout() : _buildDesktopLayout(),

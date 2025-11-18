@@ -1,0 +1,19 @@
+{
+  "rules": {
+    "users": {
+      ".read": "auth != null",
+      "$user_id": {
+        "hubs": {
+          "$serial_number": {
+            ".write": "auth != null && (!data.exists() || data.child('assigned').val() == false || data.child('ownerId').val() == auth.uid)",
+            "plugs":{
+              "$plugs_id":{
+                 ".write":"auth != null && root.child('users').child(auth.token.email.replace('.', '_at_')).child('hubs').child($serial_number).child('ownerId').val() == auth.uid"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
