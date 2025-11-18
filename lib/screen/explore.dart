@@ -21,18 +21,65 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _serialNumberController = TextEditingController();
-  List<ConnectedDevice> filteredDevices = List.from(connectedDevices);
+  List<ConnectedDevice> _userDevices = []; // New list to hold user-specific devices
+  List<ConnectedDevice> filteredDevices = []; // Initialize as empty, will be populated from _userDevices
 
   @override
   void initState() {
     super.initState();
-    filteredDevices = connectedDevices;
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(_controller);
     _controller.forward();
+    _fetchUserDevices(); // Fetch devices when the widget initializes
+  }
+
+  Future<void> _fetchUserDevices() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      // Handle not logged in state, maybe clear devices or show a message
+      setState(() {
+        _userDevices = [];
+        filteredDevices = [];
+      });
+      return;
+    }
+
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('devices')
+          .get();
+
+      final fetchedDevices = querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        return ConnectedDevice(
+          name: data['name'] ?? 'Unknown Device',
+          status: data['status'] ?? 'off',
+          icon: data['icon'] != null ? IconData(data['icon'], fontFamily: 'MaterialIcons') : Icons.devices_other, // Reconstruct IconData
+          usage: (data['usage'] as num?)?.toDouble() ?? 0.0,
+          percent: (data['percent'] as num?)?.toDouble() ?? 0.0,
+          plug: data['plug'] ?? 1,
+          serialNumber: data['serialNumber'],
+        );
+      }).toList();
+
+      setState(() {
+        _userDevices = fetchedDevices;
+        filteredDevices = List.from(_userDevices);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error fetching devices: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -135,7 +182,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
             // Add the newly linked device to the local list
             setState(() {
-              connectedDevices.add(
+              _userDevices.add(
                 ConnectedDevice(
                   name: 'Central Hub',
                   icon: Icons.router, // Using Icons.router for Central Hub
@@ -146,7 +193,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                   serialNumber: serialNumber,
                 ),
               );
-              filteredDevices = List.from(connectedDevices);
+              filteredDevices = List.from(_userDevices);
             });
           }
         } else {
@@ -285,18 +332,48 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.secondary),
-              onPressed: () {
+              onPressed: () async {
                 if (nameController.text.isNotEmpty) {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user == null) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('You must be logged in to add a device.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+
+                  final newDevice = ConnectedDevice(
+                    name: nameController.text,
+                    icon: iconOptions[selectedIcon] ?? Icons.devices_other,
+                    status: status,
+                    usage: 0.0,
+                    percent: 0.0,
+                    plug: selectedPlug,
+                    serialNumber: null, // Generic devices don't have serial numbers
+                  );
+
+                  // Add to Firestore
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .collection('devices')
+                      .add({
+                    'name': newDevice.name,
+                    'icon': newDevice.icon.codePoint, // Store icon as codePoint
+                    'status': newDevice.status,
+                    'usage': newDevice.usage,
+                    'percent': newDevice.percent,
+                    'plug': newDevice.plug,
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
+
                   setState(() {
-                    connectedDevices.add(ConnectedDevice(
-                      name: nameController.text,
-                      icon: iconOptions[selectedIcon] ?? Icons.devices_other,
-                      status: status,
-                      usage: 0.0,
-                      percent: 0.0,
-                      plug: selectedPlug,
-                    ));
-                    filteredDevices = List.from(connectedDevices);
+                    _userDevices.add(newDevice);
+                    filteredDevices = List.from(_userDevices);
                   });
                   if (!mounted) return;
                   Navigator.pop(context);
@@ -389,11 +466,56 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.secondary),
-              onPressed: () {
+              onPressed: () async {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user == null) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('You must be logged in to edit a device.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                // Find the document ID for the device in Firestore
+                String? docId;
+                if (device.serialNumber != null) {
+                  // For Central Hubs, the doc ID is the serial number
+                  docId = device.serialNumber;
+                } else {
+                  // For generic devices, we need to query to find the doc ID
+                  final querySnapshot = await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .collection('devices')
+                      .where('name', isEqualTo: device.name) // Assuming name is unique enough for generic devices
+                      .limit(1)
+                      .get();
+                  if (querySnapshot.docs.isNotEmpty) {
+                    docId = querySnapshot.docs.first.id;
+                  }
+                }
+
+                if (docId != null) {
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .collection('devices')
+                      .doc(docId)
+                      .update({
+                    'name': nameController.text,
+                    'status': status,
+                    'icon': selectedIcon.codePoint,
+                  });
+                }
+
                 setState(() {
                   device.name = nameController.text;
                   device.status = status;
                   device.icon = selectedIcon;
+                  filteredDevices = List.from(_userDevices);
                 });
                 if (!mounted) return;
                 Navigator.pop(context);
@@ -620,9 +742,47 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                       );
 
                                       if (confirmDelete == true) {
+                                        final user = FirebaseAuth.instance.currentUser;
+                                        if (user == null) {
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('You must be logged in to delete a device.'),
+                                              backgroundColor: Colors.red,
+                                            ),
+                                          );
+                                          return;
+                                        }
+
+                                        // Find the document ID for the device in Firestore
+                                        String? docId;
+                                        if (device.serialNumber != null) {
+                                          docId = device.serialNumber;
+                                        } else {
+                                          final querySnapshot = await FirebaseFirestore.instance
+                                              .collection('users')
+                                              .doc(user.uid)
+                                              .collection('devices')
+                                              .where('name', isEqualTo: device.name)
+                                              .limit(1)
+                                              .get();
+                                          if (querySnapshot.docs.isNotEmpty) {
+                                            docId = querySnapshot.docs.first.id;
+                                          }
+                                        }
+
+                                        if (docId != null) {
+                                          await FirebaseFirestore.instance
+                                              .collection('users')
+                                              .doc(user.uid)
+                                              .collection('devices')
+                                              .doc(docId)
+                                              .delete();
+                                        }
+
                                         setState(() {
-                                          connectedDevices.remove(device);
-                                          filteredDevices = List.from(connectedDevices);
+                                          _userDevices.remove(device);
+                                          filteredDevices = List.from(_userDevices);
                                         });
                                         if (!mounted) return;
                                         ScaffoldMessenger.of(context).showSnackBar(
