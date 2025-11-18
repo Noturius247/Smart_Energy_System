@@ -39,6 +39,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   Future<void> _fetchUserDevices() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      print('[_fetchUserDevices] User not logged in.');
       // Handle not logged in state, maybe clear devices or show a message
       setState(() {
         _userDevices = [];
@@ -46,6 +47,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       });
       return;
     }
+    print('[_fetchUserDevices] Fetching devices for user: ${user.uid}');
 
     try {
       final querySnapshot = await FirebaseFirestore.instance
@@ -54,9 +56,12 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           .collection('devices')
           .get();
 
+      print('[_fetchUserDevices] Retrieved ${querySnapshot.docs.length} documents.');
+
       final fetchedDevices = querySnapshot.docs.map((doc) {
         final data = doc.data();
-        return ConnectedDevice(
+        print('[_fetchUserDevices] Document data: $data');
+        final device = ConnectedDevice(
           name: data['name'] ?? 'Unknown Device',
           status: data['status'] ?? 'off',
           icon: data['icon'] != null ? IconData(data['icon'], fontFamily: 'MaterialIcons') : Icons.devices_other, // Reconstruct IconData
@@ -65,13 +70,18 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           plug: data['plug'] ?? 1,
           serialNumber: data['serialNumber'],
         );
+        print('[_fetchUserDevices] Created ConnectedDevice: ${device.name}, S/N: ${device.serialNumber}');
+        return device;
       }).toList();
 
       setState(() {
         _userDevices = fetchedDevices;
         filteredDevices = List.from(_userDevices);
+        print('[_fetchUserDevices] _userDevices updated: ${_userDevices.length} devices.');
+        print('[_fetchUserDevices] filteredDevices updated: ${filteredDevices.length} devices.');
       });
     } catch (e) {
+      print('[_fetchUserDevices] Error fetching devices: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -92,12 +102,15 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
   void _searchSerialNumber() async {
     final serialNumber = _serialNumberController.text.trim();
+    print('[_searchSerialNumber] Searching for serial number: $serialNumber');
     if (serialNumber.isEmpty) {
+      print('[_searchSerialNumber] Serial number is empty.');
       return;
     }
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.email == null) {
+      print('[_searchSerialNumber] User not logged in or email is null. User: $user');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -107,6 +120,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       );
       return;
     }
+    print('[_searchSerialNumber] Current user UID: ${user.uid}, Email: ${user.email}');
 
 
     final dbRef = FirebaseDatabase.instance.ref('users/espthesisbmn_at_gmail_com/hubs/$serialNumber');
@@ -115,8 +129,10 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     if (snapshot.exists) {
       final data = snapshot.value as Map<dynamic, dynamic>;
       final assigned = data['assigned'] ?? false;
+      print('[_searchSerialNumber] Device found in Realtime DB. Data: $data, Assigned: $assigned');
 
       if (assigned) {
+        print('[_searchSerialNumber] Device is already assigned.');
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -159,18 +175,21 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           // Link to user account and add to Firestore
           final user = FirebaseAuth.instance.currentUser;
           if (user != null) {
+            print('[_searchSerialNumber] User confirmed link. Updating Realtime DB and Firestore.');
             await dbRef.update({'assigned': true, 'ownerId': user.uid, 'user_email': user.email});
+            final firestoreData = {
+              'name': 'Central Hub',
+              'serialNumber': serialNumber,
+              'createdAt': FieldValue.serverTimestamp(),
+              'user_email': user.email,
+            };
+            print('[_searchSerialNumber] Writing to Firestore: $firestoreData');
             await FirebaseFirestore.instance
                 .collection('users')
                 .doc(user.uid)
                 .collection('devices')
                 .doc(serialNumber)
-                .set({
-              'name': 'Central Hub',
-              'serialNumber': serialNumber,
-              'createdAt': FieldValue.serverTimestamp(),
-              'user_email': user.email,
-            });
+                .set(firestoreData);
 
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
@@ -182,21 +201,23 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
             // Add the newly linked device to the local list
             setState(() {
-              _userDevices.add(
-                ConnectedDevice(
-                  name: 'Central Hub',
-                  icon: Icons.router, // Using Icons.router for Central Hub
-                  status: 'on', // Default status
-                  usage: 0.0,
-                  percent: 0.0,
-                  plug: 1,
-                  serialNumber: serialNumber,
-                ),
+              final newDevice = ConnectedDevice(
+                name: 'Central Hub',
+                icon: Icons.router, // Using Icons.router for Central Hub
+                status: 'on', // Default status
+                usage: 0.0,
+                percent: 0.0,
+                plug: 1,
+                serialNumber: serialNumber,
               );
+              _userDevices.add(newDevice);
               filteredDevices = List.from(_userDevices);
+              print('[_searchSerialNumber] Added new device to _userDevices: ${newDevice.name}, S/N: ${newDevice.serialNumber}');
+              print('[_searchSerialNumber] _userDevices count: ${_userDevices.length}, filteredDevices count: ${filteredDevices.length}');
             });
           }
         } else {
+          print('[_searchSerialNumber] Device linking cancelled by user.');
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Device linking cancelled.'),
@@ -206,6 +227,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         }
       }
     } else {
+      print('[_searchSerialNumber] Serial number not found in Realtime DB.');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
