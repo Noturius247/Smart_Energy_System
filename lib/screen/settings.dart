@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Cloud Firestore
+import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import '../theme_provider.dart';
 import 'admin_home.dart';
 import 'explore.dart';
@@ -7,6 +10,7 @@ import 'schedule.dart';
 import 'profile.dart';
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
+
 
 class EnergySettingScreen extends StatefulWidget {
   const EnergySettingScreen({super.key});
@@ -22,6 +26,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   double powerSavingLevel = 0.6;
   int _currentIndex = 4;
   bool _breakerStatus = false;
+  double _pricePerKWH = 0.0; // New state variable for price per kWh
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -31,6 +36,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   @override
   void initState() {
     super.initState();
+    _loadPricePerKWH(); // Load saved price on init
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -50,6 +56,62 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     ).animate(
       CurvedAnimation(parent: _profileController, curve: Curves.easeOutBack),
     );
+  }
+
+  // Method to save price per kWh to Firestore
+  Future<void> _savePricePerKWH() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please log in to save settings.')),
+      );
+      return;
+    }
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({'pricePerKWH': _pricePerKWH}, SetOptions(merge: true));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Price per kWh saved successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving price: $e')),
+      );
+    }
+  }
+
+  // Method to load price per kWh from Firestore
+  Future<void> _loadPricePerKWH() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      // If user is not logged in, set default and don't try to load from Firestore
+      setState(() {
+        _pricePerKWH = 0.0;
+      });
+      return;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists && doc.data()!.containsKey('pricePerKWH')) {
+        setState(() {
+          _pricePerKWH = (doc.data()!['pricePerKWH'] as num).toDouble();
+        });
+      } else {
+        setState(() {
+          _pricePerKWH = 0.0;
+        });
+      }
+    } catch (e) {
+      print('Error loading price per kWh: $e');
+      setState(() {
+        _pricePerKWH = 0.0; // Default in case of error
+      });
+    }
   }
 
   @override
@@ -100,11 +162,14 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     );
   }
 
+  bool _isSmallScreen(BuildContext context) {
+    return MediaQuery.of(context).size.width < 600; // Define your small screen breakpoint
+  }
+
   @override
   Widget build(BuildContext context) {
     // Check screen width to determine layout
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 768;
+    final isSmallScreen = _isSmallScreen(context);
 
     return Scaffold(
       body: isSmallScreen ? _buildMobileLayout() : _buildDesktopLayout(),
@@ -187,6 +252,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                     _buildDeviceManagement(),
                     const SizedBox(height: 40),
                     _buildPreferences(),
+          const SizedBox(height: 40),
+          _buildPricingSettings(),
                     const SizedBox(height: 100),
                   ],
                 ),
@@ -594,6 +661,52 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPricingSettings() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('PRICING SETTINGS'),
+        const SizedBox(height: 20),
+        _buildSettingItem(
+          icon: Icons.attach_money,
+          iconColor: Colors.green,
+          title: 'Price per kWh',
+          trailing: SizedBox(
+            width: 100,
+            child: TextFormField(
+              initialValue: _pricePerKWH.toStringAsFixed(2),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+              ],
+              textAlign: TextAlign.right,
+              onChanged: (value) {
+                setState(() {
+                  _pricePerKWH = double.tryParse(value) ?? 0.0;
+                });
+              },
+              style: Theme.of(context).textTheme.titleMedium,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                hintText: '0.00',
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton(
+            onPressed: () {
+              _savePricePerKWH();
+            },
+            child: const Text('Apply'),
+          ),
+        ),
+      ],
     );
   }
 

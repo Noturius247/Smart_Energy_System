@@ -7,6 +7,7 @@ import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
 import 'energy_chart.dart';
 
+
 class HomeScreen extends StatefulWidget {
   final int initialIndex;
   const HomeScreen({super.key, this.initialIndex = 0});
@@ -24,11 +25,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _currentIndex = widget.initialIndex;
   }
 
+  bool _isSmallScreen(BuildContext context) {
+    return MediaQuery.of(context).size.width < 600; // Define your small screen breakpoint
+  }
+
   @override
   Widget build(BuildContext context) {
     // Check screen width to determine layout
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 768; // Tablet/Mobile breakpoint
+    final isSmallScreen = _isSmallScreen(context);
 
     return Scaffold(
       body: isSmallScreen
@@ -124,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   // ---------------------- Dashboard Cards & Sections ----------------------
-
+  
   Widget _currentEnergyCard() {
     final now = DateTime.now();
     final formattedDate = DateFormat('EEEE, MMMM d, yyyy - hh:mm a').format(now);

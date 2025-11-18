@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Added import
+import 'package:cloud_firestore/cloud_firestore.dart'; // Added import
 import '../theme_provider.dart';
 import 'connected_devices.dart';
 import 'custom_sidebar_nav.dart';
@@ -27,6 +29,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   DateTime _selectedWeekStart =
       DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
 
+  List<ConnectedDevice> _userDevices = []; // New list to hold user-specific devices
+
   static const List<String> _monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -41,6 +45,50 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
+    _fetchUserDevices(); // Fetch devices when the widget initializes
+  }
+
+  Future<void> _fetchUserDevices() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _userDevices = [];
+      });
+      return;
+    }
+
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('devices')
+          .get();
+
+      final fetchedDevices = querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        return ConnectedDevice(
+          name: data['name'] ?? 'Unknown Device',
+          status: data['status'] ?? 'off',
+          icon: data['icon'] != null ? IconData(data['icon'], fontFamily: 'MaterialIcons') : Icons.devices_other,
+          usage: (data['usage'] as num?)?.toDouble() ?? 0.0,
+          percent: (data['percent'] as num?)?.toDouble() ?? 0.0,
+          plug: data['plug'] ?? 1,
+          serialNumber: data['serialNumber'],
+        );
+      }).toList();
+
+      setState(() {
+        _userDevices = fetchedDevices;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error fetching devices: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -179,7 +227,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
  @override
   Widget build(BuildContext context) {
-    double totalUsage = connectedDevices.fold(0, (sum, d) => sum + d.usage);
+    double totalUsage = _userDevices.fold(0, (sum, d) => sum + d.usage);
     
     // Define the breakpoint for switching to bottom navigation (e.g., 800 pixels)
     const double breakpoint = 800;
@@ -252,7 +300,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
               ),
               const SizedBox(height: 8),
               Column(
-                children: connectedDevices.map((device) {
+                children: _userDevices.map((device) {
                   double adjustedUsage = device.usage;
                   bool isOnline = true;
                   String status = "Good";

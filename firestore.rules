@@ -5,9 +5,11 @@ service cloud.firestore {
     // 1) Users collection: only the authenticated owner may read/write their document
     //    Admins (custom claim `admin == true`) can manage any user.
     match /users/{userId} {
-      allow create: if request.auth != null && (request.auth.uid == userId || request.auth.token.admin == true);
-      allow read: if request.auth != null && (request.auth.uid == userId || request.auth.token.admin == true);
-      allow update, delete: if request.auth != null && (request.auth.uid == userId || request.auth.token.admin == true);
+      // Allow users to manage their own documents and subcollections
+      match /{allPaths=**} {
+        allow read, write: if request.auth.uid == userId;
+      }
+      allow read, write: if request.auth.uid == userId;
     }
 
     // 2) Devices collection example: owners can create/update/delete their own device docs
