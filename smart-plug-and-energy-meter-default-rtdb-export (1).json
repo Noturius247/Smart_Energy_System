@@ -1,0 +1,50 @@
+{
+  "users": {
+    "espthesisbmn_at_gmail_com": {
+      "hubs": {
+        "SP001": {
+          "assigned": true,
+          "ownerId": "rzfR2UJlsCZ0dYsNdIgmmpBwDPz1",
+          "plugs": {
+            "plug2e5c3314": {
+              "data": {
+                "current": 0.177,
+                "energy": 0.536,
+                "power": 17.3,
+                "voltage": 219.4
+              },
+              "lastUpdate": 1763397617404
+            },
+            "plug2f5c3314": {
+              "data": {
+                "current": 0.116,
+                "energy": 0.13,
+                "power": 7.5,
+                "voltage": 220.3
+              },
+              "lastUpdate": 1763217200461
+            }
+          },
+          "user_email": "luzaresbenzgerald@gmail.com"
+        },
+        "SP002": {
+          "plugs": {
+            "plug2e5c3314": {
+              "data": {
+                "current": 0,
+                "energy": 0.558,
+                "power": 0,
+                "voltage": 223.2
+              },
+              "lastUpdate": 1763401768908
+            }
+          }
+        }
+      }
+    },
+    "user_at_example_com": {
+      "email": "user@example.com",
+      "uid": "hG05HUMKdUbtaNqVnwuK98sK6mc2"
+    }
+  }
+}

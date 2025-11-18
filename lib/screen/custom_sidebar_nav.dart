@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Cloud Firestore
+import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
+import 'dart:async'; // Import for StreamSubscription
 import 'admin_home.dart';
 import 'explore.dart';
 import 'analytics.dart';
@@ -26,11 +29,52 @@ class CustomSidebarNav extends StatefulWidget {
 class _CustomSidebarNavState extends State<CustomSidebarNav> {
   late bool isCollapsed;
   final Map<int, bool> _hoverStates = {}; // Track hover states per item
+  double _pricePerKWH = 0.0; // New state variable for price per kWh
+  StreamSubscription? _priceSubscription; // StreamSubscription for real-time updates
 
   @override
   void initState() {
     super.initState();
     isCollapsed = false; // default expanded
+    _listenToPricePerKWH(); // Start listening for price updates
+  }
+
+  @override
+  void dispose() {
+    _priceSubscription?.cancel(); // Cancel the subscription when the widget is disposed
+    super.dispose();
+  }
+
+  // Method to listen for price per kWh from Firestore
+  void _listenToPricePerKWH() {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _pricePerKWH = 0.0;
+      });
+      return;
+    }
+
+    _priceSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists && snapshot.data()!.containsKey('pricePerKWH')) {
+        setState(() {
+          _pricePerKWH = (snapshot.data()!['pricePerKWH'] as num).toDouble();
+        });
+      } else {
+        setState(() {
+          _pricePerKWH = 0.0;
+        });
+      }
+    }, onError: (error) {
+      print('Error listening to price per kWh: $error');
+      setState(() {
+        _pricePerKWH = 0.0; // Default in case of error
+      });
+    });
   }
 
   @override
@@ -182,6 +226,23 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
               },
             ),
           ),
+
+          // Display Price per kWh
+          if (!widget.isBottomNav && _pricePerKWH > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
+              child: AnimatedOpacity(
+                opacity: isCollapsed ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                child: Text(
+                  'Price/kWh: \$${_pricePerKWH.toStringAsFixed(2)}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
 
           // Collapse & Logout
           Padding(
