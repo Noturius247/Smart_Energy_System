@@ -1,3 +1,6 @@
+import 'package:firebase_database/firebase_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../theme_provider.dart';
@@ -17,6 +20,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   late Animation<double> _fadeAnimation;
 
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _serialNumberController = TextEditingController();
   List<ConnectedDevice> filteredDevices = List.from(connectedDevices);
 
   @override
@@ -35,16 +39,134 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   void dispose() {
     _controller.dispose();
     _searchController.dispose();
+    _serialNumberController.dispose();
     super.dispose();
   }
 
-  void _filterDevices(String query) {
-    final results = connectedDevices.where((device) {
-      return device.name.toLowerCase().contains(query.toLowerCase());
-    }).toList();
-    setState(() {
-      filteredDevices = results;
-    });
+  void _searchSerialNumber() async {
+    final serialNumber = _serialNumberController.text.trim();
+    if (serialNumber.isEmpty) {
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.email == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You must be logged in to link a device.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+
+    final dbRef = FirebaseDatabase.instance.ref('users/espthesisbmn_at_gmail_com/hubs/$serialNumber');
+    final snapshot = await dbRef.get();
+
+    if (snapshot.exists) {
+      final data = snapshot.value as Map<dynamic, dynamic>;
+      final assigned = data['assigned'] ?? false;
+
+      if (assigned) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Device is already assigned.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else {
+        if (!mounted) return;
+        final bool confirmLink = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                backgroundColor: Theme.of(context).cardColor,
+                title: Text(
+                  "Link Central Hub",
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                content: Text(
+                  "A Central Hub with serial number '$serialNumber' was found and is available. Do you want to link it to your account?",
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text("Cancel",
+                        style: Theme.of(context).textTheme.bodyMedium),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.secondary),
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text("Link"),
+                  ),
+                ],
+              ),
+            ) ??
+            false;
+
+        if (confirmLink) {
+          // Link to user account and add to Firestore
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            await dbRef.update({'assigned': true, 'ownerId': user.uid, 'user_email': user.email});
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('devices')
+                .doc(serialNumber)
+                .set({
+              'name': 'Central Hub',
+              'serialNumber': serialNumber,
+              'createdAt': FieldValue.serverTimestamp(),
+              'user_email': user.email,
+            });
+
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Device successfully linked.'),
+                backgroundColor: Colors.green,
+              ),
+            );
+
+            // Add the newly linked device to the local list
+            setState(() {
+              connectedDevices.add(
+                ConnectedDevice(
+                  name: 'Central Hub',
+                  icon: Icons.router, // Using Icons.router for Central Hub
+                  status: 'on', // Default status
+                  usage: 0.0,
+                  percent: 0.0,
+                  plug: 1,
+                  serialNumber: serialNumber,
+                ),
+              );
+              filteredDevices = List.from(connectedDevices);
+            });
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Device linking cancelled.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Serial number not found.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _addDeviceDialog() {
@@ -367,20 +489,34 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 16),
-                    // ✅ Removed chat button from here - now only search bar
-                    TextField(
-                      controller: _searchController,
-                      onChanged: _filterDevices,
-                      decoration: InputDecoration(
-                        hintText: 'Search devices...',
-                        prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.secondary),
-                        filled: true,
-                        fillColor: Theme.of(context).primaryColor.withAlpha(200),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
+                    Text(
+                      'Add Central Hub',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _serialNumberController,
+                            decoration: InputDecoration(
+                              hintText: 'Enter Serial Number...',
+                              prefixIcon: Icon(Icons.search, color: Theme.of(context).colorScheme.secondary),
+                              filled: true,
+                              fillColor: Theme.of(context).primaryColor.withAlpha(200),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(24),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: _searchSerialNumber,
+                          child: const Text('Search'),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -427,6 +563,11 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                         device.name,
                                         style: Theme.of(context).textTheme.bodyLarge,
                                       ),
+                                      if (device.serialNumber != null)
+                                        Text(
+                                          'S/N: ${device.serialNumber}',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                                        ),
                                       Text(
                                         device.status == "on"
                                             ? "Status: On | Plug ${device.plug}"

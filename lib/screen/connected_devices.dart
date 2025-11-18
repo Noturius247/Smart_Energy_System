@@ -7,6 +7,7 @@ class ConnectedDevice {
   double usage;
   double percent;
    int plug;
+  String? serialNumber; // Added serial number field
 
   ConnectedDevice({
     required this.name,
@@ -15,6 +16,7 @@ class ConnectedDevice {
     required this.usage,
     required this.percent,
      this.plug = 1,
+    this.serialNumber, // Initialize serial number
   });
 }
 
