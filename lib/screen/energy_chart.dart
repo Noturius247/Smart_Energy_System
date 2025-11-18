@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Added import
+import 'package:cloud_firestore/cloud_firestore.dart'; // Added import
 import 'connected_devices.dart';
 
 enum EnergyRange { daily, weekly, monthly }
@@ -19,6 +21,8 @@ class _EnergyChartState extends State<EnergyChart> {
   final int _selectedMonth = DateTime.now().month;
   DateTime? _selectedDateFromChart;
 
+  List<ConnectedDevice> _userDevices = []; // New list to hold user-specific devices
+
   static const List<String> _monthNames = [
     'January',
     'February',
@@ -35,6 +39,55 @@ class _EnergyChartState extends State<EnergyChart> {
   ];
 
   static const List<String> _weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserDevices(); // Fetch devices when the widget initializes
+  }
+
+  Future<void> _fetchUserDevices() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _userDevices = [];
+      });
+      return;
+    }
+
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('devices')
+          .get();
+
+      final fetchedDevices = querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        return ConnectedDevice(
+          name: data['name'] ?? 'Unknown Device',
+          status: data['status'] ?? 'off',
+          icon: data['icon'] != null ? IconData(data['icon'], fontFamily: 'MaterialIcons') : Icons.devices_other,
+          usage: (data['usage'] as num?)?.toDouble() ?? 0.0,
+          percent: (data['percent'] as num?)?.toDouble() ?? 0.0,
+          plug: data['plug'] ?? 1,
+          serialNumber: data['serialNumber'],
+        );
+      }).toList();
+
+      setState(() {
+        _userDevices = fetchedDevices;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error fetching devices: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   Future<void> _selectDate(BuildContext context) async {
     DateTime? picked = await showDatePicker(
@@ -113,7 +166,7 @@ class _EnergyChartState extends State<EnergyChart> {
       hoursToShow = 24;
     }
 
-    double totalUsage = connectedDevices.fold(0, (sum, d) => sum + d.usage);
+    double totalUsage = _userDevices.fold(0, (sum, d) => sum + d.usage);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -175,7 +228,7 @@ class _EnergyChartState extends State<EnergyChart> {
                 ),
                 const SizedBox(height: 16),
                 Column(
-                  children: connectedDevices.map((device) {
+                  children: _userDevices.map((device) {
                     double adjustedUsage = device.usage;
                     bool isOnline = device.status.toLowerCase() == "on";
                     bool isGood = adjustedUsage > 5;
