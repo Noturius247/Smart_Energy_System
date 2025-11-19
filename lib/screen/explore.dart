@@ -5,6 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Cloud Firestore
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../theme_provider.dart';
 import 'connected_devices.dart';
@@ -20,6 +21,8 @@ class DevicesTab extends StatefulWidget {
 }
 
 class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
+  String? _userUid; // Declare the variable
+
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
 
@@ -33,10 +36,16 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   String? _hubErrorMessage;
   Timer? _refreshTimer; // New: Timer for periodic refresh
   double _pricePerKWH = 0.0; // New state variable for price per kWh
+  Map<String, dynamic>? _centralHubData; // New state variable for Central Hub details
 
   @override
   void initState() {
     super.initState();
+    _userUid = FirebaseAuth.instance.currentUser?.uid;
+    if (_userUid == null) {
+      print("User not logged in in DevicesTab");
+      // TODO: Handle the case where user is not logged in, e.g., navigate to login
+    }
     _loadPricePerKWH(); // Load saved price on init
     _controller = AnimationController(
       vsync: this,
@@ -268,12 +277,22 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           .map((doc) {
             final data = doc.data();
             print('[_fetchUserDevices] Document data: $data');
+
+            // Check if this is the Central Hub
+            if (data['name'] == 'Central Hub') {
+              // Ensure setState is called within the build context
+              if (mounted) {
+                setState(() {
+                  _centralHubData = data;
+                });
+              }
+              print('[_fetchUserDevices] Central Hub data identified: $_centralHubData');
+            }
+
             final device = ConnectedDevice(
               name: data['name'] ?? 'Unknown Device',
               status: data['status'] ?? 'off',
-              icon: data['icon'] != null
-                  ? IconData(data['icon'], fontFamily: 'MaterialIcons')
-                  : Icons.devices_other, // Reconstruct IconData
+              icon: getIconFromCodePoint(data['icon'] as int? ?? Icons.devices_other.codePoint), // Use helper for tree-shaking
               usage: (data['usage'] as num?)?.toDouble() ?? 0.0,
               percent: (data['percent'] as num?)?.toDouble() ?? 0.0,
               plug: (data['plug']?.toString()),
@@ -466,6 +485,82 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   }
 
 
+
+  Widget _buildCentralHubSection(bool isSmallScreen) {
+    if (_centralHubData == null) {
+      return const SizedBox.shrink(); // Don't show anything if no Central Hub data
+    }
+
+    // Extract fields
+    final String name = _centralHubData!['name'] ?? 'N/A';
+    final String serialNumber = _centralHubData!['serialNumber'] ?? 'N/A';
+    final String userEmail = _centralHubData!['user_email'] ?? 'N/A';
+    final Timestamp? createdAtTimestamp = _centralHubData!['createdAt'] as Timestamp?;
+    final String createdAt = createdAtTimestamp != null
+        ? DateFormat('MMM d, yyyy HH:mm').format(createdAtTimestamp.toDate())
+        : 'N/A';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Central Hub Info',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          color: Theme.of(context).cardColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildInfoRow('Name:', name, isSmallScreen),
+                _buildInfoRow('Serial Number:', serialNumber, isSmallScreen),
+                _buildInfoRow('User Email:', userEmail, isSmallScreen),
+                _buildInfoRow('Created At:', createdAt, isSmallScreen),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, bool isSmallScreen) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: isSmallScreen ? 14 : null,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontSize: isSmallScreen ? 14 : null,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _editDeviceDialog(ConnectedDevice device) {
     final nameController = TextEditingController(text: device.name);
@@ -1367,6 +1462,8 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                       ],
                     ),
                     const SizedBox(height: 16),
+
+                    _buildCentralHubSection(_isSmallScreen(context)), // Call the new section
 
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
