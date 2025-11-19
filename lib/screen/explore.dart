@@ -56,10 +56,10 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     _loadAllDevices(); // Initial load
 
     // New: Start periodic refresh
-    _refreshTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
-      _loadAllDevices();
-      _loadPricePerKWH(); // Also refresh price per kWh
-    });
+    // _refreshTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+    //   _loadAllDevices();
+    //   _loadPricePerKWH(); // Also refresh price per kWh
+    // });
   }
 
   // Method to load price per kWh from Firestore
