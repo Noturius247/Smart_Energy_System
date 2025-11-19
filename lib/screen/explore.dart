@@ -8,13 +8,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../theme_provider.dart';
+import '../constants.dart';
 import 'connected_devices.dart';
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
-import '../constants.dart';
+import '../realtime_db_service.dart';
 
 class DevicesTab extends StatefulWidget {
-  const DevicesTab({super.key});
+  final RealtimeDbService realtimeDbService;
+  const DevicesTab({super.key, required this.realtimeDbService});
 
   @override
   State<DevicesTab> createState() => _DevicesTabState();
@@ -22,6 +24,9 @@ class DevicesTab extends StatefulWidget {
 
 class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   String? _userUid; // Declare the variable
+  late RealtimeDbService _realtimeDbService;
+  StreamSubscription?
+  _hubDataSubscription; // Stream subscription for real-time hub data
 
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
@@ -30,17 +35,15 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   final TextEditingController _serialNumberController = TextEditingController();
   Map<String, List<ConnectedDevice>> _groupedDevices = {};
 
-  // New state variables for Realtime DB linked hubs
-
   bool _isHubsLoading = true;
   String? _hubErrorMessage;
-  Timer? _refreshTimer; // New: Timer for periodic refresh
+  // Timer? _refreshTimer; // Removed: No longer needed for periodic refresh
   double _pricePerKWH = 0.0; // New state variable for price per kWh
-
 
   @override
   void initState() {
     super.initState();
+    _realtimeDbService = widget.realtimeDbService;
     _userUid = FirebaseAuth.instance.currentUser?.uid;
     if (_userUid == null) {
       print("User not logged in in DevicesTab");
@@ -55,11 +58,93 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     _controller.forward();
     _loadAllDevices(); // Initial load
 
-    // New: Start periodic refresh
-    // _refreshTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
-    //   _loadAllDevices();
-    //   _loadPricePerKWH(); // Also refresh price per kWh
-    // });
+    _setupHubListener(); // Setup the real-time hub data listener
+  }
+
+  void _setupHubListener() {
+    _hubDataSubscription?.cancel();
+    _hubDataSubscription = _realtimeDbService.hubDataStream.listen(
+      (eventData) {
+        if (!mounted) return;
+
+        final String? eventType = eventData['type'] as String?;
+        final String? serialNumber = eventData['serialNumber'] as String?;
+        if (eventType == null || serialNumber == null || _groupedDevices[serialNumber] == null) return;
+        
+        bool needsUiUpdate = false;
+
+        switch (eventType) {
+          case 'hub_state':
+            try {
+              final hubDevice = _groupedDevices[serialNumber]!.firstWhere((d) => d.plug == null);
+              final newSsrState = eventData['ssr_state'] as bool?;
+              if (hubDevice.ssr_state != newSsrState) {
+                hubDevice.ssr_state = newSsrState;
+                hubDevice.status = (newSsrState ?? false) ? 'on' : 'off';
+                needsUiUpdate = true;
+              }
+            } catch (e) {
+              // Hub not found, ignore
+            }
+            break;
+
+          case 'plug_changed':
+            try {
+              final plugId = eventData['plugId'] as String?;
+              final plugData = eventData['plugData'] as Map<String, dynamic>?;
+              if (plugId == null || plugData == null) return;
+
+              final plugDevice = _groupedDevices[serialNumber]!.firstWhere((d) => d.plug == plugId);
+              
+              // Update ssr_state and status
+              final plugSsrState = plugData['ssr_state'] as bool?;
+              if (plugDevice.ssr_state != plugSsrState) {
+                 plugDevice.ssr_state = plugSsrState;
+                 plugDevice.status = (plugSsrState ?? false) ? 'on' : 'off';
+                 needsUiUpdate = true;
+              }
+
+              // Update sensor data
+              final realTimeData = plugData['data'] as Map<String, dynamic>?;
+              if (realTimeData != null) {
+                final current = (realTimeData['current'] as num?)?.toDouble();
+                final energy = (realTimeData['energy'] as num?)?.toDouble();
+                final power = (realTimeData['power'] as num?)?.toDouble();
+                final voltage = (realTimeData['voltage'] as num?)?.toDouble();
+                
+                if (plugDevice.current != current) { plugDevice.current = current; needsUiUpdate = true; }
+                if (plugDevice.energy != energy) { plugDevice.energy = energy; needsUiUpdate = true; }
+                if (plugDevice.power != power) { plugDevice.power = power; needsUiUpdate = true; }
+                if (plugDevice.voltage != voltage) { plugDevice.voltage = voltage; needsUiUpdate = true; }
+              }
+            } catch (e) {
+              // Plug not found, ignore
+            }
+            break;
+            
+          case 'plug_removed':
+            try {
+              final plugId = eventData['plugId'] as String?;
+              if (plugId == null) return;
+              
+              _groupedDevices[serialNumber]!.removeWhere((d) => d.plug == plugId);
+              needsUiUpdate = true;
+            } catch (e) {
+              // Error during removal, ignore
+            }
+            break;
+        }
+
+        if (needsUiUpdate) {
+          setState(() {
+            // UI rebuilds with updated _groupedDevices data
+          });
+        }
+      },
+      onError: (error) {
+        print('[_setupHubListener] Error in hub data stream: $error');
+      },
+    );
   }
 
   // Method to load price per kWh from Firestore
@@ -113,8 +198,27 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
     setState(() {
       _groupedDevices = grouped;
-      print('[_loadAllDevices] Total devices loaded and grouped: ${grouped.length}');
+      print(
+        '[_loadAllDevices] Total devices loaded and grouped: ${grouped.length}',
+      );
     });
+
+    // New: Start data stream for the first linked central hub found
+    final centralHubs = allDevices
+        .where((device) => device.plug == null && device.serialNumber != null)
+        .toList();
+    if (centralHubs.isNotEmpty) {
+      final firstHubSerialNumber = centralHubs.first.serialNumber!;
+      _realtimeDbService.startRealtimeDataStream(firstHubSerialNumber);
+      print(
+        '[_loadAllDevices] Started RealtimeDataStream for hub: $firstHubSerialNumber',
+      );
+    } else {
+      _realtimeDbService.stopRealtimeDataStream();
+      print(
+        '[_loadAllDevices] No central hubs found, stopping RealtimeDataStream.',
+      );
+    }
 
     if (allDevices.isEmpty) {
       Alert(
@@ -167,8 +271,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
     try {
       // 1. Fetch all hubs from Realtime Database
-      final hubSnapshot =
-          await FirebaseDatabase.instance.ref('users/espthesisbmn_at_gmail_com/hubs').get();
+      final hubSnapshot = await FirebaseDatabase.instance
+          .ref('users/espthesisbmn/hubs')
+          .get();
 
       if (!hubSnapshot.exists || hubSnapshot.value == null) {
         print('[_fetchLinkedCentralHubs] No hubs found in Realtime Database.');
@@ -195,16 +300,21 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
             '[_fetchLinkedCentralHubs] Found owned hub with serial number: $serialNumber.',
           );
 
+          final bool hubSsrState = hubData['ssr_state'] as bool? ?? false;
+
           // Add the central hub itself as a ConnectedDevice
           fetchedPlugDevices.add(
             ConnectedDevice(
               name: 'Central Hub ($serialNumber)',
-              status: 'on', // Assuming hub is "on" if found
+              status: hubSsrState
+                  ? 'on'
+                  : 'off', // Assuming hub is "on" if found
               icon: Icons.router, // Icon for the central hub
               usage: 0.0,
               percent: 0.0,
               plug: null, // Central hub itself, not a specific plug
               serialNumber: serialNumber,
+              ssr_state: hubSsrState,
             ),
           );
 
@@ -212,6 +322,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
             final plugsData = hubData["plugs"] as Map<String, dynamic>;
             for (final plugId in plugsData.keys) {
               final plugData = plugsData[plugId] as Map<String, dynamic>;
+              final plugRealTimeData = plugData["data"] as Map<String, dynamic>;
+              final bool plugSsrState =
+                  plugRealTimeData['ssr_state'] as bool? ?? false;
               if (plugData.containsKey("data")) {
                 final realTimeData = plugData["data"] as Map<String, dynamic>;
                 print(
@@ -221,7 +334,10 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 fetchedPlugDevices.add(
                   ConnectedDevice(
                     name: 'Plug $plugId',
-                    status: 'on', // Assuming plugs are "on" if reporting data
+                    status: (plugData['ssr_state'] as bool? ?? false)
+                        ? 'on'
+                        : 'off', // Convert boolean ssr_state to 'on'/'off'
+                    ssr_state: plugSsrState,
                     icon: Icons.power, // A generic icon for a plug
                     usage:
                         0.0, // Placeholder, as usage might be calculated differently
@@ -273,30 +389,28 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         '[_fetchUserDevices] Retrieved ${querySnapshot.docs.length} documents.',
       );
 
-      final fetchedDevices = querySnapshot.docs
-          .map((doc) {
-            final data = doc.data();
-            print('[_fetchUserDevices] Document data: $data');
+      final fetchedDevices = querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        print('[_fetchUserDevices] Document data: $data');
 
-
-
-            final device = ConnectedDevice(
-              name: data['name'] ?? 'Unknown Device',
-              status: data['status'] ?? 'off',
-              icon: getIconFromCodePoint(data['icon'] as int? ?? Icons.devices_other.codePoint), // Use helper for tree-shaking
-              usage: (data['usage'] as num?)?.toDouble() ?? 0.0,
-              percent: (data['percent'] as num?)?.toDouble() ?? 0.0,
-              plug: (data['plug']?.toString()),
-              serialNumber: data['serialNumber'] as String?,
-              userEmail: data['user_email'] as String?, // Populate userEmail
-              createdAt: (data['createdAt'] as Timestamp?)?.toDate().toString(), // Populate createdAt
-            );
-            print(
-              '[_fetchUserDevices] Created ConnectedDevice: ${device.name}',
-            );
-            return device;
-          })
-          .toList();
+        final device = ConnectedDevice(
+          name: data['name'] ?? 'Unknown Device',
+          status: data['status'] ?? 'off',
+          icon: getIconFromCodePoint(
+            data['icon'] as int? ?? Icons.devices_other.codePoint,
+          ), // Use helper for tree-shaking
+          usage: (data['usage'] as num?)?.toDouble() ?? 0.0,
+          percent: (data['percent'] as num?)?.toDouble() ?? 0.0,
+          plug: (data['plug']?.toString()),
+          serialNumber: data['serialNumber'] as String?,
+          userEmail: data['user_email'] as String?, // Populate userEmail
+          createdAt: (data['createdAt'] as Timestamp?)
+              ?.toDate()
+              .toString(), // Populate createdAt
+        );
+        print('[_fetchUserDevices] Created ConnectedDevice: ${device.name}');
+        return device;
+      }).toList();
 
       return fetchedDevices;
     } catch (e) {
@@ -317,7 +431,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     _controller.dispose();
     _searchController.dispose();
     _serialNumberController.dispose();
-    _refreshTimer?.cancel(); // Cancel the timer
+    _hubDataSubscription?.cancel(); // Cancel the new stream subscription
+    _realtimeDbService.stopRealtimeDataStream(); // Stop the data stream
+    _realtimeDbService.dispose(); // Dispose the service's stream controller
     super.dispose();
   }
 
@@ -347,7 +463,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       '[_searchSerialNumber] Current user UID: ${user.uid}, Email: ${user.email}',
     );
 
-    final dbRef = FirebaseDatabase.instance.ref('users/espthesisbmn_at_gmail_com/hubs/$serialNumber');
+    final dbRef = FirebaseDatabase.instance.ref(
+      'users/espthesisbmn/hubs/$serialNumber',
+    );
     final snapshot = await dbRef.get();
 
     if (snapshot.exists) {
@@ -476,10 +594,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       );
     }
   }
-
-
-
-
 
   void _editDeviceDialog(ConnectedDevice device) {
     final nameController = TextEditingController(text: device.name);
@@ -699,9 +813,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   Widget _buildGenericDeviceCard(ConnectedDevice device, bool isSmallScreen) {
     return Card(
       color: Theme.of(context).cardColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: EdgeInsets.symmetric(vertical: isSmallScreen ? 8 : 12),
       child: Padding(
         padding: EdgeInsets.symmetric(
@@ -715,26 +827,21 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
               children: [
                 Icon(
                   device.icon,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.secondary,
+                  color: Theme.of(context).colorScheme.secondary,
                   size: isSmallScreen ? 32 : 48,
                 ),
                 SizedBox(width: isSmallScreen ? 12 : 20),
                 Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       device.name,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleMedium?.copyWith(fontSize: isSmallScreen ? 16 : null),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: isSmallScreen ? 16 : null,
+                      ),
                     ),
                     Text(
-                      device.status == "on"
-                          ? "Status: On"
-                          : "Status: Off",
+                      device.status == "on" ? "Status: On" : "Status: Off",
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         fontSize: isSmallScreen ? 14 : null,
                         color: device.status == "on"
@@ -768,22 +875,14 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 ),
                 IconButton(
                   icon: Icon(
-                    device.status == "on"
-                        ? Icons.toggle_on
-                        : Icons.toggle_off,
-                    color: device.status == "on"
-                        ? Colors.green
-                        : Colors.grey,
+                    device.status == "on" ? Icons.toggle_on : Icons.toggle_off,
+                    color: device.status == "on" ? Colors.green : Colors.grey,
                     size: isSmallScreen ? 32 : 40,
                   ),
-                  tooltip: device.status == "on"
-                      ? "Turn Off"
-                      : "Turn On",
+                  tooltip: device.status == "on" ? "Turn Off" : "Turn On",
                   onPressed: () {
                     setState(() {
-                      device.status = device.status == "on"
-                          ? "off"
-                          : "on";
+                      device.status = device.status == "on" ? "off" : "on";
                     });
                   },
                 ),
@@ -797,7 +896,10 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
   Widget _buildPlugDeviceRow(ConnectedDevice plug, bool isSmallScreen) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 16.0 : 24.0, vertical: isSmallScreen ? 8.0 : 10.0),
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? 16.0 : 24.0,
+        vertical: isSmallScreen ? 8.0 : 10.0,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -814,53 +916,57 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 children: [
                   Text(
                     plug.name,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: isSmallScreen ? 14 : null),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontSize: isSmallScreen ? 14 : null,
+                    ),
                   ),
                   Text(
-                    plug.status == "on"
-                        ? "Status: On"
-                        : "Status: Off",
+                    plug.status == "on" ? "Status: On" : "Status: Off",
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontSize: isSmallScreen ? 12 : null,
-                      color: plug.status == "on"
-                          ? Colors.green
-                          : Colors.red,
+                      color: plug.status == "on" ? Colors.green : Colors.red,
+                    ),
+                  ),
+                  Text(
+                    'SSR State: ${plug.ssr_state ?? false}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: isSmallScreen ? 10 : null,
                     ),
                   ),
                   if (plug.current != null)
                     Text(
                       'Current: ${plug.current?.toStringAsFixed(2)} A',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(fontSize: isSmallScreen ? 10 : null),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: isSmallScreen ? 10 : null,
+                      ),
                     ),
                   if (plug.energy != null) ...[
                     Text(
                       'Energy: ${plug.energy?.toStringAsFixed(2)} kWh',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(fontSize: isSmallScreen ? 10 : null),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: isSmallScreen ? 10 : null,
+                      ),
                     ),
                     Text(
                       'Cost: ₱${(plug.energy! * _pricePerKWH).toStringAsFixed(2)}',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(fontSize: isSmallScreen ? 10 : null),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: isSmallScreen ? 10 : null,
+                      ),
                     ),
                   ],
                   if (plug.power != null)
                     Text(
                       'Power: ${plug.power?.toStringAsFixed(2)} W',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(fontSize: isSmallScreen ? 10 : null),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: isSmallScreen ? 10 : null,
+                      ),
                     ),
                   if (plug.voltage != null)
                     Text(
                       'Voltage: ${plug.voltage?.toStringAsFixed(2)} V',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(fontSize: isSmallScreen ? 10 : null),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontSize: isSmallScreen ? 10 : null,
+                      ),
                     ),
                 ],
               ),
@@ -888,24 +994,14 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
               ),
               IconButton(
                 icon: Icon(
-                  plug.status == "on"
+                  (plug.ssr_state ?? false)
                       ? Icons.toggle_on
                       : Icons.toggle_off,
-                  color: plug.status == "on"
-                      ? Colors.green
-                      : Colors.grey,
+                  color: (plug.ssr_state ?? false) ? Colors.green : Colors.grey,
                   size: isSmallScreen ? 32 : 40,
                 ),
-                tooltip: plug.status == "on"
-                    ? "Turn Off"
-                    : "Turn On",
-                onPressed: () {
-                  setState(() {
-                    plug.status = plug.status == "on"
-                        ? "off"
-                        : "on";
-                  });
-                },
+                tooltip: (plug.ssr_state ?? false) ? "Turn Off" : "Turn On",
+                onPressed: () => _togglePlugSsrState(plug),
               ),
             ],
           ),
@@ -914,40 +1010,109 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     );
   }
 
+  void _toggleHubSsrState(ConnectedDevice hub) async {
+    if (hub.serialNumber == null) return;
+
+    // Optimistic UI Update
+    setState(() {
+      hub.ssr_state = !(hub.ssr_state ?? false);
+      hub.status = hub.ssr_state! ? 'on' : 'off';
+    });
+
+    final newSsrState = hub.ssr_state!;
+    final dbRef = FirebaseDatabase.instance.ref(
+      'users/espthesisbmn/hubs/${hub.serialNumber}/ssr_state',
+    );
+
+    try {
+      await dbRef.set(newSsrState);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${hub.name} turned ${newSsrState ? 'ON' : 'OFF'}'),
+          backgroundColor: newSsrState ? Colors.green : Colors.orange,
+        ),
+      );
+      // No longer calling _loadAllDevices() to prevent race conditions
+      // and for a faster UI response.
+    } catch (e) {
+      // Revert UI on error
+      setState(() {
+        hub.ssr_state = !newSsrState;
+        hub.status = hub.ssr_state! ? 'on' : 'off';
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating hub state: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _togglePlugSsrState(ConnectedDevice plug) async {
+    if (plug.serialNumber == null || plug.plug == null) return;
+
+    // Optimistic UI Update
+    setState(() {
+      plug.ssr_state = !(plug.ssr_state ?? false);
+      plug.status = plug.ssr_state! ? 'on' : 'off';
+    });
+
+    final newSsrState = plug.ssr_state!;
+    final dbRef = FirebaseDatabase.instance.ref(
+      'users/espthesisbmn/hubs/${plug.serialNumber}/plugs/${plug.plug}/data/ssr_state',
+    );
+
+    try {
+      await dbRef.set(newSsrState);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${plug.name} turned ${newSsrState ? 'ON' : 'OFF'}'),
+          backgroundColor: newSsrState ? Colors.green : Colors.orange,
+        ),
+      );
+    } catch (e) {
+      // Revert UI on error
+      setState(() {
+        plug.ssr_state = !newSsrState;
+        plug.status = plug.ssr_state! ? 'on' : 'off';
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating plug state: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   void _deleteGenericDeviceDialog(ConnectedDevice device) async {
     final confirmDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(
-          context,
-        ).cardColor,
+        backgroundColor: Theme.of(context).cardColor,
         title: Text(
           "Delete Device",
-          style: Theme.of(
-            context,
-          ).textTheme.bodyLarge,
+          style: Theme.of(context).textTheme.bodyLarge,
         ),
         content: Text(
           "Are you sure you want to delete '${device.name}'?",
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium,
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: Text(
               "Cancel",
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  Colors.redAccent,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(context, true),
             child: const Text("Delete"),
           ),
@@ -959,13 +1124,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'You must be logged in to delete a device.',
-            ),
+            content: Text('You must be logged in to delete a device.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -979,16 +1140,12 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           .collection('users')
           .doc(user.uid)
           .collection('devices')
-          .where(
-            'name',
-            isEqualTo: device.name,
-          )
+          .where('name', isEqualTo: device.name)
           .limit(1)
           .get();
       if (querySnapshot.docs.isNotEmpty) {
         docId = querySnapshot.docs.first.id;
       }
-
 
       if (docId != null) {
         await FirebaseFirestore.instance
@@ -1000,17 +1157,11 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            "${device.name} has been deleted.",
-          ),
+          content: Text("${device.name} has been deleted."),
           backgroundColor: Colors.redAccent,
-          duration: const Duration(
-            seconds: 2,
-          ),
+          duration: const Duration(seconds: 2),
         ),
       );
       await _loadAllDevices(); // Refresh all devices
@@ -1021,123 +1172,48 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     final confirmDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(
-          context,
-        ).cardColor,
+        backgroundColor: Theme.of(context).cardColor,
         title: Text(
-          "Delete Plug",
-          style: Theme.of(
-            context,
-          ).textTheme.bodyLarge,
+          "Delete Plug from UI",
+          style: Theme.of(context).textTheme.bodyLarge,
         ),
         content: Text(
-          "Are you sure you want to delete '${plug.name}'?",
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium,
+          "Are you sure you want to hide '${plug.name}'? This will only remove it from your view.",
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: Text(
               "Cancel",
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  Colors.redAccent,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete"),
+            child: const Text("Hide"),
           ),
         ],
       ),
     );
 
     if (confirmDelete == true) {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'You must be logged in to delete a plug.',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
       if (plug.serialNumber != null && plug.plug != null) {
-        // Delete plug from Realtime Database
-        await FirebaseDatabase.instance
-            .ref('users/espthesisbmn_at_gmail_com/hubs/${plug.serialNumber}/plugs/${plug.plug}')
-            .remove();
+        setState(() {
+          _groupedDevices[plug.serialNumber]
+              ?.removeWhere((d) => d.plug == plug.plug);
+        });
 
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              "${plug.name} has been deleted from Realtime DB.",
-            ),
-            backgroundColor: Colors.redAccent,
-            duration: const Duration(
-              seconds: 2,
-            ),
-          ),
-        );
-      } else {
-        // This case should ideally not happen for a plug, but as a fallback,
-        // it can try to delete from Firestore if it somehow ended up there.
-        String? docId;
-        final querySnapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('devices')
-            .where(
-              'name',
-              isEqualTo: plug.name,
-            )
-            .limit(1)
-            .get();
-        if (querySnapshot.docs.isNotEmpty) {
-          docId = querySnapshot.docs.first.id;
-        }
-
-        if (docId != null) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(user.uid)
-              .collection('devices')
-              .doc(docId)
-              .delete();
-        }
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
-          SnackBar(
-            content: Text(
-              "${plug.name} has been deleted from Firestore.",
-            ),
-            backgroundColor: Colors.redAccent,
-            duration: const Duration(
-              seconds: 2,
-            ),
+            content: Text("${plug.name} has been hidden."),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
           ),
         );
       }
-      await _loadAllDevices(); // Refresh all devices
     }
   }
 
@@ -1145,38 +1221,27 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     final confirmDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(
-          context,
-        ).cardColor,
+        backgroundColor: Theme.of(context).cardColor,
         title: Text(
-          "Delete Central Hub",
-          style: Theme.of(
-            context,
-          ).textTheme.bodyLarge,
+          "Unlink Central Hub",
+          style: Theme.of(context).textTheme.bodyLarge,
         ),
         content: Text(
-          "Are you sure you want to delete '${hub.name}' and all its associated plugs? This will also unlink it from your account.",
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium,
+          "Are you sure you want to unlink '${hub.name}'? This will remove it from your account, but it can be re-linked later.",
+          style: Theme.of(context).textTheme.bodyMedium,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: Text(
               "Cancel",
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  Colors.redAccent,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Delete"),
+            child: const Text("Unlink"),
           ),
         ],
       ),
@@ -1186,13 +1251,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'You must be logged in to delete a hub.',
-            ),
+            content: Text('You must be logged in to unlink a hub.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1200,16 +1261,12 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       }
 
       if (hub.serialNumber != null) {
-        // 1. Unassign hub in Realtime Database
+        // 1. Unassign hub in Realtime Database by setting fields to null/false
         await FirebaseDatabase.instance
-            .ref('users/espthesisbmn_at_gmail_com/hubs/${hub.serialNumber}')
-            .update({
-              'assigned': false,
-              'ownerId': null,
-              'user_email': null,
-            });
+            .ref('users/espthesisbmn/hubs/${hub.serialNumber}')
+            .update({'assigned': false, 'ownerId': null, 'user_email': null});
 
-        // 2. Delete hub from Firestore
+        // 2. Delete hub metadata from Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -1218,38 +1275,33 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
             .delete();
 
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              "${hub.name} and its plugs have been unlinked and deleted.",
-            ),
+            content: Text("${hub.name} has been unlinked."),
             backgroundColor: Colors.redAccent,
-            duration: const Duration(
-              seconds: 2,
-            ),
+            duration: const Duration(seconds: 2),
           ),
         );
+
+        // 3. Optimistic UI update
+        setState(() {
+          _groupedDevices.remove(hub.serialNumber);
+        });
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Error: Cannot delete hub without a serial number.',
-            ),
+            content: Text('Error: Cannot unlink hub without a serial number.'),
             backgroundColor: Colors.red,
           ),
         );
       }
-      await _loadAllDevices(); // Refresh all devices
     }
   }
 
   bool _isSmallScreen(BuildContext context) {
-    return MediaQuery.of(context).size.width < 600; // Define your small screen breakpoint
+    return MediaQuery.of(context).size.width <
+        600; // Define your small screen breakpoint
   }
 
   @override
@@ -1266,6 +1318,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         CustomSidebarNav(
           currentIndex: 1,
           isBottomNav: false,
+          realtimeDbService: widget.realtimeDbService, // Pass the service
           onTap: (index, page) {
             if (index == 1) return;
             if (!mounted) return;
@@ -1287,6 +1340,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         CustomSidebarNav(
           currentIndex: 1,
           isBottomNav: true,
+          realtimeDbService: widget.realtimeDbService, // Pass the service
           onTap: (index, page) {
             if (index == 1) return;
             if (!mounted) return;
@@ -1324,6 +1378,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                   listen: false,
                 ).toggleTheme();
               },
+              realtimeDbService: _realtimeDbService, // Pass the service
             ),
             const SizedBox(height: 16),
             Expanded(
@@ -1382,26 +1437,25 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: 16),
 
-
-
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                                            Text(
-                                              'Connected Devices',
-                                              style: Theme.of(context).textTheme.bodyLarge
-                                                  ?.copyWith(
-                                                    fontSize: 20,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                            ),
-                                            Text(
-                                              'Price per kWh: ₱$_pricePerKWH',
-                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                    fontSize: 16,
-                                                    color: Theme.of(context).colorScheme.primary,
-                                                  ),
-                                            ),                        
+                        Text(
+                          'Connected Devices',
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        Text(
+                          'Price per kWh: ₱$_pricePerKWH',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                fontSize: 16,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -1415,13 +1469,21 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                         // Handle generic devices (without serial number)
                         return Column(
                           children: devices.map((device) {
-                            return _buildGenericDeviceCard(device, isSmallScreen(context));
+                            return _buildGenericDeviceCard(
+                              device,
+                              isSmallScreen(context),
+                            );
                           }).toList(),
                         );
                       } else {
                         // Handle hubs and their plugs
-                        final hub = devices.firstWhere((d) => d.plug == null, orElse: () => devices.first);
-                        final plugs = devices.where((d) => d.plug != null).toList();
+                        final hub = devices.firstWhere(
+                          (d) => d.plug == null,
+                          orElse: () => devices.first,
+                        );
+                        final plugs = devices
+                            .where((d) => d.plug != null)
+                            .toList();
 
                         // Calculate aggregated values for all plugs under this hub
                         double totalCurrent = 0.0;
@@ -1431,11 +1493,16 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                         int activePlugs = 0;
 
                         for (final plug in plugs) {
-                          if (plug.current != null) totalCurrent += plug.current!;
+                          if (plug.current != null)
+                            totalCurrent += plug.current!;
                           if (plug.energy != null) totalEnergy += plug.energy!;
                           if (plug.power != null) totalPower += plug.power!;
-                          if (plug.voltage != null) totalVoltage += plug.voltage!;
-                          if (plug.current != null || plug.energy != null || plug.power != null || plug.voltage != null) {
+                          if (plug.voltage != null)
+                            totalVoltage += plug.voltage!;
+                          if (plug.current != null ||
+                              plug.energy != null ||
+                              plug.power != null ||
+                              plug.voltage != null) {
                             activePlugs++;
                           }
                         }
@@ -1445,22 +1512,51 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          margin: EdgeInsets.symmetric(vertical: isSmallScreen(context) ? 8 : 12),
+                          margin: EdgeInsets.symmetric(
+                            vertical: isSmallScreen(context) ? 8 : 12,
+                          ),
                           child: ExpansionTile(
                             title: Row(
                               children: [
                                 Icon(
                                   hub.icon,
-                                  color: Theme.of(context).colorScheme.secondary,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondary,
                                   size: isSmallScreen(context) ? 28 : 40,
                                 ),
-                                SizedBox(width: isSmallScreen(context) ? 10 : 16),
+                                SizedBox(
+                                  width: isSmallScreen(context) ? 10 : 16,
+                                ),
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       hub.name,
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: isSmallScreen(context) ? 16 : null),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontSize: isSmallScreen(context)
+                                                ? 16
+                                                : null,
+                                          ),
+                                    ),
+                                    Text(
+                                      (hub.ssr_state ?? false)
+                                          ? "Status: Active"
+                                          : "Status: Inactive",
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            fontSize: isSmallScreen(context)
+                                                ? 12
+                                                : null,
+                                            color: (hub.ssr_state ?? false)
+                                                ? Colors.green
+                                                : Colors.red,
+                                          ),
                                     ),
                                     if (hub.serialNumber != null)
                                       Text(
@@ -1468,7 +1564,12 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall
-                                            ?.copyWith(color: Colors.grey, fontSize: isSmallScreen(context) ? 10 : null),
+                                            ?.copyWith(
+                                              color: Colors.grey,
+                                              fontSize: isSmallScreen(context)
+                                                  ? 10
+                                                  : null,
+                                            ),
                                       ),
                                     if (hub.userEmail != null)
                                       Text(
@@ -1476,7 +1577,12 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall
-                                            ?.copyWith(color: Colors.grey, fontSize: isSmallScreen(context) ? 10 : null),
+                                            ?.copyWith(
+                                              color: Colors.grey,
+                                              fontSize: isSmallScreen(context)
+                                                  ? 10
+                                                  : null,
+                                            ),
                                       ),
                                     if (hub.createdAt != null)
                                       Text(
@@ -1484,60 +1590,150 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall
-                                            ?.copyWith(color: Colors.grey, fontSize: isSmallScreen(context) ? 10 : null),
+                                            ?.copyWith(
+                                              color: Colors.grey,
+                                              fontSize: isSmallScreen(context)
+                                                  ? 10
+                                                  : null,
+                                            ),
                                       ),
                                   ],
                                 ),
                               ],
                             ),
-                            trailing: IconButton(
-                              icon: Icon(Icons.delete, color: Colors.redAccent, size: isSmallScreen(context) ? 24 : 32,),
-                              tooltip: "Delete Hub",
-                              onPressed: () => _deleteHubDialog(hub),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.link_off,
+                                    color: Colors.redAccent,
+                                    size: isSmallScreen(context) ? 24 : 32,
+                                  ),
+                                  tooltip: 'Unlink Hub',
+                                  onPressed: () => _deleteHubDialog(hub),
+                                ),
+                                IconButton(
+                                  icon: Icon(
+                                    (hub.ssr_state ?? false)
+                                        ? Icons.toggle_on
+                                        : Icons.toggle_off,
+                                    color: (hub.ssr_state ?? false)
+                                        ? Colors.green
+                                        : Colors.grey,
+                                    size: isSmallScreen(context) ? 32 : 40,
+                                  ),
+                                  tooltip: (hub.ssr_state ?? false)
+                                      ? "Turn Hub Off"
+                                      : "Turn Hub On",
+                                  onPressed: () => _toggleHubSsrState(hub),
+                                ),
+                              ],
                             ),
                             children: [
                               if (plugs.isNotEmpty)
                                 Padding(
-                                  padding: EdgeInsets.symmetric(horizontal: isSmallScreen(context) ? 16.0 : 24.0, vertical: isSmallScreen(context) ? 8.0 : 12.0),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isSmallScreen(context)
+                                        ? 16.0
+                                        : 24.0,
+                                    vertical: isSmallScreen(context)
+                                        ? 8.0
+                                        : 12.0,
+                                  ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'Overall Plug Output:',
-                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: isSmallScreen(context) ? 16 : null),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(
+                                              fontSize: isSmallScreen(context)
+                                                  ? 16
+                                                  : null,
+                                            ),
                                       ),
                                       if (activePlugs > 0) ...[
                                         Text(
                                           'Total Current: ${totalCurrent.toStringAsFixed(2)} A',
-                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: isSmallScreen(context) ? 14 : null),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontSize: isSmallScreen(context)
+                                                    ? 14
+                                                    : null,
+                                              ),
                                         ),
                                         Text(
                                           'Total Energy: ${totalEnergy.toStringAsFixed(2)} kWh',
-                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: isSmallScreen(context) ? 14 : null),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontSize: isSmallScreen(context)
+                                                    ? 14
+                                                    : null,
+                                              ),
                                         ),
                                         Text(
                                           'Total Cost: ₱${(totalEnergy * _pricePerKWH).toStringAsFixed(2)}',
-                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: isSmallScreen(context) ? 14 : null),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontSize: isSmallScreen(context)
+                                                    ? 14
+                                                    : null,
+                                              ),
                                         ),
                                         Text(
                                           'Total Power: ${totalPower.toStringAsFixed(2)} W',
-                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: isSmallScreen(context) ? 14 : null),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontSize: isSmallScreen(context)
+                                                    ? 14
+                                                    : null,
+                                              ),
                                         ),
                                         Text(
                                           'Total Voltage: ${totalVoltage.toStringAsFixed(2)} V',
-                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: isSmallScreen(context) ? 14 : null),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontSize: isSmallScreen(context)
+                                                    ? 14
+                                                    : null,
+                                              ),
                                         ),
                                       ] else
                                         Text(
                                           'No active plug data available.',
-                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic, fontSize: isSmallScreen(context) ? 14 : null),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontStyle: FontStyle.italic,
+                                                fontSize: isSmallScreen(context)
+                                                    ? 14
+                                                    : null,
+                                              ),
                                         ),
                                       const Divider(), // Separator
                                     ],
                                   ),
                                 ),
                               ...plugs.map((plug) {
-                                return _buildPlugDeviceRow(plug, isSmallScreen(context));
+                                return _buildPlugDeviceRow(
+                                  plug,
+                                  isSmallScreen(context),
+                                );
                               }).toList(),
                             ],
                           ),

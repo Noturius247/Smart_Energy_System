@@ -1,0 +1,29 @@
+{
+  "rules": {
+    "users": {
+      "espthesisbmn": {
+        "hubs": {
+          "$serial_number": {
+            ".read": "auth != null",
+            ".write": "auth != null && (!data.exists() || data.child('assigned').val() != true || data.child('ownerId').val() == auth.uid)",
+            "ssr_state": {
+              ".write": "auth != null && data.parent().child('ownerId').val() == auth.uid",
+              ".validate": "newData.isBoolean()"
+            },
+            "plugs": {
+              "$plug_id": {
+                ".write": "auth != null && root.child('users/espthesisbmn/hubs').child($serial_number).child('ownerId').val() == auth.uid",
+                "data": {
+                    "ssr_state": {
+                      ".write": "auth != null && root.child('users/espthesisbmn/hubs').child($serial_number).child('ownerId').val() == auth.uid",
+                      ".validate": "newData.isBoolean()"
+                    }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
