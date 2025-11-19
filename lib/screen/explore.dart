@@ -1516,6 +1516,10 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: isSmallScreen(context) ? 14 : null),
                                         ),
                                         Text(
+                                          'Total Cost: ₱${(totalEnergy * _pricePerKWH).toStringAsFixed(2)}',
+                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: isSmallScreen(context) ? 14 : null),
+                                        ),
+                                        Text(
                                           'Total Power: ${totalPower.toStringAsFixed(2)} W',
                                           style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: isSmallScreen(context) ? 14 : null),
                                         ),
