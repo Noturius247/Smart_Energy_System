@@ -39,6 +39,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   String? _hubErrorMessage;
   // Timer? _refreshTimer; // Removed: No longer needed for periodic refresh
   double _pricePerKWH = 0.0; // New state variable for price per kWh
+  Timer? _refreshTimer;
 
   @override
   void initState() {
@@ -59,6 +60,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     _loadAllDevices(); // Initial load
 
     _setupHubListener(); // Setup the real-time hub data listener
+    _startRefreshTimer();
   }
 
   void _setupHubListener() {
@@ -145,6 +147,16 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         print('[_setupHubListener] Error in hub data stream: $error');
       },
     );
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      if (mounted) {
+        setState(() {
+          // Just trigger a rebuild to refresh the screen
+        });
+      }
+    });
   }
 
   // Method to load price per kWh from Firestore
@@ -428,6 +440,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _controller.dispose();
     _searchController.dispose();
     _serialNumberController.dispose();
