@@ -13,6 +13,8 @@ class ConnectedDevice {
   double? energy; // New field for energy
   double? power; // New field for power
   double? voltage; // New field for voltage
+  String? userEmail; // New field for user email
+  String? createdAt; // New field for creation timestamp
 
   ConnectedDevice({
     required this.name,
@@ -26,5 +28,7 @@ class ConnectedDevice {
     this.energy,
     this.power,
     this.voltage,
+    this.userEmail, // Initialize user email
+    this.createdAt, // Initialize creation timestamp
   });
 }
