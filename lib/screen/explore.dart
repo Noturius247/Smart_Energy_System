@@ -36,7 +36,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   String? _hubErrorMessage;
   Timer? _refreshTimer; // New: Timer for periodic refresh
   double _pricePerKWH = 0.0; // New state variable for price per kWh
-  Map<String, dynamic>? _centralHubData; // New state variable for Central Hub details
+
 
   @override
   void initState() {
@@ -278,16 +278,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
             final data = doc.data();
             print('[_fetchUserDevices] Document data: $data');
 
-            // Check if this is the Central Hub
-            if (data['name'] == 'Central Hub') {
-              // Ensure setState is called within the build context
-              if (mounted) {
-                setState(() {
-                  _centralHubData = data;
-                });
-              }
-              print('[_fetchUserDevices] Central Hub data identified: $_centralHubData');
-            }
+
 
             final device = ConnectedDevice(
               name: data['name'] ?? 'Unknown Device',
@@ -297,6 +288,8 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
               percent: (data['percent'] as num?)?.toDouble() ?? 0.0,
               plug: (data['plug']?.toString()),
               serialNumber: data['serialNumber'] as String?,
+              userEmail: data['user_email'] as String?, // Populate userEmail
+              createdAt: (data['createdAt'] as Timestamp?)?.toDate().toString(), // Populate createdAt
             );
             print(
               '[_fetchUserDevices] Created ConnectedDevice: ${device.name}',
@@ -486,81 +479,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
 
 
-  Widget _buildCentralHubSection(bool isSmallScreen) {
-    if (_centralHubData == null) {
-      return const SizedBox.shrink(); // Don't show anything if no Central Hub data
-    }
 
-    // Extract fields
-    final String name = _centralHubData!['name'] ?? 'N/A';
-    final String serialNumber = _centralHubData!['serialNumber'] ?? 'N/A';
-    final String userEmail = _centralHubData!['user_email'] ?? 'N/A';
-    final Timestamp? createdAtTimestamp = _centralHubData!['createdAt'] as Timestamp?;
-    final String createdAt = createdAtTimestamp != null
-        ? DateFormat('MMM d, yyyy HH:mm').format(createdAtTimestamp.toDate())
-        : 'N/A';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Central Hub Info',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          color: Theme.of(context).cardColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildInfoRow('Name:', name, isSmallScreen),
-                _buildInfoRow('Serial Number:', serialNumber, isSmallScreen),
-                _buildInfoRow('User Email:', userEmail, isSmallScreen),
-                _buildInfoRow('Created At:', createdAt, isSmallScreen),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value, bool isSmallScreen) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: isSmallScreen ? 14 : null,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontSize: isSmallScreen ? 14 : null,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _editDeviceDialog(ConnectedDevice device) {
     final nameController = TextEditingController(text: device.name);
@@ -923,7 +842,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                       ).textTheme.bodySmall?.copyWith(fontSize: isSmallScreen ? 10 : null),
                     ),
                     Text(
-                      'Cost: \$${(plug.energy! * _pricePerKWH).toStringAsFixed(2)}',
+                      'Cost: ₱${(plug.energy! * _pricePerKWH).toStringAsFixed(2)}',
                       style: Theme.of(
                         context,
                       ).textTheme.bodySmall?.copyWith(fontSize: isSmallScreen ? 10 : null),
@@ -1463,7 +1382,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: 16),
 
-                    _buildCentralHubSection(_isSmallScreen(context)), // Call the new section
+
 
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1477,7 +1396,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                   ),
                                             ),
                                             Text(
-                                              'Price per kWh: \$$_pricePerKWH',
+                                              'Price per kWh: ₱$_pricePerKWH',
                                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                                     fontSize: 16,
                                                     color: Theme.of(context).colorScheme.primary,
@@ -1546,6 +1465,22 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                     if (hub.serialNumber != null)
                                       Text(
                                         'S/N: ${hub.serialNumber}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(color: Colors.grey, fontSize: isSmallScreen(context) ? 10 : null),
+                                      ),
+                                    if (hub.userEmail != null)
+                                      Text(
+                                        'Owner: ${hub.userEmail}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(color: Colors.grey, fontSize: isSmallScreen(context) ? 10 : null),
+                                      ),
+                                    if (hub.createdAt != null)
+                                      Text(
+                                        'Added: ${hub.createdAt}',
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall
