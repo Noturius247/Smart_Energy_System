@@ -1,51 +1,94 @@
+import 'dart:async'; // Added for StreamSubscription
+import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Added import
-import 'package:cloud_firestore/cloud_firestore.dart'; // Added import
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme_provider.dart';
+
+import '../realtime_db_service.dart';
 import 'connected_devices.dart';
 import 'custom_sidebar_nav.dart';
 import 'custom_header.dart';
 
-enum EnergyRange { daily, weekly, monthly }
-
 class AnalyticsScreen extends StatefulWidget {
-  const AnalyticsScreen({super.key});
+  final RealtimeDbService realtimeDbService;
+  const AnalyticsScreen({super.key, required this.realtimeDbService});
 
   @override
   State<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
+
+enum AnalyticsMetric { current, voltage, power, energy }
+
 class _AnalyticsScreenState extends State<AnalyticsScreen>
     with TickerProviderStateMixin {
-  EnergyRange _selectedRange = EnergyRange.daily;
-  DateTime? _selectedDateFromChart;
-
   late AnimationController _profileController;
+  late final RealtimeDbService _realtimeDbService;
+  List<ConnectedDevice> _userDevices = [];
+  final Map<AnalyticsMetric, StreamSubscription<List<TimestampedFlSpot>>> _subscriptions = {};
+  bool _isLoading = true;
+  DateTime? _dueDate;
+  int? _daysUntilDue;
+  DateTime? _lastUpdated;
 
-  int _selectedMonth = DateTime.now().month;
-  DateTime _selectedDate = DateTime.now();
-  DateTime _selectedWeekStart =
-      DateTime.now().subtract(Duration(days: DateTime.now().weekday - 1));
+  final Map<AnalyticsMetric, List<TimestampedFlSpot>> _chartData = {
+    AnalyticsMetric.current: [],
+    AnalyticsMetric.voltage: [],
+    AnalyticsMetric.power: [],
+    AnalyticsMetric.energy: [],
+  };
+  final Map<AnalyticsMetric, double> _metricValues = {
+    AnalyticsMetric.current: 0.0,
+    AnalyticsMetric.voltage: 0.0,
+    AnalyticsMetric.power: 0.0,
+    AnalyticsMetric.energy: 0.0,
+  };
 
-  List<ConnectedDevice> _userDevices = []; // New list to hold user-specific devices
-
-  static const List<String> _monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-
-  static const List<String> _weekDays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  IconData getIconFromCodePoint(int codePoint) {
+    return IconData(codePoint, fontFamily: 'MaterialIcons');
+  }
 
   @override
   void initState() {
     super.initState();
+
     _profileController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    _fetchUserDevices(); // Fetch devices when the widget initializes
+    _realtimeDbService = widget.realtimeDbService;
+    _fetchUserDevices().then((_) {
+      _listenToAnalyticsData();
+    });
+    _loadDueDate();
+  }
+
+  Future<void> _loadDueDate() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists && doc.data()!.containsKey('dueDate')) {
+        setState(() {
+          _dueDate = (doc.data()!['dueDate'] as Timestamp).toDate();
+          final difference = _dueDate!.difference(DateTime.now()).inDays;
+          _daysUntilDue = difference >= 0 ? difference : null;
+        });
+      }
+    } catch (e) {
+      // Handle error, maybe show a snackbar
+      debugPrint('Error loading due date: $e');
+    }
   }
 
   Future<void> _fetchUserDevices() async {
@@ -69,11 +112,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         return ConnectedDevice(
           name: data['name'] ?? 'Unknown Device',
           status: data['status'] ?? 'off',
-          icon: data['icon'] != null ? IconData(data['icon'], fontFamily: 'MaterialIcons') : Icons.devices_other,
+          icon: getIconFromCodePoint(data['icon'] as int? ?? Icons.devices_other.codePoint),
           usage: (data['usage'] as num?)?.toDouble() ?? 0.0,
           percent: (data['percent'] as num?)?.toDouble() ?? 0.0,
-          plug: data['plug'] ?? 1,
-          serialNumber: data['serialNumber'],
+          plug: (data['plug'] ?? 1).toString(),
+          serialNumber: data['serialNumber']?.toString(),
         );
       }).toList();
 
@@ -91,144 +134,88 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     }
   }
 
+  void _listenToAnalyticsData() {
+    for (var sub in _subscriptions.values) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
+
+    setState(() {
+      _isLoading = true;
+      for (var key in _chartData.keys) {
+        _chartData[key] = [];
+      }
+      for (var key in _metricValues.keys) {
+        _metricValues[key] = 0.0;
+      }
+    });
+
+    if (_userDevices.isEmpty || _userDevices.first.serialNumber == null) {
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final String hubSerialNumber = _userDevices.first.serialNumber!;
+    
+    int loadedMetrics = 0;
+    for (var metric in AnalyticsMetric.values) {
+      final subscription = _realtimeDbService
+          .getAnalyticsDataStream(hubSerialNumber, metric.name)
+          .listen((spots) {
+        if (!mounted) return;
+        
+        double value;
+        if (metric == AnalyticsMetric.energy) {
+          value = spots.fold(0.0, (total, spot) => total + spot.y);
+        } else {
+          value = spots.isEmpty ? 0.0 : spots.fold(0.0, (total, spot) => total + spot.y) / spots.length;
+        }
+
+        setState(() {
+          _chartData[metric] = spots;
+          _metricValues[metric] = value;
+          loadedMetrics++;
+          if (loadedMetrics == AnalyticsMetric.values.length) {
+            _isLoading = false;
+            _lastUpdated = DateTime.now();
+          }
+        });
+      }, onError: (error) {
+        debugPrint('Error listening to analytics data for $metric: $error');
+        if (!mounted) return;
+        setState(() {
+          _chartData[metric] = [];
+          _metricValues[metric] = 0.0;
+          loadedMetrics++;
+          if (loadedMetrics == AnalyticsMetric.values.length) {
+            _isLoading = false;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading analytics for $metric: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      });
+      _subscriptions[metric] = subscription;
+    }
+  }
+
   @override
   void dispose() {
     _profileController.dispose();
+    for (var sub in _subscriptions.values) {
+      sub.cancel();
+    }
+    _subscriptions.clear();
     super.dispose();
-  }
-
-  Widget _rangeSelector() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        _rangeButton(EnergyRange.daily, 'Daily'),
-        const SizedBox(width: 8),
-        _rangeButton(EnergyRange.weekly, 'Weekly'),
-        const SizedBox(width: 8),
-        _rangeButton(EnergyRange.monthly, 'Monthly'),
-      ],
-    );
-  }
-
-  Widget _rangeButton(EnergyRange r, String label) {
-    final sel = _selectedRange == r;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedRange = r),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: sel ? Theme.of(context).colorScheme.secondary : Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: Theme.of(context).textTheme.bodyLarge?.color,
-            fontWeight: sel ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _headerWidget() {
-    switch (_selectedRange) {
-      case EnergyRange.daily:
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              '${_monthNames[_selectedDate.month - 1]} ${_selectedDate.day}, ${_selectedDate.year}',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(Icons.calendar_today, color: Theme.of(context).iconTheme.color, size: 20),
-              onPressed: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _selectedDate,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime(2100),
-                );
-                if (picked != null && mounted) {
-                  setState(() => _selectedDate = picked);
-                }
-              },
-            )
-          ],
-        );
-      case EnergyRange.weekly:
-        final end = _selectedWeekStart.add(const Duration(days: 6));
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              '${_monthNames[_selectedWeekStart.month - 1]} ${_selectedWeekStart.day} – ${_monthNames[end.month - 1]} ${end.day}, ${end.year}',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(Icons.calendar_month, color: Theme.of(context).iconTheme.color, size: 20),
-              onPressed: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _selectedWeekStart,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime(2100),
-                );
-                if (picked != null && mounted) {
-                  final monday = picked.subtract(Duration(days: picked.weekday - 1));
-                  setState(() => _selectedWeekStart = monday);
-                }
-              },
-            )
-          ],
-        );
-      case EnergyRange.monthly:
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              '${_monthNames[_selectedMonth - 1]}, ${DateTime.now().year}',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: Icon(Icons.calendar_view_month, color: Theme.of(context).iconTheme.color, size: 20),
-              onPressed: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime(DateTime.now().year, _selectedMonth, 1),
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime(2100),
-                );
-                if (picked != null && mounted) {
-                  setState(() => _selectedMonth = picked.month);
-                }
-              },
-            )
-          ],
-        );
-    }
-  }
-
-  List<FlSpot> _getUsageData() {
-    switch (_selectedRange) {
-      case EnergyRange.daily:
-        return List.generate(24, (h) => FlSpot(h.toDouble(), 10 + (h % 6) * 3));
-      case EnergyRange.weekly:
-        return List.generate(7, (d) => FlSpot(d.toDouble(), 20 + (d % 3) * 5));
-      case EnergyRange.monthly:
-        final daysInMonth = DateTime(DateTime.now().year, _selectedMonth + 1, 0).day;
-        return List.generate(daysInMonth, (i) => FlSpot((i + 1).toDouble(), 30 + (i % 5) * 4));
-    }
   }
 
  @override
   Widget build(BuildContext context) {
-    double totalUsage = _userDevices.fold(0, (sum, d) => sum + d.usage);
-    
     // Define the breakpoint for switching to bottom navigation (e.g., 800 pixels)
     const double breakpoint = 800;
 
@@ -258,70 +245,35 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   onToggleDarkMode: () {
                     Provider.of<ThemeNotifier>(context, listen: false).toggleTheme();
                   },
+                  realtimeDbService: _realtimeDbService,
                 ),
                Expanded(
-  child: SingleChildScrollView(
-    padding: const EdgeInsets.all(8), // reduced padding
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 10), // smaller spacing
-        Text(
-          'Analytics',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(child: summaryCard('Total Consumption', '${totalUsage.toStringAsFixed(1)} kWh', '+4.2%')),
-            const SizedBox(width: 8), // reduced width
-            Expanded(child: summaryCard('Cost', '₱${(totalUsage * 0.188).toStringAsFixed(2)}', '+16.5%')),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Energy Usage',
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 4),
-        _rangeSelector(),
-        const SizedBox(height: 8),
-        _headerWidget(),
-        const SizedBox(height: 8),
-        SizedBox(height: 150, child: lineChart()), // smaller chart height
-        const SizedBox(height: 16),
-        if (_selectedDateFromChart != null)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Devices on ${_monthNames[_selectedDateFromChart!.month - 1]} ${_selectedDateFromChart!.day}, ${_selectedDateFromChart!.year}',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              Column(
-                children: _userDevices.map((device) {
-                  double adjustedUsage = device.usage;
-                  bool isOnline = true;
-                  String status = "Good";
-
-                  return breakdownTile(
-                    device.icon,
-                    device.name,
-                    '${adjustedUsage.toStringAsFixed(1)} kWh',
-                    adjustedUsage / totalUsage,
-                    isOnline,
-                    status,
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-      ],
-    ),
-  ),
-)
-
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : SingleChildScrollView(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+                        Text(
+                          'Analytics',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDueDateCard(),
+                        const SizedBox(height: 16),
+                        _buildChart(AnalyticsMetric.energy, 'Total Consumption', 'kWh'),
+                        const SizedBox(height: 16),
+                        _buildChart(AnalyticsMetric.power, 'Average Power', 'W'),
+                        const SizedBox(height: 16),
+                        _buildChart(AnalyticsMetric.voltage, 'Average Voltage', 'V'),
+                        const SizedBox(height: 16),
+                        _buildChart(AnalyticsMetric.current, 'Average Current', 'A'),
+                      ],
+                    ),
+                  ),
+                )
               ],
             ),
           ),
@@ -334,6 +286,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             body: mainContent,
             bottomNavigationBar: CustomSidebarNav(
               currentIndex: 2,
+              realtimeDbService: _realtimeDbService,
               onTap: (index, page) {
                 if (index != 2) {
                   if (!mounted) return;
@@ -343,7 +296,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                   );
                 }
               },
-              isBottomNav: true, // Use the bottom navigation layout
+              isBottomNav: true,
             ),
           );
         } else {
@@ -354,6 +307,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 // Sidebar on the left
                 CustomSidebarNav(
                   currentIndex: 2,
+                  realtimeDbService: _realtimeDbService,
                   onTap: (index, page) {
                     if (index != 2) {
                       Navigator.pushReplacement(
@@ -370,6 +324,82 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           );
         }
       },
+    );
+  }
+
+  Widget _buildDueDateCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.3).round()), blurRadius: 20, offset: const Offset(0, 10))],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Billing Due Date',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 8),
+              if (_dueDate != null)
+                Text(
+                  '${_dueDate!.month}/${_dueDate!.day}/${_dueDate!.year}',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 28, fontWeight: FontWeight.w600),
+                )
+              else
+                Text(
+                  'Not Set',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 28, fontWeight: FontWeight.w600),
+                ),
+            ],
+          ),
+          if (_daysUntilDue != null)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  'Days Remaining',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$_daysUntilDue',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 28, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.secondary),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChart(AnalyticsMetric metric, String title, String unit) {
+    final spots = _chartData[metric]!;
+    final value = _metricValues[metric]!;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_lastUpdated != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Text(
+              'Last Updated: ${DateFormat('MMM d, yyyy hh:mm:ss a').format(_lastUpdated!)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+            ),
+          ),
+        summaryCard(title, '${value.toStringAsFixed(1)} $unit', '+0.0%'), // placeholder for change
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 300, // Doubled the height
+          child: lineChart(spots),
+        ),
+      ],
     );
   }
 
@@ -395,72 +425,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     );
   }
 
-  Widget lineChart() {
-  final spots = _getUsageData();
-
-  // Correct minX and maxX for all ranges
-  double minX = 0;
-  double maxX = 0;
-
-  switch (_selectedRange) {
-    case EnergyRange.daily:
-      minX = 0;
-      maxX = 23;
-      break;
-    case EnergyRange.weekly:
-      minX = 0;
-      maxX = 6; // last index of week
-      break;
-    case EnergyRange.monthly:
-      minX = 1;
-      maxX = spots.length.toDouble(); // number of days in month
-      break;
-  }
+  Widget lineChart(List<TimestampedFlSpot> spots) {
+  final double maxY = spots.isEmpty ? 50 : spots.map((spot) => spot.y).reduce(max) * 1.2;
 
   return LineChart(
     LineChartData(
-      minX: minX,
-      maxX: maxX,
+      minX: 0,
+      maxX: 60,
       minY: 0,
-      maxY: 50,
+      maxY: maxY,
       titlesData: FlTitlesData(
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            interval: 1,
+            interval: 10,
             getTitlesWidget: (value, _) {
-              if (_selectedRange == EnergyRange.weekly) {
-                int idx = value.toInt();
-                if (idx >= 0 && idx < 7) {
-                  return Text(_weekDays[idx],
-                      style: Theme.of(context).textTheme.bodyMedium);
-                }
-              } else if (_selectedRange == EnergyRange.monthly) {
-                int day = value.toInt();
-                if (day >= 1 && day <= spots.length) {
-                  return Text(day.toString(),
-                      style: Theme.of(context).textTheme.bodyMedium);
-                }
-              }  else {
-    // Daily: show 12:00 AM → 11:59 PM
-    int hour = value.toInt();
-    if (hour >= 0 && hour < 24) {
-      String period = hour < 12 ? 'AM' : 'PM';
-      int displayHour = hour % 12;
-      if (displayHour == 0) displayHour = 12;
-
-      // Label for first hour is 12:00 AM, last hour shows 11:59 PM
-      String label = hour == 23
-          ? '$displayHour:59 $period'
-          : '$displayHour:00 $period';
-
-      return Text(
-        label,
-        style: Theme.of(context).textTheme.bodyMedium,
-      );
-    }
-  }
-              return const SizedBox();
+              return Text(
+                '${value.toInt()}s',
+                style: Theme.of(context).textTheme.bodyMedium,
+              );
             },
           ),
         ),
@@ -475,57 +458,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
             show: true,
             color: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.2).round()),
           ),
-          dotData: FlDotData(show: true),
+          dotData: const FlDotData(show: true),
         ),
       ],
       lineTouchData: LineTouchData(
         handleBuiltInTouches: true,
         touchTooltipData: LineTouchTooltipData(
           tooltipBgColor: Theme.of(context).colorScheme.secondary,
-          getTooltipItems: (touchedSpots) {
-            return touchedSpots.map((touchedSpot) {
-              String label = '';
-              switch (_selectedRange) {
-                case EnergyRange.daily:
-                  label = '${touchedSpot.x.toInt()}:00';
-                  break;
-                case EnergyRange.weekly:
-                  DateTime date =
-                      _selectedWeekStart.add(Duration(days: touchedSpot.x.toInt()));
-                  label =
-                      '${_weekDays[date.weekday - 1]}, ${_monthNames[date.month - 1]} ${date.day}';
-                  break;
-                case EnergyRange.monthly:
-                  DateTime date =
-                      DateTime(DateTime.now().year, _selectedMonth, touchedSpot.x.toInt());
-                  label = '${_monthNames[date.month - 1]} ${date.day}';
-                  break;
-              }
-              return LineTooltipItem(label, const TextStyle(color: Colors.white));
+          getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+            return touchedBarSpots.map((barSpot) {
+              final spot = spots[barSpot.spotIndex];
+              final formattedTime = DateFormat('HH:mm:ss').format(spot.timestamp);
+                            return LineTooltipItem(
+                              '${spot.y.toStringAsFixed(2)}\n$formattedTime',
+                              const TextStyle(color: Colors.white),
+                            );
             }).toList();
           },
         ),
-        touchCallback: (event, response) {
-          if (!event.isInterestedForInteractions ||
-              response == null ||
-              response.lineBarSpots == null) {
-            return;
-          }
-
-          setState(() {
-            final spot = response.lineBarSpots!.first;
-            if (_selectedRange == EnergyRange.monthly) {
-              _selectedDateFromChart =
-                  DateTime(DateTime.now().year, _selectedMonth, spot.x.toInt());
-            } else if (_selectedRange == EnergyRange.weekly) {
-              _selectedDateFromChart =
-                  _selectedWeekStart.add(Duration(days: spot.x.toInt()));
-            } else {
-              _selectedDateFromChart = DateTime(
-                  _selectedDate.year, _selectedDate.month, _selectedDate.day, spot.x.toInt());
-            }
-          });
-        },
       ),
     ),
   );
