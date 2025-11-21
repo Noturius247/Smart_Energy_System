@@ -6,12 +6,14 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../realtime_db_service.dart';
 import 'admin_home.dart';
 import 'login_header.dart'; // Import LoginHeader
 import 'theadmin.dart';
 
 class AuthPage extends StatefulWidget {
-  const AuthPage({super.key});
+  final RealtimeDbService realtimeDbService; // New: Add RealtimeDbService
+  const AuthPage({super.key, required this.realtimeDbService});
 
   @override
   State<AuthPage> createState() => _AuthPageState();
@@ -21,7 +23,8 @@ class _AuthPageState extends State<AuthPage> {
   bool isLogin = true;
   bool _isLoading = false;
   bool _obscurePassword = true; // New state for password visibility
-  bool _obscureConfirmPassword = true; // New state for confirm password visibility
+  bool _obscureConfirmPassword =
+      true; // New state for confirm password visibility
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -37,6 +40,7 @@ class _AuthPageState extends State<AuthPage> {
   static const String _webClientId =
       '163950309353-9pu1nfnvfnkuacv3k27o1fe33bd3e6jr.apps.googleusercontent.com';
   late final GoogleSignIn _googleSignIn;
+  late RealtimeDbService _realtimeDbService;
 
   @override
   void initState() {
@@ -45,9 +49,8 @@ class _AuthPageState extends State<AuthPage> {
       clientId: kIsWeb ? _webClientId : null,
       scopes: const ['email', 'profile'],
     );
+    _realtimeDbService = widget.realtimeDbService;
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +60,8 @@ class _AuthPageState extends State<AuthPage> {
       final isTablet = size.width >= 600 && size.width < 1000;
 
       return Scaffold(
-        body: Stack( // Use Stack to place CustomHeader on top
+        body: Stack(
+          // Use Stack to place CustomHeader on top
           children: [
             Container(
               decoration: BoxDecoration(
@@ -82,9 +86,18 @@ class _AuthPageState extends State<AuthPage> {
                         child: Container(
                           padding: const EdgeInsets.all(24),
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(context).cardColor,
+                                Theme.of(context).primaryColor,
+                              ],
+                            ),
                             borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withOpacity(0.3),
+                            ),
                           ),
                           child: isMobile
                               ? _buildVerticalLayout(context)
@@ -97,12 +110,7 @@ class _AuthPageState extends State<AuthPage> {
               ),
             ),
             // CustomHeader at the top
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: LoginHeader(),
-            ),
+            Positioned(top: 0, left: 0, right: 0, child: LoginHeader()),
           ],
         ),
       );
@@ -125,16 +133,28 @@ class _AuthPageState extends State<AuthPage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline, color: Theme.of(context).colorScheme.onSurface, size: 64),
+                Icon(
+                  Icons.error_outline,
+                  color: Theme.of(context).colorScheme.onSurface,
+                  size: 64,
+                ),
                 const SizedBox(height: 20),
                 Text(
                   'Error loading login page',
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 20),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 20,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   e.toString(),
-                  style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7), fontSize: 12),
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.7),
+                    fontSize: 12,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -152,11 +172,8 @@ class _AuthPageState extends State<AuthPage> {
       children: [
         Expanded(flex: isTablet ? 1 : 2, child: _buildLeftPanel()),
         const SizedBox(width: 20),
-        Expanded(
-          flex: 2,
-          child: _buildRightPanel(context),
-        ),
- // <-- conditional
+        Expanded(flex: 2, child: _buildRightPanel(context)),
+        // <-- conditional
       ],
     );
   }
@@ -189,7 +206,9 @@ class _AuthPageState extends State<AuthPage> {
                   return Icon(
                     Icons.bolt,
                     size: 250,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.54),
                   );
                 },
               );
@@ -197,7 +216,9 @@ class _AuthPageState extends State<AuthPage> {
               return Icon(
                 Icons.bolt,
                 size: 250,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.54),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withOpacity(0.54),
               );
             }
           },
@@ -216,7 +237,11 @@ class _AuthPageState extends State<AuthPage> {
         Text(
           'We are delighted to have you here.\nPlease enter personal details to your user account.\nIf you need any assistance feel free to reach out.',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 15, color: Theme.of(context).textTheme.bodyMedium?.color, height: 1.4),
+          style: TextStyle(
+            fontSize: 15,
+            color: Theme.of(context).textTheme.bodyMedium?.color,
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 25),
         _buildToggleButtons(),
@@ -231,7 +256,9 @@ class _AuthPageState extends State<AuthPage> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -281,9 +308,13 @@ class _AuthPageState extends State<AuthPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor]),
+        gradient: LinearGradient(
+          colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
+        ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.24)),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.24),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -321,7 +352,9 @@ class _AuthPageState extends State<AuthPage> {
               suffixIcon: IconButton(
                 icon: Icon(
                   _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
                 ),
                 onPressed: () {
                   setState(() {
@@ -339,19 +372,26 @@ class _AuthPageState extends State<AuthPage> {
               obscureText: _obscureConfirmPassword,
               style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               decoration:
-                  _inputDecoration('Confirm Password', Icons.lock_outline).copyWith(
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  _inputDecoration(
+                    'Confirm Password',
+                    Icons.lock_outline,
+                  ).copyWith(
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
                   ),
-                  onPressed: () {
-                    setState(() {
-                      _obscureConfirmPassword = !_obscureConfirmPassword;
-                    });
-                  },
-                ),
-              ),
             ),
 
           if (isLogin)
@@ -359,8 +399,14 @@ class _AuthPageState extends State<AuthPage> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: _handlePasswordReset,
-                child: Text('Forgot Password?',
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7))),
+                child: Text(
+                  'Forgot Password?',
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.7),
+                  ),
+                ),
               ),
             ),
 
@@ -370,20 +416,23 @@ class _AuthPageState extends State<AuthPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: _isLoading ? null : () {
-                if (isLogin) {
-                  // Sign-in mode: validate email exists in database
-                  _handleEmailPasswordLogin();
-                } else {
-                  // Sign-up mode: create account, save to Firestore and authenticate
-                  _handleEmailPasswordSignup();
-                }
-              },
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      if (isLogin) {
+                        // Sign-in mode: validate email exists in database
+                        _handleEmailPasswordLogin();
+                      } else {
+                        // Sign-up mode: create account, save to Firestore and authenticate
+                        _handleEmailPasswordSignup();
+                      }
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.secondary,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: _isLoading
                   ? SizedBox(
@@ -391,24 +440,29 @@ class _AuthPageState extends State<AuthPage> {
                       width: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onSecondary),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.onSecondary,
+                        ),
                       ),
                     )
                   : Text(
                       isLogin ? 'Login' : 'Sign Up',
                       style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSecondary),
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSecondary,
+                      ),
                     ),
             ),
           ),
 
-
-
           const SizedBox(height: 20),
-          Text('Or sign in/up with',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7))),
+          Text(
+            'Or sign in/up with',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+            ),
+          ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -421,7 +475,11 @@ class _AuthPageState extends State<AuthPage> {
                   decoration: BoxDecoration(
                     color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(50),
-                    border: Border.all(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.3),
+                    ),
                   ),
                   child: _isLoading
                       ? SizedBox(
@@ -429,10 +487,16 @@ class _AuthPageState extends State<AuthPage> {
                           height: 24,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.onSecondary),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).colorScheme.onSecondary,
+                            ),
                           ),
                         )
-                      : Icon(FontAwesomeIcons.google, color: Theme.of(context).colorScheme.onSurface, size: 24),
+                      : Icon(
+                          FontAwesomeIcons.google,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 24,
+                        ),
                 ),
               ),
             ],
@@ -441,10 +505,6 @@ class _AuthPageState extends State<AuthPage> {
       ),
     );
   }
-
-
-
-
 
   Future<void> _handleEmailPasswordLogin() async {
     final email = _emailController.text.trim();
@@ -470,8 +530,10 @@ class _AuthPageState extends State<AuthPage> {
     try {
       final userCredential = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: email, password: password);
-      
-      debugPrint('✅ Firebase authentication successful: ${userCredential.user?.uid}');
+
+      debugPrint(
+        '✅ Firebase authentication successful: ${userCredential.user?.uid}',
+      );
       final signedInUser = userCredential.user;
       if (signedInUser != null) {
         setState(() {
@@ -480,32 +542,33 @@ class _AuthPageState extends State<AuthPage> {
         await _checkUserVerificationAndData(signedInUser);
       }
     } on FirebaseAuthException catch (firebaseError) {
-        setState(() {
-          _isLoading = false;
-        });
-        
-        String errorMessage = 'Authentication failed';
-        if (firebaseError.code == 'user-not-found') {
-          errorMessage = 'Email not registered';
-        } else if (firebaseError.code == 'wrong-password') {
-          errorMessage = 'Incorrect password';
-        } else if (firebaseError.code == 'invalid-email') {
-          errorMessage = 'Invalid email format';
-        } else if (firebaseError.code == 'user-disabled') {
-          errorMessage = 'Account has been disabled';
-        }
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(errorMessage),
-              backgroundColor: Theme.of(context).colorScheme.error,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        }
-        debugPrint('❌ Firebase auth error: $errorMessage');
-      } catch (e) { // General catch for any other exceptions
+      setState(() {
+        _isLoading = false;
+      });
+
+      String errorMessage = 'Authentication failed';
+      if (firebaseError.code == 'user-not-found') {
+        errorMessage = 'Email not registered';
+      } else if (firebaseError.code == 'wrong-password') {
+        errorMessage = 'Incorrect password';
+      } else if (firebaseError.code == 'invalid-email') {
+        errorMessage = 'Invalid email format';
+      } else if (firebaseError.code == 'user-disabled') {
+        errorMessage = 'Account has been disabled';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      debugPrint('❌ Firebase auth error: $errorMessage');
+    } catch (e) {
+      // General catch for any other exceptions
       setState(() {
         _isLoading = false;
       });
@@ -518,7 +581,8 @@ class _AuthPageState extends State<AuthPage> {
           ),
         );
       }
-    } finally { // Always executes after try/catch
+    } finally {
+      // Always executes after try/catch
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -618,7 +682,9 @@ class _AuthPageState extends State<AuthPage> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('A verification email has been sent to your address. Please verify your email to activate your Smart Energy Meter account.'),
+            content: Text(
+              'A verification email has been sent to your address. Please verify your email to activate your Smart Energy Meter account.',
+            ),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 6),
           ),
@@ -648,7 +714,8 @@ class _AuthPageState extends State<AuthPage> {
         );
       }
       debugPrint('❌ Firebase signup error: $firebaseError');
-    } catch (e) { // General catch for any other exceptions
+    } catch (e) {
+      // General catch for any other exceptions
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -658,7 +725,8 @@ class _AuthPageState extends State<AuthPage> {
           ),
         );
       }
-    } finally { // Always executes after try/catch
+    } finally {
+      // Always executes after try/catch
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -686,7 +754,9 @@ class _AuthPageState extends State<AuthPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Password reset email sent. Please check your inbox.'),
+            content: const Text(
+              'Password reset email sent. Please check your inbox.',
+            ),
             backgroundColor: Theme.of(context).colorScheme.secondary,
           ),
         );
@@ -767,7 +837,8 @@ class _AuthPageState extends State<AuthPage> {
       }
 
       // Step 2: Get authentication details from Google
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
       // Step 3: Create a new credential for Firebase Auth
       final credential = GoogleAuthProvider.credential(
@@ -776,8 +847,8 @@ class _AuthPageState extends State<AuthPage> {
       );
 
       // Step 4: Sign in to Firebase with Google credential
-      final UserCredential userCredential =
-          await FirebaseAuth.instance.signInWithCredential(credential);
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithCredential(credential);
       final User? firebaseUser = userCredential.user;
 
       if (firebaseUser == null) {
@@ -813,10 +884,13 @@ class _AuthPageState extends State<AuthPage> {
     final idTokenResult = await user.getIdTokenResult();
     final isAdmin = idTokenResult.claims?['admin'] == true;
 
-    final userDoc =
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
 
-    if (!user.emailVerified && !isAdmin) { // Only check email verification for non-admins
+    if (!user.emailVerified && !isAdmin) {
+      // Only check email verification for non-admins
       // Email is not verified
       setState(() {
         _isLoading = false;
@@ -826,11 +900,15 @@ class _AuthPageState extends State<AuthPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Please verify your email before logging in.'),
-            backgroundColor: Theme.of(context).colorScheme.error, // Themed color
+            backgroundColor: Theme.of(
+              context,
+            ).colorScheme.error, // Themed color
             duration: const Duration(seconds: 5),
             action: SnackBarAction(
               label: 'Resend',
-              textColor: Theme.of(context).colorScheme.onPrimary, // Themed color
+              textColor: Theme.of(
+                context,
+              ).colorScheme.onPrimary, // Themed color
               onPressed: () async {
                 await user.sendEmailVerification();
               },
@@ -843,7 +921,10 @@ class _AuthPageState extends State<AuthPage> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const MyAdminScreen()),
+          MaterialPageRoute(
+            builder: (context) =>
+                MyAdminScreen(realtimeDbService: _realtimeDbService),
+          ),
         );
       }
     } else if (userDoc.exists) {
@@ -851,7 +932,10 @@ class _AuthPageState extends State<AuthPage> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          MaterialPageRoute(
+            builder: (context) =>
+                HomeScreen(realtimeDbService: _realtimeDbService),
+          ),
         );
       }
     } else {
@@ -869,7 +953,10 @@ class _AuthPageState extends State<AuthPage> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          MaterialPageRoute(
+            builder: (context) =>
+                HomeScreen(realtimeDbService: _realtimeDbService),
+          ),
         );
       }
     }
@@ -878,14 +965,21 @@ class _AuthPageState extends State<AuthPage> {
   InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
-      labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
-      prefixIcon: Icon(icon, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+      labelStyle: TextStyle(
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+      ),
+      prefixIcon: Icon(
+        icon,
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+      ),
       filled: true,
       fillColor: Theme.of(context).cardColor.withOpacity(0.7),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

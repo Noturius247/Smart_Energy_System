@@ -1,0 +1,4369 @@
+{
+  "central_hub": {
+    "data_reception_paused": true
+  },
+  "hubs": {
+    "SP001": {
+      "aggregations": {
+        "daily": {
+          "2025-11-19": {
+            "average_power_w": 24.75,
+            "date": "2025-11-19",
+            "last_updated_utc": "2025-11-19T16:11:30.932635",
+            "total_readings": 2
+          }
+        }
+      }
+    }
+  },
+  "users": {
+    "espthesisbmn": {
+      "hubs": {
+        "SP001": {
+          "aggregations": {
+            "daily": {
+              "2025-11-20": {
+                "average_power_w": 14.65,
+                "date": "2025-11-20",
+                "last_updated_ph": "2025-11-20T03:40:52.237097+08:00",
+                "total_readings": 2
+              },
+              "2025-11-21": {
+                "average_power_w": 35.3,
+                "date": "2025-11-21",
+                "last_updated_ph": "2025-11-21T05:20:14.472938+08:00",
+                "total_readings": 2
+              }
+            },
+            "per_second": {
+              "timestamp": 1763673617716,
+              "total_current": 0.493,
+              "total_energy": 3.948,
+              "total_power": 70.6,
+              "total_voltage": 455.39999
+            }
+          },
+          "assigned": true,
+          "ownerId": "rzfR2UJlsCZ0dYsNdIgmmpBwDPz1",
+          "plugs": {
+            "plug2e5c3314": {
+              "data": {
+                "current": 0.03,
+                "energy": 1.233,
+                "lastUpdate": 1763673617633,
+                "power": 0,
+                "ssr_state": true,
+                "voltage": 227.7
+              }
+            },
+            "plug2f5c3314": {
+              "data": {
+                "current": 0.463,
+                "energy": 2.715,
+                "lastUpdate": 1763673617432,
+                "power": 70.6,
+                "ssr_state": true,
+                "voltage": 227.7
+              }
+            }
+          },
+          "ssr_state": true,
+          "user_email": "luzaresbenzgerald@gmail.com"
+        },
+        "ssr_state": true
+      }
+    },
+    "espthesisbmn_at_gmail_com": {
+      "hubs": {
+        "SP001": {
+          "aggregations": {
+            "daily": {
+              "2025-11-19": {
+                "average_power_w": 15.55,
+                "date": "2025-11-19",
+                "last_updated_ph": "2025-11-20T00:26:42.608405+08:00",
+                "total_readings": 2
+              },
+              "2025-11-20": {
+                "average_power_w": 0,
+                "date": "2025-11-20",
+                "last_updated_ph": "2025-11-20T02:08:55.324944+08:00",
+                "total_readings": 2
+              }
+            },
+            "per_second": {
+              "2025-11-20T01_38_05_054546_08_00": {
+                "timestamp": "2025-11-20T01:38:05.054546+08:00",
+                "total_current": 0.46099999999999997,
+                "total_energy": 1.229,
+                "total_power": 69.3,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_38_06_073258_08_00": {
+                "timestamp": "2025-11-20T01:38:06.073258+08:00",
+                "total_current": 0.46099999999999997,
+                "total_energy": 1.229,
+                "total_power": 69.3,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_38_07_045907_08_00": {
+                "timestamp": "2025-11-20T01:38:07.045907+08:00",
+                "total_current": 0.46099999999999997,
+                "total_energy": 1.229,
+                "total_power": 69.3,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_38_08_047877_08_00": {
+                "timestamp": "2025-11-20T01:38:08.047877+08:00",
+                "total_current": 0.46099999999999997,
+                "total_energy": 1.229,
+                "total_power": 69.3,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_38_09_062876_08_00": {
+                "timestamp": "2025-11-20T01:38:09.062876+08:00",
+                "total_current": 0.42500000000000004,
+                "total_energy": 1.229,
+                "total_power": 60.5,
+                "total_voltage": 443.5
+              },
+              "2025-11-20T01_38_10_048793_08_00": {
+                "timestamp": "2025-11-20T01:38:10.048793+08:00",
+                "total_current": 0.448,
+                "total_energy": 1.229,
+                "total_power": 64.30000000000001,
+                "total_voltage": 443.4
+              },
+              "2025-11-20T01_38_11_052476_08_00": {
+                "timestamp": "2025-11-20T01:38:11.052476+08:00",
+                "total_current": 0.471,
+                "total_energy": 1.229,
+                "total_power": 71,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_38_12_052691_08_00": {
+                "timestamp": "2025-11-20T01:38:12.052691+08:00",
+                "total_current": 0.456,
+                "total_energy": 1.23,
+                "total_power": 68.7,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_38_13_056569_08_00": {
+                "timestamp": "2025-11-20T01:38:13.056569+08:00",
+                "total_current": 0.456,
+                "total_energy": 1.23,
+                "total_power": 68.7,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_38_14_497417_08_00": {
+                "timestamp": "2025-11-20T01:38:14.497417+08:00",
+                "total_current": 0.51,
+                "total_energy": 1.23,
+                "total_power": 82.1,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_38_16_048021_08_00": {
+                "timestamp": "2025-11-20T01:38:16.048021+08:00",
+                "total_current": 0.521,
+                "total_energy": 1.23,
+                "total_power": 81.4,
+                "total_voltage": 443.5
+              },
+              "2025-11-20T01_38_16_054096_08_00": {
+                "timestamp": "2025-11-20T01:38:16.054096+08:00",
+                "total_current": 0.521,
+                "total_energy": 1.23,
+                "total_power": 81.4,
+                "total_voltage": 443.5
+              },
+              "2025-11-20T01_38_18_045314_08_00": {
+                "timestamp": "2025-11-20T01:38:18.045314+08:00",
+                "total_current": 0.521,
+                "total_energy": 1.23,
+                "total_power": 81.4,
+                "total_voltage": 443.5
+              },
+              "2025-11-20T01_38_18_062192_08_00": {
+                "timestamp": "2025-11-20T01:38:18.062192+08:00",
+                "total_current": 0.521,
+                "total_energy": 1.23,
+                "total_power": 81.4,
+                "total_voltage": 443.5
+              },
+              "2025-11-20T01_38_20_040797_08_00": {
+                "timestamp": "2025-11-20T01:38:20.040797+08:00",
+                "total_current": 0.502,
+                "total_energy": 1.23,
+                "total_power": 78.4,
+                "total_voltage": 444.29999999999995
+              },
+              "2025-11-20T01_38_20_051536_08_00": {
+                "timestamp": "2025-11-20T01:38:20.051536+08:00",
+                "total_current": 0.502,
+                "total_energy": 1.23,
+                "total_power": 78.4,
+                "total_voltage": 444.29999999999995
+              },
+              "2025-11-20T01_38_22_048183_08_00": {
+                "timestamp": "2025-11-20T01:38:22.048183+08:00",
+                "total_current": 0.241,
+                "total_energy": 1.23,
+                "total_power": 28.4,
+                "total_voltage": 444.9
+              },
+              "2025-11-20T01_38_22_053187_08_00": {
+                "timestamp": "2025-11-20T01:38:22.053187+08:00",
+                "total_current": 0.241,
+                "total_energy": 1.23,
+                "total_power": 28.4,
+                "total_voltage": 444.9
+              },
+              "2025-11-20T01_38_24_040259_08_00": {
+                "timestamp": "2025-11-20T01:38:24.040259+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.4,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_38_24_049865_08_00": {
+                "timestamp": "2025-11-20T01:38:24.049865+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.4,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_38_26_041382_08_00": {
+                "timestamp": "2025-11-20T01:38:26.041382+08:00",
+                "total_current": 0.247,
+                "total_energy": 1.23,
+                "total_power": 29.6,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_38_26_061534_08_00": {
+                "timestamp": "2025-11-20T01:38:26.061534+08:00",
+                "total_current": 0.247,
+                "total_energy": 1.23,
+                "total_power": 29.6,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_38_28_041914_08_00": {
+                "timestamp": "2025-11-20T01:38:28.041914+08:00",
+                "total_current": 0.247,
+                "total_energy": 1.23,
+                "total_power": 29.6,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_38_28_055823_08_00": {
+                "timestamp": "2025-11-20T01:38:28.055823+08:00",
+                "total_current": 0.247,
+                "total_energy": 1.23,
+                "total_power": 29.6,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_38_30_047268_08_00": {
+                "timestamp": "2025-11-20T01:38:30.047268+08:00",
+                "total_current": 0.239,
+                "total_energy": 1.23,
+                "total_power": 28.1,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_30_055491_08_00": {
+                "timestamp": "2025-11-20T01:38:30.055491+08:00",
+                "total_current": 0.239,
+                "total_energy": 1.23,
+                "total_power": 28.1,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_32_043051_08_00": {
+                "timestamp": "2025-11-20T01:38:32.043051+08:00",
+                "total_current": 0.243,
+                "total_energy": 1.23,
+                "total_power": 28.8,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_32_052306_08_00": {
+                "timestamp": "2025-11-20T01:38:32.052306+08:00",
+                "total_current": 0.243,
+                "total_energy": 1.23,
+                "total_power": 28.8,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_34_039732_08_00": {
+                "timestamp": "2025-11-20T01:38:34.039732+08:00",
+                "total_current": 0.233,
+                "total_energy": 1.23,
+                "total_power": 27.4,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_34_054099_08_00": {
+                "timestamp": "2025-11-20T01:38:34.054099+08:00",
+                "total_current": 0.233,
+                "total_energy": 1.23,
+                "total_power": 27.4,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_36_044893_08_00": {
+                "timestamp": "2025-11-20T01:38:36.044893+08:00",
+                "total_current": 0.115,
+                "total_energy": 1.23,
+                "total_power": 13.8,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_36_054359_08_00": {
+                "timestamp": "2025-11-20T01:38:36.054359+08:00",
+                "total_current": 0.115,
+                "total_energy": 1.23,
+                "total_power": 13.8,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_38_043975_08_00": {
+                "timestamp": "2025-11-20T01:38:38.043975+08:00",
+                "total_current": 0.115,
+                "total_energy": 1.23,
+                "total_power": 13.8,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_38_051164_08_00": {
+                "timestamp": "2025-11-20T01:38:38.051164+08:00",
+                "total_current": 0.115,
+                "total_energy": 1.23,
+                "total_power": 13.8,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_40_029367_08_00": {
+                "timestamp": "2025-11-20T01:38:40.029367+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_40_056963_08_00": {
+                "timestamp": "2025-11-20T01:38:40.056963+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_42_037786_08_00": {
+                "timestamp": "2025-11-20T01:38:42.037786+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_42_055330_08_00": {
+                "timestamp": "2025-11-20T01:38:42.055330+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_44_043817_08_00": {
+                "timestamp": "2025-11-20T01:38:44.043817+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_44_052212_08_00": {
+                "timestamp": "2025-11-20T01:38:44.052212+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_38_46_042023_08_00": {
+                "timestamp": "2025-11-20T01:38:46.042023+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_46_059475_08_00": {
+                "timestamp": "2025-11-20T01:38:46.059475+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_48_055165_08_00": {
+                "timestamp": "2025-11-20T01:38:48.055165+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_48_058955_08_00": {
+                "timestamp": "2025-11-20T01:38:48.058955+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_50_049644_08_00": {
+                "timestamp": "2025-11-20T01:38:50.049644+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_50_053639_08_00": {
+                "timestamp": "2025-11-20T01:38:50.053639+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_38_52_046508_08_00": {
+                "timestamp": "2025-11-20T01:38:52.046508+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_38_52_056223_08_00": {
+                "timestamp": "2025-11-20T01:38:52.056223+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_38_54_046986_08_00": {
+                "timestamp": "2025-11-20T01:38:54.046986+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_38_54_051547_08_00": {
+                "timestamp": "2025-11-20T01:38:54.051547+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_38_56_048981_08_00": {
+                "timestamp": "2025-11-20T01:38:56.048981+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_38_56_056149_08_00": {
+                "timestamp": "2025-11-20T01:38:56.056149+08:00",
+                "total_current": 0,
+                "total_energy": 1.23,
+                "total_power": 0,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_38_58_055354_08_00": {
+                "timestamp": "2025-11-20T01:38:58.055354+08:00",
+                "total_current": 0.051,
+                "total_energy": 1.23,
+                "total_power": 2.3,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_38_59_043591_08_00": {
+                "timestamp": "2025-11-20T01:38:59.043591+08:00",
+                "total_current": 0.051,
+                "total_energy": 1.23,
+                "total_power": 2.3,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_00_043910_08_00": {
+                "timestamp": "2025-11-20T01:39:00.043910+08:00",
+                "total_current": 0.051,
+                "total_energy": 1.23,
+                "total_power": 2.3,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_01_053027_08_00": {
+                "timestamp": "2025-11-20T01:39:01.053027+08:00",
+                "total_current": 0.197,
+                "total_energy": 1.23,
+                "total_power": 21.8,
+                "total_voltage": 444.5
+              },
+              "2025-11-20T01_39_02_054240_08_00": {
+                "timestamp": "2025-11-20T01:39:02.054240+08:00",
+                "total_current": 0.201,
+                "total_energy": 1.23,
+                "total_power": 22.2,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_39_03_049682_08_00": {
+                "timestamp": "2025-11-20T01:39:03.049682+08:00",
+                "total_current": 0.201,
+                "total_energy": 1.23,
+                "total_power": 22.2,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_39_04_051683_08_00": {
+                "timestamp": "2025-11-20T01:39:04.051683+08:00",
+                "total_current": 0.206,
+                "total_energy": 1.23,
+                "total_power": 23,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_39_05_045022_08_00": {
+                "timestamp": "2025-11-20T01:39:05.045022+08:00",
+                "total_current": 0.236,
+                "total_energy": 1.23,
+                "total_power": 27.6,
+                "total_voltage": 444.29999999999995
+              },
+              "2025-11-20T01_39_06_046086_08_00": {
+                "timestamp": "2025-11-20T01:39:06.046086+08:00",
+                "total_current": 0.217,
+                "total_energy": 1.23,
+                "total_power": 24.7,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_39_07_043064_08_00": {
+                "timestamp": "2025-11-20T01:39:07.043064+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.4,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_39_08_052870_08_00": {
+                "timestamp": "2025-11-20T01:39:08.052870+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.4,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_39_09_466560_08_00": {
+                "timestamp": "2025-11-20T01:39:09.466560+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.4,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_39_11_037439_08_00": {
+                "timestamp": "2025-11-20T01:39:11.037439+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.4,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_39_11_052928_08_00": {
+                "timestamp": "2025-11-20T01:39:11.052928+08:00",
+                "total_current": 0.227,
+                "total_energy": 1.23,
+                "total_power": 26.3,
+                "total_voltage": 444.6
+              },
+              "2025-11-20T01_39_13_048152_08_00": {
+                "timestamp": "2025-11-20T01:39:13.048152+08:00",
+                "total_current": 0.24,
+                "total_energy": 1.23,
+                "total_power": 28.6,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_13_054235_08_00": {
+                "timestamp": "2025-11-20T01:39:13.054235+08:00",
+                "total_current": 0.24,
+                "total_energy": 1.23,
+                "total_power": 28.6,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_15_044921_08_00": {
+                "timestamp": "2025-11-20T01:39:15.044921+08:00",
+                "total_current": 0.235,
+                "total_energy": 1.23,
+                "total_power": 27.7,
+                "total_voltage": 444.6
+              },
+              "2025-11-20T01_39_15_054482_08_00": {
+                "timestamp": "2025-11-20T01:39:15.054482+08:00",
+                "total_current": 0.235,
+                "total_energy": 1.23,
+                "total_power": 27.7,
+                "total_voltage": 444.6
+              },
+              "2025-11-20T01_39_17_038467_08_00": {
+                "timestamp": "2025-11-20T01:39:17.038467+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.7,
+                "total_voltage": 444.6
+              },
+              "2025-11-20T01_39_17_058159_08_00": {
+                "timestamp": "2025-11-20T01:39:17.058159+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.7,
+                "total_voltage": 444.6
+              },
+              "2025-11-20T01_39_19_041800_08_00": {
+                "timestamp": "2025-11-20T01:39:19.041800+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.7,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_19_044691_08_00": {
+                "timestamp": "2025-11-20T01:39:19.044691+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.7,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_21_033458_08_00": {
+                "timestamp": "2025-11-20T01:39:21.033458+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.7,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_21_061450_08_00": {
+                "timestamp": "2025-11-20T01:39:21.061450+08:00",
+                "total_current": 0.234,
+                "total_energy": 1.23,
+                "total_power": 27.7,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_23_047566_08_00": {
+                "timestamp": "2025-11-20T01:39:23.047566+08:00",
+                "total_current": 0.194,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21.5,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_39_23_050910_08_00": {
+                "timestamp": "2025-11-20T01:39:23.050910+08:00",
+                "total_current": 0.194,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21.5,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_39_25_046184_08_00": {
+                "timestamp": "2025-11-20T01:39:25.046184+08:00",
+                "total_current": 0.213,
+                "total_energy": 1.2309999999999999,
+                "total_power": 24.2,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_39_25_052286_08_00": {
+                "timestamp": "2025-11-20T01:39:25.052286+08:00",
+                "total_current": 0.213,
+                "total_energy": 1.2309999999999999,
+                "total_power": 24.2,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_39_27_043229_08_00": {
+                "timestamp": "2025-11-20T01:39:27.043229+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_27_046753_08_00": {
+                "timestamp": "2025-11-20T01:39:27.046753+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_29_037403_08_00": {
+                "timestamp": "2025-11-20T01:39:29.037403+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_29_048500_08_00": {
+                "timestamp": "2025-11-20T01:39:29.048500+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_31_051239_08_00": {
+                "timestamp": "2025-11-20T01:39:31.051239+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_31_054187_08_00": {
+                "timestamp": "2025-11-20T01:39:31.054187+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_39_33_041034_08_00": {
+                "timestamp": "2025-11-20T01:39:33.041034+08:00",
+                "total_current": 0.202,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.5,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_34_410147_08_00": {
+                "timestamp": "2025-11-20T01:39:34.410147+08:00",
+                "total_current": 0.207,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.2,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_35_041750_08_00": {
+                "timestamp": "2025-11-20T01:39:35.041750+08:00",
+                "total_current": 0.207,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.2,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_36_099101_08_00": {
+                "timestamp": "2025-11-20T01:39:36.099101+08:00",
+                "total_current": 0.218,
+                "total_energy": 1.2309999999999999,
+                "total_power": 25.1,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_37_039152_08_00": {
+                "timestamp": "2025-11-20T01:39:37.039152+08:00",
+                "total_current": 0.198,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_38_050057_08_00": {
+                "timestamp": "2025-11-20T01:39:38.050057+08:00",
+                "total_current": 0.201,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21.9,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_39_043418_08_00": {
+                "timestamp": "2025-11-20T01:39:39.043418+08:00",
+                "total_current": 0.216,
+                "total_energy": 1.2309999999999999,
+                "total_power": 24.8,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_40_048659_08_00": {
+                "timestamp": "2025-11-20T01:39:40.048659+08:00",
+                "total_current": 0.216,
+                "total_energy": 1.2309999999999999,
+                "total_power": 24.8,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_41_046382_08_00": {
+                "timestamp": "2025-11-20T01:39:41.046382+08:00",
+                "total_current": 0.216,
+                "total_energy": 1.2309999999999999,
+                "total_power": 24.8,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_42_054076_08_00": {
+                "timestamp": "2025-11-20T01:39:42.054076+08:00",
+                "total_current": 0.216,
+                "total_energy": 1.2309999999999999,
+                "total_power": 24.8,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_39_43_050372_08_00": {
+                "timestamp": "2025-11-20T01:39:43.050372+08:00",
+                "total_current": 0.186,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.8,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_39_44_053038_08_00": {
+                "timestamp": "2025-11-20T01:39:44.053038+08:00",
+                "total_current": 0.186,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.8,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_39_45_055969_08_00": {
+                "timestamp": "2025-11-20T01:39:45.055969+08:00",
+                "total_current": 0.19,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.7,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_39_46_053592_08_00": {
+                "timestamp": "2025-11-20T01:39:46.053592+08:00",
+                "total_current": 0.199,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22,
+                "total_voltage": 445.4
+              },
+              "2025-11-20T01_39_47_047769_08_00": {
+                "timestamp": "2025-11-20T01:39:47.047769+08:00",
+                "total_current": 0.203,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.8,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_39_48_061786_08_00": {
+                "timestamp": "2025-11-20T01:39:48.061786+08:00",
+                "total_current": 0.203,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.8,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_39_49_050025_08_00": {
+                "timestamp": "2025-11-20T01:39:49.050025+08:00",
+                "total_current": 0.181,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.4,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_39_50_054003_08_00": {
+                "timestamp": "2025-11-20T01:39:50.054003+08:00",
+                "total_current": 0.177,
+                "total_energy": 1.2309999999999999,
+                "total_power": 18.5,
+                "total_voltage": 445.5
+              },
+              "2025-11-20T01_39_51_050005_08_00": {
+                "timestamp": "2025-11-20T01:39:51.050005+08:00",
+                "total_current": 0.177,
+                "total_energy": 1.2309999999999999,
+                "total_power": 18.5,
+                "total_voltage": 445.5
+              },
+              "2025-11-20T01_39_52_055798_08_00": {
+                "timestamp": "2025-11-20T01:39:52.055798+08:00",
+                "total_current": 0.177,
+                "total_energy": 1.2309999999999999,
+                "total_power": 18.5,
+                "total_voltage": 445.5
+              },
+              "2025-11-20T01_39_53_043268_08_00": {
+                "timestamp": "2025-11-20T01:39:53.043268+08:00",
+                "total_current": 0.177,
+                "total_energy": 1.2309999999999999,
+                "total_power": 18.5,
+                "total_voltage": 445.5
+              },
+              "2025-11-20T01_39_54_053144_08_00": {
+                "timestamp": "2025-11-20T01:39:54.053144+08:00",
+                "total_current": 0.176,
+                "total_energy": 1.2309999999999999,
+                "total_power": 18.4,
+                "total_voltage": 445.5
+              },
+              "2025-11-20T01_39_55_046113_08_00": {
+                "timestamp": "2025-11-20T01:39:55.046113+08:00",
+                "total_current": 0.182,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.2,
+                "total_voltage": 445.6
+              },
+              "2025-11-20T01_39_56_053584_08_00": {
+                "timestamp": "2025-11-20T01:39:56.053584+08:00",
+                "total_current": 0.204,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.9,
+                "total_voltage": 445.5
+              },
+              "2025-11-20T01_39_57_040967_08_00": {
+                "timestamp": "2025-11-20T01:39:57.040967+08:00",
+                "total_current": 0.185,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.9,
+                "total_voltage": 445.6
+              },
+              "2025-11-20T01_39_58_052743_08_00": {
+                "timestamp": "2025-11-20T01:39:58.052743+08:00",
+                "total_current": 0.185,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.9,
+                "total_voltage": 445.6
+              },
+              "2025-11-20T01_39_59_038036_08_00": {
+                "timestamp": "2025-11-20T01:39:59.038036+08:00",
+                "total_current": 0.176,
+                "total_energy": 1.2309999999999999,
+                "total_power": 18.6,
+                "total_voltage": 445.5
+              },
+              "2025-11-20T01_40_00_054927_08_00": {
+                "timestamp": "2025-11-20T01:40:00.054927+08:00",
+                "total_current": 0.19,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21,
+                "total_voltage": 445.4
+              },
+              "2025-11-20T01_40_01_054097_08_00": {
+                "timestamp": "2025-11-20T01:40:01.054097+08:00",
+                "total_current": 0.19,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21,
+                "total_voltage": 445.4
+              },
+              "2025-11-20T01_40_02_052576_08_00": {
+                "timestamp": "2025-11-20T01:40:02.052576+08:00",
+                "total_current": 0.19,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21,
+                "total_voltage": 445.4
+              },
+              "2025-11-20T01_40_03_044536_08_00": {
+                "timestamp": "2025-11-20T01:40:03.044536+08:00",
+                "total_current": 0.19,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21,
+                "total_voltage": 445.4
+              },
+              "2025-11-20T01_40_04_058159_08_00": {
+                "timestamp": "2025-11-20T01:40:04.058159+08:00",
+                "total_current": 0.18,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.1,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_40_05_045094_08_00": {
+                "timestamp": "2025-11-20T01:40:05.045094+08:00",
+                "total_current": 0.176,
+                "total_energy": 1.2309999999999999,
+                "total_power": 18.6,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_06_066996_08_00": {
+                "timestamp": "2025-11-20T01:40:06.066996+08:00",
+                "total_current": 0.196,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21.4,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_40_07_042926_08_00": {
+                "timestamp": "2025-11-20T01:40:07.042926+08:00",
+                "total_current": 0.189,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.4,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_08_057370_08_00": {
+                "timestamp": "2025-11-20T01:40:08.057370+08:00",
+                "total_current": 0.189,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.4,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_09_045683_08_00": {
+                "timestamp": "2025-11-20T01:40:09.045683+08:00",
+                "total_current": 0.18,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.4,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_10_056823_08_00": {
+                "timestamp": "2025-11-20T01:40:10.056823+08:00",
+                "total_current": 0.201,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.2,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_40_11_048745_08_00": {
+                "timestamp": "2025-11-20T01:40:11.048745+08:00",
+                "total_current": 0.201,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.2,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_40_12_052776_08_00": {
+                "timestamp": "2025-11-20T01:40:12.052776+08:00",
+                "total_current": 0.201,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.2,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_40_13_047943_08_00": {
+                "timestamp": "2025-11-20T01:40:13.047943+08:00",
+                "total_current": 0.201,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.2,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_40_14_057152_08_00": {
+                "timestamp": "2025-11-20T01:40:14.057152+08:00",
+                "total_current": 0.182,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.2,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_40_15_056925_08_00": {
+                "timestamp": "2025-11-20T01:40:15.056925+08:00",
+                "total_current": 0.18,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.2,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_16_054523_08_00": {
+                "timestamp": "2025-11-20T01:40:16.054523+08:00",
+                "total_current": 0.185,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.7,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_40_17_050323_08_00": {
+                "timestamp": "2025-11-20T01:40:17.050323+08:00",
+                "total_current": 0.186,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.8,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_40_18_064978_08_00": {
+                "timestamp": "2025-11-20T01:40:18.064978+08:00",
+                "total_current": 0.186,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.5,
+                "total_voltage": 444.70000000000005
+              },
+              "2025-11-20T01_40_19_046586_08_00": {
+                "timestamp": "2025-11-20T01:40:19.046586+08:00",
+                "total_current": 0.186,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.5,
+                "total_voltage": 444.8
+              },
+              "2025-11-20T01_40_20_056803_08_00": {
+                "timestamp": "2025-11-20T01:40:20.056803+08:00",
+                "total_current": 0.203,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.5,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_40_21_057623_08_00": {
+                "timestamp": "2025-11-20T01:40:21.057623+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_22_058864_08_00": {
+                "timestamp": "2025-11-20T01:40:22.058864+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_23_050867_08_00": {
+                "timestamp": "2025-11-20T01:40:23.050867+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_24_056562_08_00": {
+                "timestamp": "2025-11-20T01:40:24.056562+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_25_047312_08_00": {
+                "timestamp": "2025-11-20T01:40:25.047312+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_26_053371_08_00": {
+                "timestamp": "2025-11-20T01:40:26.053371+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.1,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_27_041346_08_00": {
+                "timestamp": "2025-11-20T01:40:27.041346+08:00",
+                "total_current": 0.219,
+                "total_energy": 1.2309999999999999,
+                "total_power": 25.4,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_40_28_048665_08_00": {
+                "timestamp": "2025-11-20T01:40:28.048665+08:00",
+                "total_current": 0.198,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21.7,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_40_29_053270_08_00": {
+                "timestamp": "2025-11-20T01:40:29.053270+08:00",
+                "total_current": 0.181,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.1,
+                "total_voltage": 445.5
+              },
+              "2025-11-20T01_40_30_054469_08_00": {
+                "timestamp": "2025-11-20T01:40:30.054469+08:00",
+                "total_current": 0.181,
+                "total_energy": 1.2309999999999999,
+                "total_power": 19.1,
+                "total_voltage": 445.4
+              },
+              "2025-11-20T01_40_31_042294_08_00": {
+                "timestamp": "2025-11-20T01:40:31.042294+08:00",
+                "total_current": 0.191,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.6,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_40_32_057419_08_00": {
+                "timestamp": "2025-11-20T01:40:32.057419+08:00",
+                "total_current": 0.191,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.6,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_40_33_042022_08_00": {
+                "timestamp": "2025-11-20T01:40:33.042022+08:00",
+                "total_current": 0.191,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.6,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_40_34_050813_08_00": {
+                "timestamp": "2025-11-20T01:40:34.050813+08:00",
+                "total_current": 0.191,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.6,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_40_35_042115_08_00": {
+                "timestamp": "2025-11-20T01:40:35.042115+08:00",
+                "total_current": 0.204,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.2,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_40_36_057694_08_00": {
+                "timestamp": "2025-11-20T01:40:36.057694+08:00",
+                "total_current": 0.204,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.2,
+                "total_voltage": 445.29999999999995
+              },
+              "2025-11-20T01_40_37_044633_08_00": {
+                "timestamp": "2025-11-20T01:40:37.044633+08:00",
+                "total_current": 0.216,
+                "total_energy": 1.2309999999999999,
+                "total_power": 24.4,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_40_38_053758_08_00": {
+                "timestamp": "2025-11-20T01:40:38.053758+08:00",
+                "total_current": 0.204,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.8,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_39_048160_08_00": {
+                "timestamp": "2025-11-20T01:40:39.048160+08:00",
+                "total_current": 0.204,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.8,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_40_056280_08_00": {
+                "timestamp": "2025-11-20T01:40:40.056280+08:00",
+                "total_current": 0.21,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.9,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_40_41_045152_08_00": {
+                "timestamp": "2025-11-20T01:40:41.045152+08:00",
+                "total_current": 0.191,
+                "total_energy": 1.2309999999999999,
+                "total_power": 21.1,
+                "total_voltage": 446
+              },
+              "2025-11-20T01_40_42_061486_08_00": {
+                "timestamp": "2025-11-20T01:40:42.061486+08:00",
+                "total_current": 0.191,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.9,
+                "total_voltage": 445.9
+              },
+              "2025-11-20T01_40_43_047811_08_00": {
+                "timestamp": "2025-11-20T01:40:43.047811+08:00",
+                "total_current": 0.191,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.9,
+                "total_voltage": 445.9
+              },
+              "2025-11-20T01_40_44_065601_08_00": {
+                "timestamp": "2025-11-20T01:40:44.065601+08:00",
+                "total_current": 0.191,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.9,
+                "total_voltage": 445.9
+              },
+              "2025-11-20T01_40_45_052820_08_00": {
+                "timestamp": "2025-11-20T01:40:45.052820+08:00",
+                "total_current": 0.191,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.9,
+                "total_voltage": 445.9
+              },
+              "2025-11-20T01_40_46_059738_08_00": {
+                "timestamp": "2025-11-20T01:40:46.059738+08:00",
+                "total_current": 0.187,
+                "total_energy": 1.2309999999999999,
+                "total_power": 20.3,
+                "total_voltage": 446.1
+              },
+              "2025-11-20T01_40_47_045813_08_00": {
+                "timestamp": "2025-11-20T01:40:47.045813+08:00",
+                "total_current": 0.217,
+                "total_energy": 1.2309999999999999,
+                "total_power": 25.1,
+                "total_voltage": 445.9
+              },
+              "2025-11-20T01_40_48_054595_08_00": {
+                "timestamp": "2025-11-20T01:40:48.054595+08:00",
+                "total_current": 0.208,
+                "total_energy": 1.2309999999999999,
+                "total_power": 23.7,
+                "total_voltage": 445.9
+              },
+              "2025-11-20T01_40_49_050033_08_00": {
+                "timestamp": "2025-11-20T01:40:49.050033+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.8,
+                "total_voltage": 445.9
+              },
+              "2025-11-20T01_40_50_054422_08_00": {
+                "timestamp": "2025-11-20T01:40:50.054422+08:00",
+                "total_current": 0.205,
+                "total_energy": 1.2309999999999999,
+                "total_power": 22.8,
+                "total_voltage": 445.9
+              },
+              "2025-11-20T01_40_51_040408_08_00": {
+                "timestamp": "2025-11-20T01:40:51.040408+08:00",
+                "total_current": 0.313,
+                "total_energy": 1.2309999999999999,
+                "total_power": 30.6,
+                "total_voltage": 445.9
+              },
+              "2025-11-20T01_40_52_053854_08_00": {
+                "timestamp": "2025-11-20T01:40:52.053854+08:00",
+                "total_current": 0.31,
+                "total_energy": 1.2309999999999999,
+                "total_power": 30.1,
+                "total_voltage": 445.8
+              },
+              "2025-11-20T01_40_53_044831_08_00": {
+                "timestamp": "2025-11-20T01:40:53.044831+08:00",
+                "total_current": 0.31,
+                "total_energy": 1.2309999999999999,
+                "total_power": 30.1,
+                "total_voltage": 445.8
+              },
+              "2025-11-20T01_40_54_057979_08_00": {
+                "timestamp": "2025-11-20T01:40:54.057979+08:00",
+                "total_current": 0.31,
+                "total_energy": 1.2309999999999999,
+                "total_power": 30.1,
+                "total_voltage": 445.8
+              },
+              "2025-11-20T01_40_55_048333_08_00": {
+                "timestamp": "2025-11-20T01:40:55.048333+08:00",
+                "total_current": 0.31,
+                "total_energy": 1.2309999999999999,
+                "total_power": 30.1,
+                "total_voltage": 445.8
+              },
+              "2025-11-20T01_40_56_051744_08_00": {
+                "timestamp": "2025-11-20T01:40:56.051744+08:00",
+                "total_current": 0.677,
+                "total_energy": 1.2309999999999999,
+                "total_power": 119.2,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_40_57_044832_08_00": {
+                "timestamp": "2025-11-20T01:40:57.044832+08:00",
+                "total_current": 0.677,
+                "total_energy": 1.2309999999999999,
+                "total_power": 121.1,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_40_58_069134_08_00": {
+                "timestamp": "2025-11-20T01:40:58.069134+08:00",
+                "total_current": 0.65,
+                "total_energy": 1.2309999999999999,
+                "total_power": 114.4,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_40_59_040595_08_00": {
+                "timestamp": "2025-11-20T01:40:59.040595+08:00",
+                "total_current": 0.61,
+                "total_energy": 1.2309999999999999,
+                "total_power": 105.69999999999999,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_41_00_051462_08_00": {
+                "timestamp": "2025-11-20T01:41:00.051462+08:00",
+                "total_current": 0.593,
+                "total_energy": 1.2309999999999999,
+                "total_power": 101.60000000000001,
+                "total_voltage": 445.1
+              },
+              "2025-11-20T01_41_01_053003_08_00": {
+                "timestamp": "2025-11-20T01:41:01.053003+08:00",
+                "total_current": 0.581,
+                "total_energy": 1.2309999999999999,
+                "total_power": 98.9,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_41_02_085423_08_00": {
+                "timestamp": "2025-11-20T01:41:02.085423+08:00",
+                "total_current": 0.5980000000000001,
+                "total_energy": 1.2309999999999999,
+                "total_power": 102.2,
+                "total_voltage": 444.6
+              },
+              "2025-11-20T01_41_04_187765_08_00": {
+                "timestamp": "2025-11-20T01:41:04.187765+08:00",
+                "total_current": 0.5920000000000001,
+                "total_energy": 1.2309999999999999,
+                "total_power": 101.6,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_41_04_379332_08_00": {
+                "timestamp": "2025-11-20T01:41:04.379332+08:00",
+                "total_current": 0.5920000000000001,
+                "total_energy": 1.2309999999999999,
+                "total_power": 101.6,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_41_06_049494_08_00": {
+                "timestamp": "2025-11-20T01:41:06.049494+08:00",
+                "total_current": 0.5920000000000001,
+                "total_energy": 1.2309999999999999,
+                "total_power": 101.6,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_41_07_048241_08_00": {
+                "timestamp": "2025-11-20T01:41:07.048241+08:00",
+                "total_current": 0.5650000000000001,
+                "total_energy": 1.2309999999999999,
+                "total_power": 93.2,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_08_057822_08_00": {
+                "timestamp": "2025-11-20T01:41:08.057822+08:00",
+                "total_current": 0.572,
+                "total_energy": 1.2309999999999999,
+                "total_power": 94.8,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_09_045225_08_00": {
+                "timestamp": "2025-11-20T01:41:09.045225+08:00",
+                "total_current": 0.556,
+                "total_energy": 1.2309999999999999,
+                "total_power": 91.3,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_41_10_076646_08_00": {
+                "timestamp": "2025-11-20T01:41:10.076646+08:00",
+                "total_current": 0.502,
+                "total_energy": 1.2309999999999999,
+                "total_power": 77.9,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_41_11_045472_08_00": {
+                "timestamp": "2025-11-20T01:41:11.045472+08:00",
+                "total_current": 0.46599999999999997,
+                "total_energy": 1.2309999999999999,
+                "total_power": 69.1,
+                "total_voltage": 444.29999999999995
+              },
+              "2025-11-20T01_41_12_048575_08_00": {
+                "timestamp": "2025-11-20T01:41:12.048575+08:00",
+                "total_current": 0.473,
+                "total_energy": 1.2309999999999999,
+                "total_power": 70.8,
+                "total_voltage": 444.29999999999995
+              },
+              "2025-11-20T01_41_13_049947_08_00": {
+                "timestamp": "2025-11-20T01:41:13.049947+08:00",
+                "total_current": 0.477,
+                "total_energy": 1.2309999999999999,
+                "total_power": 71.7,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_41_14_056605_08_00": {
+                "timestamp": "2025-11-20T01:41:14.056605+08:00",
+                "total_current": 0.477,
+                "total_energy": 1.2309999999999999,
+                "total_power": 71.7,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_41_15_050407_08_00": {
+                "timestamp": "2025-11-20T01:41:15.050407+08:00",
+                "total_current": 0.477,
+                "total_energy": 1.2309999999999999,
+                "total_power": 71.7,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_41_16_053781_08_00": {
+                "timestamp": "2025-11-20T01:41:16.053781+08:00",
+                "total_current": 0.477,
+                "total_energy": 1.2309999999999999,
+                "total_power": 71.7,
+                "total_voltage": 444.4
+              },
+              "2025-11-20T01_41_17_038047_08_00": {
+                "timestamp": "2025-11-20T01:41:17.038047+08:00",
+                "total_current": 0.42300000000000004,
+                "total_energy": 1.2309999999999999,
+                "total_power": 60.5,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_41_18_050239_08_00": {
+                "timestamp": "2025-11-20T01:41:18.050239+08:00",
+                "total_current": 0.439,
+                "total_energy": 1.2309999999999999,
+                "total_power": 64.1,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_41_19_043418_08_00": {
+                "timestamp": "2025-11-20T01:41:19.043418+08:00",
+                "total_current": 0.426,
+                "total_energy": 1.2309999999999999,
+                "total_power": 61.3,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_41_20_053173_08_00": {
+                "timestamp": "2025-11-20T01:41:20.053173+08:00",
+                "total_current": 0.40800000000000003,
+                "total_energy": 1.2309999999999999,
+                "total_power": 59.199999999999996,
+                "total_voltage": 443.2
+              },
+              "2025-11-20T01_41_21_055845_08_00": {
+                "timestamp": "2025-11-20T01:41:21.055845+08:00",
+                "total_current": 0.392,
+                "total_energy": 1.2309999999999999,
+                "total_power": 55.8,
+                "total_voltage": 443.2
+              },
+              "2025-11-20T01_41_22_045662_08_00": {
+                "timestamp": "2025-11-20T01:41:22.045662+08:00",
+                "total_current": 0.418,
+                "total_energy": 1.2309999999999999,
+                "total_power": 60.800000000000004,
+                "total_voltage": 443.1
+              },
+              "2025-11-20T01_41_23_047930_08_00": {
+                "timestamp": "2025-11-20T01:41:23.047930+08:00",
+                "total_current": 0.406,
+                "total_energy": 1.2309999999999999,
+                "total_power": 59.6,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_41_24_047192_08_00": {
+                "timestamp": "2025-11-20T01:41:24.047192+08:00",
+                "total_current": 0.429,
+                "total_energy": 1.2309999999999999,
+                "total_power": 63.5,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_25_049450_08_00": {
+                "timestamp": "2025-11-20T01:41:25.049450+08:00",
+                "total_current": 0.429,
+                "total_energy": 1.2309999999999999,
+                "total_power": 63.5,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_26_052352_08_00": {
+                "timestamp": "2025-11-20T01:41:26.052352+08:00",
+                "total_current": 0.429,
+                "total_energy": 1.2309999999999999,
+                "total_power": 63.5,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_27_047904_08_00": {
+                "timestamp": "2025-11-20T01:41:27.047904+08:00",
+                "total_current": 0.429,
+                "total_energy": 1.2309999999999999,
+                "total_power": 63.5,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_28_061207_08_00": {
+                "timestamp": "2025-11-20T01:41:28.061207+08:00",
+                "total_current": 0.512,
+                "total_energy": 1.2309999999999999,
+                "total_power": 82.6,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_29_041940_08_00": {
+                "timestamp": "2025-11-20T01:41:29.041940+08:00",
+                "total_current": 0.46699999999999997,
+                "total_energy": 1.2309999999999999,
+                "total_power": 71.9,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_30_053870_08_00": {
+                "timestamp": "2025-11-20T01:41:30.053870+08:00",
+                "total_current": 0.46,
+                "total_energy": 1.2309999999999999,
+                "total_power": 71.1,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_31_045335_08_00": {
+                "timestamp": "2025-11-20T01:41:31.045335+08:00",
+                "total_current": 0.456,
+                "total_energy": 1.2309999999999999,
+                "total_power": 69.8,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_41_32_055577_08_00": {
+                "timestamp": "2025-11-20T01:41:32.055577+08:00",
+                "total_current": 0.45699999999999996,
+                "total_energy": 1.2309999999999999,
+                "total_power": 69.8,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_33_045505_08_00": {
+                "timestamp": "2025-11-20T01:41:33.045505+08:00",
+                "total_current": 0.458,
+                "total_energy": 1.2309999999999999,
+                "total_power": 70.4,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_34_051961_08_00": {
+                "timestamp": "2025-11-20T01:41:34.051961+08:00",
+                "total_current": 0.487,
+                "total_energy": 1.2309999999999999,
+                "total_power": 77.7,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_41_35_045839_08_00": {
+                "timestamp": "2025-11-20T01:41:35.045839+08:00",
+                "total_current": 0.46499999999999997,
+                "total_energy": 1.2309999999999999,
+                "total_power": 73.2,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_36_056098_08_00": {
+                "timestamp": "2025-11-20T01:41:36.056098+08:00",
+                "total_current": 0.46499999999999997,
+                "total_energy": 1.2309999999999999,
+                "total_power": 73.2,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_37_051913_08_00": {
+                "timestamp": "2025-11-20T01:41:37.051913+08:00",
+                "total_current": 0.46499999999999997,
+                "total_energy": 1.2309999999999999,
+                "total_power": 73.2,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_38_048544_08_00": {
+                "timestamp": "2025-11-20T01:41:38.048544+08:00",
+                "total_current": 0.46499999999999997,
+                "total_energy": 1.2309999999999999,
+                "total_power": 73.2,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_41_39_038200_08_00": {
+                "timestamp": "2025-11-20T01:41:39.038200+08:00",
+                "total_current": 0.448,
+                "total_energy": 1.2309999999999999,
+                "total_power": 69.1,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_41_40_052538_08_00": {
+                "timestamp": "2025-11-20T01:41:40.052538+08:00",
+                "total_current": 0.479,
+                "total_energy": 1.2309999999999999,
+                "total_power": 75.2,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_41_070455_08_00": {
+                "timestamp": "2025-11-20T01:41:41.070455+08:00",
+                "total_current": 0.519,
+                "total_energy": 1.2309999999999999,
+                "total_power": 83.4,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_41_42_047401_08_00": {
+                "timestamp": "2025-11-20T01:41:42.047401+08:00",
+                "total_current": 0.505,
+                "total_energy": 1.2309999999999999,
+                "total_power": 78.1,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_41_43_040618_08_00": {
+                "timestamp": "2025-11-20T01:41:43.040618+08:00",
+                "total_current": 0.497,
+                "total_energy": 1.2309999999999999,
+                "total_power": 77.2,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_44_048091_08_00": {
+                "timestamp": "2025-11-20T01:41:44.048091+08:00",
+                "total_current": 0.497,
+                "total_energy": 1.2309999999999999,
+                "total_power": 77.2,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_45_046218_08_00": {
+                "timestamp": "2025-11-20T01:41:45.046218+08:00",
+                "total_current": 0.497,
+                "total_energy": 1.2309999999999999,
+                "total_power": 76.4,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_46_053442_08_00": {
+                "timestamp": "2025-11-20T01:41:46.053442+08:00",
+                "total_current": 0.497,
+                "total_energy": 1.2309999999999999,
+                "total_power": 76.4,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_47_051108_08_00": {
+                "timestamp": "2025-11-20T01:41:47.051108+08:00",
+                "total_current": 0.497,
+                "total_energy": 1.2309999999999999,
+                "total_power": 76.4,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_48_052530_08_00": {
+                "timestamp": "2025-11-20T01:41:48.052530+08:00",
+                "total_current": 0.497,
+                "total_energy": 1.2309999999999999,
+                "total_power": 76.4,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_49_055506_08_00": {
+                "timestamp": "2025-11-20T01:41:49.055506+08:00",
+                "total_current": 0.478,
+                "total_energy": 1.2309999999999999,
+                "total_power": 72.3,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_41_50_053031_08_00": {
+                "timestamp": "2025-11-20T01:41:50.053031+08:00",
+                "total_current": 0.471,
+                "total_energy": 1.2309999999999999,
+                "total_power": 71.3,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_41_51_039574_08_00": {
+                "timestamp": "2025-11-20T01:41:51.039574+08:00",
+                "total_current": 0.43,
+                "total_energy": 1.2309999999999999,
+                "total_power": 62.3,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_41_52_061583_08_00": {
+                "timestamp": "2025-11-20T01:41:52.061583+08:00",
+                "total_current": 0.41800000000000004,
+                "total_energy": 1.2309999999999999,
+                "total_power": 60.599999999999994,
+                "total_voltage": 444.29999999999995
+              },
+              "2025-11-20T01_41_53_046854_08_00": {
+                "timestamp": "2025-11-20T01:41:53.046854+08:00",
+                "total_current": 0.418,
+                "total_energy": 1.2309999999999999,
+                "total_power": 60.7,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_41_54_054940_08_00": {
+                "timestamp": "2025-11-20T01:41:54.054940+08:00",
+                "total_current": 0.418,
+                "total_energy": 1.2309999999999999,
+                "total_power": 60.7,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_41_55_039704_08_00": {
+                "timestamp": "2025-11-20T01:41:55.039704+08:00",
+                "total_current": 0.43100000000000005,
+                "total_energy": 1.2309999999999999,
+                "total_power": 61.2,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_41_56_048227_08_00": {
+                "timestamp": "2025-11-20T01:41:56.048227+08:00",
+                "total_current": 0.43100000000000005,
+                "total_energy": 1.2309999999999999,
+                "total_power": 61.2,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_41_57_043804_08_00": {
+                "timestamp": "2025-11-20T01:41:57.043804+08:00",
+                "total_current": 0.43100000000000005,
+                "total_energy": 1.2309999999999999,
+                "total_power": 61.2,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_41_58_049022_08_00": {
+                "timestamp": "2025-11-20T01:41:58.049022+08:00",
+                "total_current": 0.43100000000000005,
+                "total_energy": 1.2309999999999999,
+                "total_power": 61.2,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_41_59_518912_08_00": {
+                "timestamp": "2025-11-20T01:41:59.518912+08:00",
+                "total_current": 0.4,
+                "total_energy": 1.232,
+                "total_power": 56.2,
+                "total_voltage": 444.29999999999995
+              },
+              "2025-11-20T01_42_00_058136_08_00": {
+                "timestamp": "2025-11-20T01:42:00.058136+08:00",
+                "total_current": 0.4,
+                "total_energy": 1.232,
+                "total_power": 56.2,
+                "total_voltage": 444.29999999999995
+              },
+              "2025-11-20T01_42_02_045429_08_00": {
+                "timestamp": "2025-11-20T01:42:02.045429+08:00",
+                "total_current": 0.43400000000000005,
+                "total_energy": 1.232,
+                "total_power": 62.2,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_42_02_054449_08_00": {
+                "timestamp": "2025-11-20T01:42:02.054449+08:00",
+                "total_current": 0.43400000000000005,
+                "total_energy": 1.232,
+                "total_power": 62.2,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_42_04_043967_08_00": {
+                "timestamp": "2025-11-20T01:42:04.043967+08:00",
+                "total_current": 0.444,
+                "total_energy": 1.232,
+                "total_power": 65.5,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_04_055326_08_00": {
+                "timestamp": "2025-11-20T01:42:04.055326+08:00",
+                "total_current": 0.444,
+                "total_energy": 1.232,
+                "total_power": 65.5,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_06_044296_08_00": {
+                "timestamp": "2025-11-20T01:42:06.044296+08:00",
+                "total_current": 0.40800000000000003,
+                "total_energy": 1.232,
+                "total_power": 57.6,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_06_060058_08_00": {
+                "timestamp": "2025-11-20T01:42:06.060058+08:00",
+                "total_current": 0.40800000000000003,
+                "total_energy": 1.232,
+                "total_power": 57.6,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_08_047682_08_00": {
+                "timestamp": "2025-11-20T01:42:08.047682+08:00",
+                "total_current": 0.40800000000000003,
+                "total_energy": 1.232,
+                "total_power": 57.6,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_08_051670_08_00": {
+                "timestamp": "2025-11-20T01:42:08.051670+08:00",
+                "total_current": 0.40800000000000003,
+                "total_energy": 1.232,
+                "total_power": 57.6,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_10_039594_08_00": {
+                "timestamp": "2025-11-20T01:42:10.039594+08:00",
+                "total_current": 0.432,
+                "total_energy": 1.232,
+                "total_power": 63.6,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_42_10_062017_08_00": {
+                "timestamp": "2025-11-20T01:42:10.062017+08:00",
+                "total_current": 0.432,
+                "total_energy": 1.232,
+                "total_power": 63.6,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_42_12_048244_08_00": {
+                "timestamp": "2025-11-20T01:42:12.048244+08:00",
+                "total_current": 0.43,
+                "total_energy": 1.233,
+                "total_power": 60.5,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_12_051819_08_00": {
+                "timestamp": "2025-11-20T01:42:12.051819+08:00",
+                "total_current": 0.43,
+                "total_energy": 1.233,
+                "total_power": 60.5,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_14_048197_08_00": {
+                "timestamp": "2025-11-20T01:42:14.048197+08:00",
+                "total_current": 0.352,
+                "total_energy": 1.233,
+                "total_power": 48.400000000000006,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_14_056745_08_00": {
+                "timestamp": "2025-11-20T01:42:14.056745+08:00",
+                "total_current": 0.352,
+                "total_energy": 1.233,
+                "total_power": 48.400000000000006,
+                "total_voltage": 444
+              },
+              "2025-11-20T01_42_16_048367_08_00": {
+                "timestamp": "2025-11-20T01:42:16.048367+08:00",
+                "total_current": 0.344,
+                "total_energy": 1.233,
+                "total_power": 47,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_42_16_656048_08_00": {
+                "timestamp": "2025-11-20T01:42:16.656048+08:00",
+                "total_current": 0.344,
+                "total_energy": 1.233,
+                "total_power": 47,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_42_18_052537_08_00": {
+                "timestamp": "2025-11-20T01:42:18.052537+08:00",
+                "total_current": 0.355,
+                "total_energy": 1.233,
+                "total_power": 50.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_19_036463_08_00": {
+                "timestamp": "2025-11-20T01:42:19.036463+08:00",
+                "total_current": 0.355,
+                "total_energy": 1.233,
+                "total_power": 50.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_20_050347_08_00": {
+                "timestamp": "2025-11-20T01:42:20.050347+08:00",
+                "total_current": 0.355,
+                "total_energy": 1.233,
+                "total_power": 50.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_21_053461_08_00": {
+                "timestamp": "2025-11-20T01:42:21.053461+08:00",
+                "total_current": 0.33899999999999997,
+                "total_energy": 1.233,
+                "total_power": 46.6,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_22_057165_08_00": {
+                "timestamp": "2025-11-20T01:42:22.057165+08:00",
+                "total_current": 0.361,
+                "total_energy": 1.233,
+                "total_power": 50,
+                "total_voltage": 443.9
+              },
+              "2025-11-20T01_42_23_040670_08_00": {
+                "timestamp": "2025-11-20T01:42:23.040670+08:00",
+                "total_current": 0.359,
+                "total_energy": 1.233,
+                "total_power": 49.8,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_24_055683_08_00": {
+                "timestamp": "2025-11-20T01:42:24.055683+08:00",
+                "total_current": 0.34099999999999997,
+                "total_energy": 1.233,
+                "total_power": 46.7,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_25_038213_08_00": {
+                "timestamp": "2025-11-20T01:42:25.038213+08:00",
+                "total_current": 0.348,
+                "total_energy": 1.233,
+                "total_power": 48.9,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_26_053679_08_00": {
+                "timestamp": "2025-11-20T01:42:26.053679+08:00",
+                "total_current": 0.348,
+                "total_energy": 1.233,
+                "total_power": 48.2,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_42_27_035744_08_00": {
+                "timestamp": "2025-11-20T01:42:27.035744+08:00",
+                "total_current": 0.33999999999999997,
+                "total_energy": 1.233,
+                "total_power": 46.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_28_075755_08_00": {
+                "timestamp": "2025-11-20T01:42:28.075755+08:00",
+                "total_current": 0.33999999999999997,
+                "total_energy": 1.233,
+                "total_power": 46.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_29_035531_08_00": {
+                "timestamp": "2025-11-20T01:42:29.035531+08:00",
+                "total_current": 0.33999999999999997,
+                "total_energy": 1.233,
+                "total_power": 46.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_30_069498_08_00": {
+                "timestamp": "2025-11-20T01:42:30.069498+08:00",
+                "total_current": 0.33999999999999997,
+                "total_energy": 1.233,
+                "total_power": 46.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_31_052560_08_00": {
+                "timestamp": "2025-11-20T01:42:31.052560+08:00",
+                "total_current": 0.399,
+                "total_energy": 1.233,
+                "total_power": 57.7,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_32_062351_08_00": {
+                "timestamp": "2025-11-20T01:42:32.062351+08:00",
+                "total_current": 0.373,
+                "total_energy": 1.233,
+                "total_power": 51.800000000000004,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_33_041972_08_00": {
+                "timestamp": "2025-11-20T01:42:33.041972+08:00",
+                "total_current": 0.392,
+                "total_energy": 1.233,
+                "total_power": 57.199999999999996,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_42_34_056854_08_00": {
+                "timestamp": "2025-11-20T01:42:34.056854+08:00",
+                "total_current": 0.413,
+                "total_energy": 1.233,
+                "total_power": 62.2,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_42_35_034982_08_00": {
+                "timestamp": "2025-11-20T01:42:35.034982+08:00",
+                "total_current": 0.413,
+                "total_energy": 1.233,
+                "total_power": 55.7,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_42_36_054124_08_00": {
+                "timestamp": "2025-11-20T01:42:36.054124+08:00",
+                "total_current": 0.435,
+                "total_energy": 1.233,
+                "total_power": 59.3,
+                "total_voltage": 443.5
+              },
+              "2025-11-20T01_42_37_042406_08_00": {
+                "timestamp": "2025-11-20T01:42:37.042406+08:00",
+                "total_current": 0.383,
+                "total_energy": 1.233,
+                "total_power": 55.2,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_38_051919_08_00": {
+                "timestamp": "2025-11-20T01:42:38.051919+08:00",
+                "total_current": 0.369,
+                "total_energy": 1.233,
+                "total_power": 51.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_39_038315_08_00": {
+                "timestamp": "2025-11-20T01:42:39.038315+08:00",
+                "total_current": 0.369,
+                "total_energy": 1.233,
+                "total_power": 51.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_40_069479_08_00": {
+                "timestamp": "2025-11-20T01:42:40.069479+08:00",
+                "total_current": 0.369,
+                "total_energy": 1.233,
+                "total_power": 51.5,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_41_037597_08_00": {
+                "timestamp": "2025-11-20T01:42:41.037597+08:00",
+                "total_current": 0.366,
+                "total_energy": 1.233,
+                "total_power": 51.599999999999994,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_42_055092_08_00": {
+                "timestamp": "2025-11-20T01:42:42.055092+08:00",
+                "total_current": 0.4,
+                "total_energy": 1.233,
+                "total_power": 55.5,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_42_43_037669_08_00": {
+                "timestamp": "2025-11-20T01:42:43.037669+08:00",
+                "total_current": 0.42200000000000004,
+                "total_energy": 1.233,
+                "total_power": 59.8,
+                "total_voltage": 443.5
+              },
+              "2025-11-20T01_42_44_060828_08_00": {
+                "timestamp": "2025-11-20T01:42:44.060828+08:00",
+                "total_current": 0.41900000000000004,
+                "total_energy": 1.233,
+                "total_power": 59.599999999999994,
+                "total_voltage": 443.5
+              },
+              "2025-11-20T01_42_45_039030_08_00": {
+                "timestamp": "2025-11-20T01:42:45.039030+08:00",
+                "total_current": 0.392,
+                "total_energy": 1.233,
+                "total_power": 55.5,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_46_056596_08_00": {
+                "timestamp": "2025-11-20T01:42:46.056596+08:00",
+                "total_current": 0.406,
+                "total_energy": 1.233,
+                "total_power": 58.5,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_42_47_043080_08_00": {
+                "timestamp": "2025-11-20T01:42:47.043080+08:00",
+                "total_current": 0.4,
+                "total_energy": 1.233,
+                "total_power": 57.8,
+                "total_voltage": 443.6
+              },
+              "2025-11-20T01_42_48_056476_08_00": {
+                "timestamp": "2025-11-20T01:42:48.056476+08:00",
+                "total_current": 0.393,
+                "total_energy": 1.233,
+                "total_power": 56.099999999999994,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_49_039576_08_00": {
+                "timestamp": "2025-11-20T01:42:49.039576+08:00",
+                "total_current": 0.393,
+                "total_energy": 1.233,
+                "total_power": 56.099999999999994,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_50_056280_08_00": {
+                "timestamp": "2025-11-20T01:42:50.056280+08:00",
+                "total_current": 0.393,
+                "total_energy": 1.233,
+                "total_power": 56.099999999999994,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_51_040406_08_00": {
+                "timestamp": "2025-11-20T01:42:51.040406+08:00",
+                "total_current": 0.393,
+                "total_energy": 1.233,
+                "total_power": 56.099999999999994,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_52_050012_08_00": {
+                "timestamp": "2025-11-20T01:42:52.050012+08:00",
+                "total_current": 0.42,
+                "total_energy": 1.233,
+                "total_power": 59.9,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_53_042529_08_00": {
+                "timestamp": "2025-11-20T01:42:53.042529+08:00",
+                "total_current": 0.41800000000000004,
+                "total_energy": 1.233,
+                "total_power": 60.8,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_54_052794_08_00": {
+                "timestamp": "2025-11-20T01:42:54.052794+08:00",
+                "total_current": 0.41900000000000004,
+                "total_energy": 1.233,
+                "total_power": 61,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_55_038024_08_00": {
+                "timestamp": "2025-11-20T01:42:55.038024+08:00",
+                "total_current": 0.41100000000000003,
+                "total_energy": 1.233,
+                "total_power": 59.099999999999994,
+                "total_voltage": 443.70000000000005
+              },
+              "2025-11-20T01_42_56_055565_08_00": {
+                "timestamp": "2025-11-20T01:42:56.055565+08:00",
+                "total_current": 0.391,
+                "total_energy": 1.233,
+                "total_power": 55.6,
+                "total_voltage": 443.8
+              },
+              "2025-11-20T01_42_58_057822_08_00": {
+                "timestamp": "2025-11-20T01:42:58.057822+08:00",
+                "total_current": 0.422,
+                "total_energy": 1.233,
+                "total_power": 60.4,
+                "total_voltage": 443.4
+              },
+              "2025-11-20T01_42_58_060983_08_00": {
+                "timestamp": "2025-11-20T01:42:58.060983+08:00",
+                "total_current": 0.422,
+                "total_energy": 1.233,
+                "total_power": 60.4,
+                "total_voltage": 443.4
+              },
+              "2025-11-20T01_43_00_051073_08_00": {
+                "timestamp": "2025-11-20T01:43:00.051073+08:00",
+                "total_current": 0.422,
+                "total_energy": 1.233,
+                "total_power": 60.4,
+                "total_voltage": 443.4
+              },
+              "2025-11-20T01_43_00_054197_08_00": {
+                "timestamp": "2025-11-20T01:43:00.054197+08:00",
+                "total_current": 0.422,
+                "total_energy": 1.233,
+                "total_power": 60.4,
+                "total_voltage": 443.4
+              },
+              "2025-11-20T01_43_02_044322_08_00": {
+                "timestamp": "2025-11-20T01:43:02.044322+08:00",
+                "total_current": 0.44399999999999995,
+                "total_energy": 1.233,
+                "total_power": 64,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_43_02_056740_08_00": {
+                "timestamp": "2025-11-20T01:43:02.056740+08:00",
+                "total_current": 0.44399999999999995,
+                "total_energy": 1.233,
+                "total_power": 64,
+                "total_voltage": 444.1
+              },
+              "2025-11-20T01_43_04_044163_08_00": {
+                "timestamp": "2025-11-20T01:43:04.044163+08:00",
+                "total_current": 0.473,
+                "total_energy": 1.233,
+                "total_power": 71.2,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_43_04_053048_08_00": {
+                "timestamp": "2025-11-20T01:43:04.053048+08:00",
+                "total_current": 0.473,
+                "total_energy": 1.233,
+                "total_power": 71.2,
+                "total_voltage": 445
+              },
+              "2025-11-20T01_43_06_042885_08_00": {
+                "timestamp": "2025-11-20T01:43:06.042885+08:00",
+                "total_current": 0.367,
+                "total_energy": 1.233,
+                "total_power": 52.800000000000004,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_43_06_055308_08_00": {
+                "timestamp": "2025-11-20T01:43:06.055308+08:00",
+                "total_current": 0.367,
+                "total_energy": 1.233,
+                "total_power": 52.800000000000004,
+                "total_voltage": 445.2
+              },
+              "2025-11-20T01_43_08_057937_08_00": {
+                "timestamp": "2025-11-20T01:43:08.057937+08:00",
+                "total_current": 0.419,
+                "total_energy": 1.233,
+                "total_power": 60.3,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_43_08_063590_08_00": {
+                "timestamp": "2025-11-20T01:43:08.063590+08:00",
+                "total_current": 0.419,
+                "total_energy": 1.233,
+                "total_power": 60.3,
+                "total_voltage": 444.2
+              },
+              "2025-11-20T01_43_10_037236_08_00": {
+                "timestamp": "2025-11-20T01:43:10.037236+08:00",
+                "total_current": 0.421,
+                "total_energy": 1.233,
+                "total_power": 60.7,
+                "total_voltage": 444.6
+              },
+              "2025-11-20T01_43_10_050375_08_00": {
+                "timestamp": "2025-11-20T01:43:10.050375+08:00",
+                "total_current": 0.421,
+                "total_energy": 1.233,
+                "total_power": 60.7,
+                "total_voltage": 444.6
+              }
+            }
+          },
+          "assigned": "true",
+          "ownerId": "rzfR2UJlsCZ0dYsNdIgmmpBwDPz1",
+          "plugs": {
+            "plug2e5c3314": {
+              "data": {
+                "current": 0,
+                "energy": 0.854,
+                "lastUpdate": 1763576249344,
+                "power": 0,
+                "ssr_state": true,
+                "voltage": 227.6
+              }
+            },
+            "plug2f5c3314": {
+              "data": {
+                "current": 0,
+                "energy": 0.4,
+                "lastUpdate": 1763576249144,
+                "power": 0,
+                "ssr_state": true,
+                "voltage": 227.6
+              },
+              "lastUpdate": 1763552595485,
+              "ssr_state": true
+            }
+          },
+          "ssr_state": true,
+          "user_email": "luzaresbenzgerald@gmail.com"
+        },
+        "SP002": {
+          "aggregations": {
+            "per_second": {
+              "2025-11-20T01_38_05_676003_08_00": {
+                "timestamp": "2025-11-20T01:38:05.676003+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_06_700728_08_00": {
+                "timestamp": "2025-11-20T01:38:06.700728+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_07_674308_08_00": {
+                "timestamp": "2025-11-20T01:38:07.674308+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_08_671637_08_00": {
+                "timestamp": "2025-11-20T01:38:08.671637+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_09_695223_08_00": {
+                "timestamp": "2025-11-20T01:38:09.695223+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_10_680184_08_00": {
+                "timestamp": "2025-11-20T01:38:10.680184+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_11_668718_08_00": {
+                "timestamp": "2025-11-20T01:38:11.668718+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_12_682989_08_00": {
+                "timestamp": "2025-11-20T01:38:12.682989+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_13_698309_08_00": {
+                "timestamp": "2025-11-20T01:38:13.698309+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_15_128729_08_00": {
+                "timestamp": "2025-11-20T01:38:15.128729+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_16_868587_08_00": {
+                "timestamp": "2025-11-20T01:38:16.868587+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_16_875515_08_00": {
+                "timestamp": "2025-11-20T01:38:16.875515+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_18_874056_08_00": {
+                "timestamp": "2025-11-20T01:38:18.874056+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_18_883512_08_00": {
+                "timestamp": "2025-11-20T01:38:18.883512+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_20_842680_08_00": {
+                "timestamp": "2025-11-20T01:38:20.842680+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_20_863652_08_00": {
+                "timestamp": "2025-11-20T01:38:20.863652+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_22_856401_08_00": {
+                "timestamp": "2025-11-20T01:38:22.856401+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_22_870263_08_00": {
+                "timestamp": "2025-11-20T01:38:22.870263+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_24_854898_08_00": {
+                "timestamp": "2025-11-20T01:38:24.854898+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_24_857397_08_00": {
+                "timestamp": "2025-11-20T01:38:24.857397+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_26_855035_08_00": {
+                "timestamp": "2025-11-20T01:38:26.855035+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_26_899400_08_00": {
+                "timestamp": "2025-11-20T01:38:26.899400+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_28_861871_08_00": {
+                "timestamp": "2025-11-20T01:38:28.861871+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_28_871036_08_00": {
+                "timestamp": "2025-11-20T01:38:28.871036+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_30_859287_08_00": {
+                "timestamp": "2025-11-20T01:38:30.859287+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_30_861540_08_00": {
+                "timestamp": "2025-11-20T01:38:30.861540+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_32_864548_08_00": {
+                "timestamp": "2025-11-20T01:38:32.864548+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_32_930309_08_00": {
+                "timestamp": "2025-11-20T01:38:32.930309+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_34_848550_08_00": {
+                "timestamp": "2025-11-20T01:38:34.848550+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_34_850957_08_00": {
+                "timestamp": "2025-11-20T01:38:34.850957+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_36_843388_08_00": {
+                "timestamp": "2025-11-20T01:38:36.843388+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_36_857203_08_00": {
+                "timestamp": "2025-11-20T01:38:36.857203+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_38_841247_08_00": {
+                "timestamp": "2025-11-20T01:38:38.841247+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_38_844011_08_00": {
+                "timestamp": "2025-11-20T01:38:38.844011+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_40_854193_08_00": {
+                "timestamp": "2025-11-20T01:38:40.854193+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_40_860908_08_00": {
+                "timestamp": "2025-11-20T01:38:40.860908+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_42_860019_08_00": {
+                "timestamp": "2025-11-20T01:38:42.860019+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_42_872690_08_00": {
+                "timestamp": "2025-11-20T01:38:42.872690+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_44_857833_08_00": {
+                "timestamp": "2025-11-20T01:38:44.857833+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_44_861861_08_00": {
+                "timestamp": "2025-11-20T01:38:44.861861+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_46_847233_08_00": {
+                "timestamp": "2025-11-20T01:38:46.847233+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_46_880390_08_00": {
+                "timestamp": "2025-11-20T01:38:46.880390+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_48_854819_08_00": {
+                "timestamp": "2025-11-20T01:38:48.854819+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_48_860312_08_00": {
+                "timestamp": "2025-11-20T01:38:48.860312+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_50_863439_08_00": {
+                "timestamp": "2025-11-20T01:38:50.863439+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_50_866844_08_00": {
+                "timestamp": "2025-11-20T01:38:50.866844+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_52_842852_08_00": {
+                "timestamp": "2025-11-20T01:38:52.842852+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_52_849664_08_00": {
+                "timestamp": "2025-11-20T01:38:52.849664+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_54_847001_08_00": {
+                "timestamp": "2025-11-20T01:38:54.847001+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_54_854040_08_00": {
+                "timestamp": "2025-11-20T01:38:54.854040+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_56_847254_08_00": {
+                "timestamp": "2025-11-20T01:38:56.847254+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_56_849520_08_00": {
+                "timestamp": "2025-11-20T01:38:56.849520+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_58_680012_08_00": {
+                "timestamp": "2025-11-20T01:38:58.680012+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_38_59_663955_08_00": {
+                "timestamp": "2025-11-20T01:38:59.663955+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_00_666690_08_00": {
+                "timestamp": "2025-11-20T01:39:00.666690+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_01_684955_08_00": {
+                "timestamp": "2025-11-20T01:39:01.684955+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_02_676264_08_00": {
+                "timestamp": "2025-11-20T01:39:02.676264+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_03_649456_08_00": {
+                "timestamp": "2025-11-20T01:39:03.649456+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_04_680116_08_00": {
+                "timestamp": "2025-11-20T01:39:04.680116+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_05_662756_08_00": {
+                "timestamp": "2025-11-20T01:39:05.662756+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_06_673395_08_00": {
+                "timestamp": "2025-11-20T01:39:06.673395+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_07_671046_08_00": {
+                "timestamp": "2025-11-20T01:39:07.671046+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_08_665186_08_00": {
+                "timestamp": "2025-11-20T01:39:08.665186+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_10_082123_08_00": {
+                "timestamp": "2025-11-20T01:39:10.082123+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_11_847863_08_00": {
+                "timestamp": "2025-11-20T01:39:11.847863+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_11_850128_08_00": {
+                "timestamp": "2025-11-20T01:39:11.850128+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_13_862120_08_00": {
+                "timestamp": "2025-11-20T01:39:13.862120+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_13_883279_08_00": {
+                "timestamp": "2025-11-20T01:39:13.883279+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_15_861379_08_00": {
+                "timestamp": "2025-11-20T01:39:15.861379+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_15_867039_08_00": {
+                "timestamp": "2025-11-20T01:39:15.867039+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_17_840237_08_00": {
+                "timestamp": "2025-11-20T01:39:17.840237+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_17_855998_08_00": {
+                "timestamp": "2025-11-20T01:39:17.855998+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_19_854232_08_00": {
+                "timestamp": "2025-11-20T01:39:19.854232+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_19_860116_08_00": {
+                "timestamp": "2025-11-20T01:39:19.860116+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_21_867793_08_00": {
+                "timestamp": "2025-11-20T01:39:21.867793+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_21_878994_08_00": {
+                "timestamp": "2025-11-20T01:39:21.878994+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_23_868761_08_00": {
+                "timestamp": "2025-11-20T01:39:23.868761+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_23_872539_08_00": {
+                "timestamp": "2025-11-20T01:39:23.872539+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_25_859490_08_00": {
+                "timestamp": "2025-11-20T01:39:25.859490+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_25_861770_08_00": {
+                "timestamp": "2025-11-20T01:39:25.861770+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_27_847407_08_00": {
+                "timestamp": "2025-11-20T01:39:27.847407+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_27_859029_08_00": {
+                "timestamp": "2025-11-20T01:39:27.859029+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_29_855889_08_00": {
+                "timestamp": "2025-11-20T01:39:29.855889+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_29_872962_08_00": {
+                "timestamp": "2025-11-20T01:39:29.872962+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_31_859228_08_00": {
+                "timestamp": "2025-11-20T01:39:31.859228+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_31_862582_08_00": {
+                "timestamp": "2025-11-20T01:39:31.862582+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_33_663340_08_00": {
+                "timestamp": "2025-11-20T01:39:33.663340+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_35_053752_08_00": {
+                "timestamp": "2025-11-20T01:39:35.053752+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_35_668083_08_00": {
+                "timestamp": "2025-11-20T01:39:35.668083+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_36_725025_08_00": {
+                "timestamp": "2025-11-20T01:39:36.725025+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_37_652609_08_00": {
+                "timestamp": "2025-11-20T01:39:37.652609+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_38_659400_08_00": {
+                "timestamp": "2025-11-20T01:39:38.659400+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_39_651778_08_00": {
+                "timestamp": "2025-11-20T01:39:39.651778+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_40_669105_08_00": {
+                "timestamp": "2025-11-20T01:39:40.669105+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_41_665719_08_00": {
+                "timestamp": "2025-11-20T01:39:41.665719+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_42_672475_08_00": {
+                "timestamp": "2025-11-20T01:39:42.672475+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_43_676942_08_00": {
+                "timestamp": "2025-11-20T01:39:43.676942+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_44_666860_08_00": {
+                "timestamp": "2025-11-20T01:39:44.666860+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_45_678860_08_00": {
+                "timestamp": "2025-11-20T01:39:45.678860+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_46_680846_08_00": {
+                "timestamp": "2025-11-20T01:39:46.680846+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_47_657480_08_00": {
+                "timestamp": "2025-11-20T01:39:47.657480+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_48_680842_08_00": {
+                "timestamp": "2025-11-20T01:39:48.680842+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_49_676171_08_00": {
+                "timestamp": "2025-11-20T01:39:49.676171+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_50_691813_08_00": {
+                "timestamp": "2025-11-20T01:39:50.691813+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_51_664690_08_00": {
+                "timestamp": "2025-11-20T01:39:51.664690+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_52_672037_08_00": {
+                "timestamp": "2025-11-20T01:39:52.672037+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_53_655288_08_00": {
+                "timestamp": "2025-11-20T01:39:53.655288+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_54_670347_08_00": {
+                "timestamp": "2025-11-20T01:39:54.670347+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_55_677293_08_00": {
+                "timestamp": "2025-11-20T01:39:55.677293+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_56_665822_08_00": {
+                "timestamp": "2025-11-20T01:39:56.665822+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_57_667999_08_00": {
+                "timestamp": "2025-11-20T01:39:57.667999+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_58_687752_08_00": {
+                "timestamp": "2025-11-20T01:39:58.687752+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_39_59_659572_08_00": {
+                "timestamp": "2025-11-20T01:39:59.659572+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_00_693883_08_00": {
+                "timestamp": "2025-11-20T01:40:00.693883+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_01_689163_08_00": {
+                "timestamp": "2025-11-20T01:40:01.689163+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_03_068527_08_00": {
+                "timestamp": "2025-11-20T01:40:03.068527+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_03_669847_08_00": {
+                "timestamp": "2025-11-20T01:40:03.669847+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_04_681498_08_00": {
+                "timestamp": "2025-11-20T01:40:04.681498+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_05_672114_08_00": {
+                "timestamp": "2025-11-20T01:40:05.672114+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_06_686252_08_00": {
+                "timestamp": "2025-11-20T01:40:06.686252+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_07_675916_08_00": {
+                "timestamp": "2025-11-20T01:40:07.675916+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_08_676204_08_00": {
+                "timestamp": "2025-11-20T01:40:08.676204+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_09_674060_08_00": {
+                "timestamp": "2025-11-20T01:40:09.674060+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_10_682548_08_00": {
+                "timestamp": "2025-11-20T01:40:10.682548+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_11_665684_08_00": {
+                "timestamp": "2025-11-20T01:40:11.665684+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_12_676505_08_00": {
+                "timestamp": "2025-11-20T01:40:12.676505+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_13_690914_08_00": {
+                "timestamp": "2025-11-20T01:40:13.690914+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_14_685787_08_00": {
+                "timestamp": "2025-11-20T01:40:14.685787+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_15_682127_08_00": {
+                "timestamp": "2025-11-20T01:40:15.682127+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_16_667733_08_00": {
+                "timestamp": "2025-11-20T01:40:16.667733+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_17_668599_08_00": {
+                "timestamp": "2025-11-20T01:40:17.668599+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_18_721104_08_00": {
+                "timestamp": "2025-11-20T01:40:18.721104+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_19_670183_08_00": {
+                "timestamp": "2025-11-20T01:40:19.670183+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_20_710102_08_00": {
+                "timestamp": "2025-11-20T01:40:20.710102+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_21_675216_08_00": {
+                "timestamp": "2025-11-20T01:40:21.675216+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_22_668404_08_00": {
+                "timestamp": "2025-11-20T01:40:22.668404+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_23_686035_08_00": {
+                "timestamp": "2025-11-20T01:40:23.686035+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_24_678887_08_00": {
+                "timestamp": "2025-11-20T01:40:24.678887+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_25_678860_08_00": {
+                "timestamp": "2025-11-20T01:40:25.678860+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_26_676582_08_00": {
+                "timestamp": "2025-11-20T01:40:26.676582+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_27_656955_08_00": {
+                "timestamp": "2025-11-20T01:40:27.656955+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_28_666636_08_00": {
+                "timestamp": "2025-11-20T01:40:28.666636+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_29_673039_08_00": {
+                "timestamp": "2025-11-20T01:40:29.673039+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_30_673584_08_00": {
+                "timestamp": "2025-11-20T01:40:30.673584+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_31_646913_08_00": {
+                "timestamp": "2025-11-20T01:40:31.646913+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_32_679999_08_00": {
+                "timestamp": "2025-11-20T01:40:32.679999+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_33_672162_08_00": {
+                "timestamp": "2025-11-20T01:40:33.672162+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_34_669466_08_00": {
+                "timestamp": "2025-11-20T01:40:34.669466+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_35_671316_08_00": {
+                "timestamp": "2025-11-20T01:40:35.671316+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_36_666885_08_00": {
+                "timestamp": "2025-11-20T01:40:36.666885+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_37_663719_08_00": {
+                "timestamp": "2025-11-20T01:40:37.663719+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_38_671927_08_00": {
+                "timestamp": "2025-11-20T01:40:38.671927+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_39_667835_08_00": {
+                "timestamp": "2025-11-20T01:40:39.667835+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_40_705774_08_00": {
+                "timestamp": "2025-11-20T01:40:40.705774+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_41_658060_08_00": {
+                "timestamp": "2025-11-20T01:40:41.658060+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_42_690371_08_00": {
+                "timestamp": "2025-11-20T01:40:42.690371+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_43_666458_08_00": {
+                "timestamp": "2025-11-20T01:40:43.666458+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_44_701711_08_00": {
+                "timestamp": "2025-11-20T01:40:44.701711+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_45_682446_08_00": {
+                "timestamp": "2025-11-20T01:40:45.682446+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_46_686894_08_00": {
+                "timestamp": "2025-11-20T01:40:46.686894+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_47_665261_08_00": {
+                "timestamp": "2025-11-20T01:40:47.665261+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_48_685308_08_00": {
+                "timestamp": "2025-11-20T01:40:48.685308+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_49_668283_08_00": {
+                "timestamp": "2025-11-20T01:40:49.668283+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_50_680487_08_00": {
+                "timestamp": "2025-11-20T01:40:50.680487+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_51_653653_08_00": {
+                "timestamp": "2025-11-20T01:40:51.653653+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_52_672440_08_00": {
+                "timestamp": "2025-11-20T01:40:52.672440+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_53_657169_08_00": {
+                "timestamp": "2025-11-20T01:40:53.657169+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_54_684947_08_00": {
+                "timestamp": "2025-11-20T01:40:54.684947+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_55_663809_08_00": {
+                "timestamp": "2025-11-20T01:40:55.663809+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_56_661115_08_00": {
+                "timestamp": "2025-11-20T01:40:56.661115+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_57_667283_08_00": {
+                "timestamp": "2025-11-20T01:40:57.667283+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_58_693617_08_00": {
+                "timestamp": "2025-11-20T01:40:58.693617+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_40_59_666655_08_00": {
+                "timestamp": "2025-11-20T01:40:59.666655+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_00_685711_08_00": {
+                "timestamp": "2025-11-20T01:41:00.685711+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_02_457292_08_00": {
+                "timestamp": "2025-11-20T01:41:02.457292+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_02_716210_08_00": {
+                "timestamp": "2025-11-20T01:41:02.716210+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_04_997960_08_00": {
+                "timestamp": "2025-11-20T01:41:04.997960+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_05_192660_08_00": {
+                "timestamp": "2025-11-20T01:41:05.192660+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_06_664028_08_00": {
+                "timestamp": "2025-11-20T01:41:06.664028+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_07_662096_08_00": {
+                "timestamp": "2025-11-20T01:41:07.662096+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_08_680696_08_00": {
+                "timestamp": "2025-11-20T01:41:08.680696+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_09_669413_08_00": {
+                "timestamp": "2025-11-20T01:41:09.669413+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_10_688173_08_00": {
+                "timestamp": "2025-11-20T01:41:10.688173+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_11_653642_08_00": {
+                "timestamp": "2025-11-20T01:41:11.653642+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_12_666180_08_00": {
+                "timestamp": "2025-11-20T01:41:12.666180+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_13_656339_08_00": {
+                "timestamp": "2025-11-20T01:41:13.656339+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_14_676708_08_00": {
+                "timestamp": "2025-11-20T01:41:14.676708+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_15_679316_08_00": {
+                "timestamp": "2025-11-20T01:41:15.679316+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_16_693935_08_00": {
+                "timestamp": "2025-11-20T01:41:16.693935+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_17_650046_08_00": {
+                "timestamp": "2025-11-20T01:41:17.650046+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_18_693157_08_00": {
+                "timestamp": "2025-11-20T01:41:18.693157+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_19_676042_08_00": {
+                "timestamp": "2025-11-20T01:41:19.676042+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_20_657749_08_00": {
+                "timestamp": "2025-11-20T01:41:20.657749+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_21_691828_08_00": {
+                "timestamp": "2025-11-20T01:41:21.691828+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_22_684364_08_00": {
+                "timestamp": "2025-11-20T01:41:22.684364+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_23_676891_08_00": {
+                "timestamp": "2025-11-20T01:41:23.676891+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_24_663059_08_00": {
+                "timestamp": "2025-11-20T01:41:24.663059+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_25_674571_08_00": {
+                "timestamp": "2025-11-20T01:41:25.674571+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_26_668429_08_00": {
+                "timestamp": "2025-11-20T01:41:26.668429+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_27_669533_08_00": {
+                "timestamp": "2025-11-20T01:41:27.669533+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_28_698563_08_00": {
+                "timestamp": "2025-11-20T01:41:28.698563+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_29_675746_08_00": {
+                "timestamp": "2025-11-20T01:41:29.675746+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_30_678886_08_00": {
+                "timestamp": "2025-11-20T01:41:30.678886+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_31_666659_08_00": {
+                "timestamp": "2025-11-20T01:41:31.666659+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_32_682169_08_00": {
+                "timestamp": "2025-11-20T01:41:32.682169+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_33_673209_08_00": {
+                "timestamp": "2025-11-20T01:41:33.673209+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_34_671623_08_00": {
+                "timestamp": "2025-11-20T01:41:34.671623+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_35_665738_08_00": {
+                "timestamp": "2025-11-20T01:41:35.665738+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_36_684216_08_00": {
+                "timestamp": "2025-11-20T01:41:36.684216+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_37_662137_08_00": {
+                "timestamp": "2025-11-20T01:41:37.662137+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_38_658018_08_00": {
+                "timestamp": "2025-11-20T01:41:38.658018+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_39_664087_08_00": {
+                "timestamp": "2025-11-20T01:41:39.664087+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_40_677836_08_00": {
+                "timestamp": "2025-11-20T01:41:40.677836+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_41_695385_08_00": {
+                "timestamp": "2025-11-20T01:41:41.695385+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_42_666734_08_00": {
+                "timestamp": "2025-11-20T01:41:42.666734+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_43_668702_08_00": {
+                "timestamp": "2025-11-20T01:41:43.668702+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_44_680671_08_00": {
+                "timestamp": "2025-11-20T01:41:44.680671+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_45_655935_08_00": {
+                "timestamp": "2025-11-20T01:41:45.655935+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_46_682933_08_00": {
+                "timestamp": "2025-11-20T01:41:46.682933+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_47_674856_08_00": {
+                "timestamp": "2025-11-20T01:41:47.674856+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_48_669540_08_00": {
+                "timestamp": "2025-11-20T01:41:48.669540+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_49_679388_08_00": {
+                "timestamp": "2025-11-20T01:41:49.679388+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_50_664230_08_00": {
+                "timestamp": "2025-11-20T01:41:50.664230+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_51_651459_08_00": {
+                "timestamp": "2025-11-20T01:41:51.651459+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_52_684079_08_00": {
+                "timestamp": "2025-11-20T01:41:52.684079+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_53_662493_08_00": {
+                "timestamp": "2025-11-20T01:41:53.662493+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_54_666787_08_00": {
+                "timestamp": "2025-11-20T01:41:54.666787+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_55_646739_08_00": {
+                "timestamp": "2025-11-20T01:41:55.646739+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_56_668756_08_00": {
+                "timestamp": "2025-11-20T01:41:56.668756+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_57_648279_08_00": {
+                "timestamp": "2025-11-20T01:41:57.648279+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_41_58_646266_08_00": {
+                "timestamp": "2025-11-20T01:41:58.646266+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_00_148258_08_00": {
+                "timestamp": "2025-11-20T01:42:00.148258+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_00_694391_08_00": {
+                "timestamp": "2025-11-20T01:42:00.694391+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_02_877987_08_00": {
+                "timestamp": "2025-11-20T01:42:02.877987+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_02_880412_08_00": {
+                "timestamp": "2025-11-20T01:42:02.880412+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_04_867704_08_00": {
+                "timestamp": "2025-11-20T01:42:04.867704+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_04_870391_08_00": {
+                "timestamp": "2025-11-20T01:42:04.870391+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_06_845790_08_00": {
+                "timestamp": "2025-11-20T01:42:06.845790+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_06_860483_08_00": {
+                "timestamp": "2025-11-20T01:42:06.860483+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_08_857380_08_00": {
+                "timestamp": "2025-11-20T01:42:08.857380+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_08_860569_08_00": {
+                "timestamp": "2025-11-20T01:42:08.860569+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_10_860638_08_00": {
+                "timestamp": "2025-11-20T01:42:10.860638+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_10_863074_08_00": {
+                "timestamp": "2025-11-20T01:42:10.863074+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_12_855379_08_00": {
+                "timestamp": "2025-11-20T01:42:12.855379+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_12_858051_08_00": {
+                "timestamp": "2025-11-20T01:42:12.858051+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_14_857992_08_00": {
+                "timestamp": "2025-11-20T01:42:14.857992+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_14_883320_08_00": {
+                "timestamp": "2025-11-20T01:42:14.883320+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_16_660432_08_00": {
+                "timestamp": "2025-11-20T01:42:16.660432+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_17_306849_08_00": {
+                "timestamp": "2025-11-20T01:42:17.306849+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_18_678635_08_00": {
+                "timestamp": "2025-11-20T01:42:18.678635+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_19_665558_08_00": {
+                "timestamp": "2025-11-20T01:42:19.665558+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_20_740299_08_00": {
+                "timestamp": "2025-11-20T01:42:20.740299+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_21_672093_08_00": {
+                "timestamp": "2025-11-20T01:42:21.672093+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_22_677960_08_00": {
+                "timestamp": "2025-11-20T01:42:22.677960+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_23_659897_08_00": {
+                "timestamp": "2025-11-20T01:42:23.659897+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_24_687951_08_00": {
+                "timestamp": "2025-11-20T01:42:24.687951+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_25_668582_08_00": {
+                "timestamp": "2025-11-20T01:42:25.668582+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_26_671126_08_00": {
+                "timestamp": "2025-11-20T01:42:26.671126+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_27_656940_08_00": {
+                "timestamp": "2025-11-20T01:42:27.656940+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_28_697285_08_00": {
+                "timestamp": "2025-11-20T01:42:28.697285+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_29_658960_08_00": {
+                "timestamp": "2025-11-20T01:42:29.658960+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_30_693503_08_00": {
+                "timestamp": "2025-11-20T01:42:30.693503+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_31_666556_08_00": {
+                "timestamp": "2025-11-20T01:42:31.666556+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_32_677731_08_00": {
+                "timestamp": "2025-11-20T01:42:32.677731+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_33_662102_08_00": {
+                "timestamp": "2025-11-20T01:42:33.662102+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_34_673641_08_00": {
+                "timestamp": "2025-11-20T01:42:34.673641+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_35_658553_08_00": {
+                "timestamp": "2025-11-20T01:42:35.658553+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_36_676819_08_00": {
+                "timestamp": "2025-11-20T01:42:36.676819+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_37_657404_08_00": {
+                "timestamp": "2025-11-20T01:42:37.657404+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_38_664977_08_00": {
+                "timestamp": "2025-11-20T01:42:38.664977+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_39_652256_08_00": {
+                "timestamp": "2025-11-20T01:42:39.652256+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_40_686567_08_00": {
+                "timestamp": "2025-11-20T01:42:40.686567+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_41_670249_08_00": {
+                "timestamp": "2025-11-20T01:42:41.670249+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_42_692438_08_00": {
+                "timestamp": "2025-11-20T01:42:42.692438+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_43_657957_08_00": {
+                "timestamp": "2025-11-20T01:42:43.657957+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_44_686521_08_00": {
+                "timestamp": "2025-11-20T01:42:44.686521+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_45_663649_08_00": {
+                "timestamp": "2025-11-20T01:42:45.663649+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_46_700338_08_00": {
+                "timestamp": "2025-11-20T01:42:46.700338+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_47_653873_08_00": {
+                "timestamp": "2025-11-20T01:42:47.653873+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_48_681232_08_00": {
+                "timestamp": "2025-11-20T01:42:48.681232+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_49_650836_08_00": {
+                "timestamp": "2025-11-20T01:42:49.650836+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_50_677966_08_00": {
+                "timestamp": "2025-11-20T01:42:50.677966+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_51_643235_08_00": {
+                "timestamp": "2025-11-20T01:42:51.643235+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_52_678772_08_00": {
+                "timestamp": "2025-11-20T01:42:52.678772+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_53_648517_08_00": {
+                "timestamp": "2025-11-20T01:42:53.648517+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_54_679130_08_00": {
+                "timestamp": "2025-11-20T01:42:54.679130+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_55_643073_08_00": {
+                "timestamp": "2025-11-20T01:42:55.643073+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_57_002970_08_00": {
+                "timestamp": "2025-11-20T01:42:57.002970+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_58_872814_08_00": {
+                "timestamp": "2025-11-20T01:42:58.872814+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_42_58_879748_08_00": {
+                "timestamp": "2025-11-20T01:42:58.879748+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_00_862445_08_00": {
+                "timestamp": "2025-11-20T01:43:00.862445+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_00_875381_08_00": {
+                "timestamp": "2025-11-20T01:43:00.875381+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_02_870942_08_00": {
+                "timestamp": "2025-11-20T01:43:02.870942+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_02_873201_08_00": {
+                "timestamp": "2025-11-20T01:43:02.873201+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_04_850268_08_00": {
+                "timestamp": "2025-11-20T01:43:04.850268+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_04_852910_08_00": {
+                "timestamp": "2025-11-20T01:43:04.852910+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_06_842010_08_00": {
+                "timestamp": "2025-11-20T01:43:06.842010+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_06_847055_08_00": {
+                "timestamp": "2025-11-20T01:43:06.847055+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_08_871368_08_00": {
+                "timestamp": "2025-11-20T01:43:08.871368+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              },
+              "2025-11-20T01_43_08_873751_08_00": {
+                "timestamp": "2025-11-20T01:43:08.873751+08:00",
+                "total_current": 0,
+                "total_energy": 0.558,
+                "total_power": 0,
+                "total_voltage": 223.2
+              }
+            }
+          },
+          "assigned": true,
+          "ownerId": "rzfR2UJlsCZ0dYsNdIgmmpBwDPz1",
+          "plugs": {
+            "plug2e5c3314": {
+              "data": {
+                "current": 0,
+                "energy": 0.558,
+                "power": 0,
+                "ssr_state": false,
+                "voltage": 223.2
+              },
+              "lastUpdate": 1763401768908
+            }
+          },
+          "ssr_state": true,
+          "user_email": "luzaresbenzgerald@gmail.com"
+        }
+      }
+    },
+    "user_at_example_com": {
+      "email": "user@example.com",
+      "uid": "hG05HUMKdUbtaNqVnwuK98sK6mc2"
+    }
+  }
+}

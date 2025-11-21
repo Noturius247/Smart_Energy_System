@@ -15,6 +15,8 @@ class ConnectedDevice {
   double? voltage; // New field for voltage
   String? userEmail; // New field for user email
   String? createdAt; // New field for creation timestamp
+  bool? ssr_state;
+  String? nickname; // NEW: User-defined nickname for hub or plug
 
   ConnectedDevice({
     required this.name,
@@ -30,5 +32,7 @@ class ConnectedDevice {
     this.voltage,
     this.userEmail, // Initialize user email
     this.createdAt, // Initialize creation timestamp
+    this.ssr_state,
+    this.nickname, // Initialize nickname
   });
 }

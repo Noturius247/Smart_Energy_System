@@ -4,16 +4,16 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Cloud Firestore
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import '../theme_provider.dart';
+import '../realtime_db_service.dart';
 import 'admin_home.dart';
 import 'explore.dart';
 import 'schedule.dart';
 import 'profile.dart';
-import 'custom_sidebar_nav.dart';
-import 'custom_header.dart';
 
 
 class EnergySettingScreen extends StatefulWidget {
-  const EnergySettingScreen({super.key});
+  final RealtimeDbService realtimeDbService;
+  const EnergySettingScreen({super.key, required this.realtimeDbService});
 
   @override
   State<EnergySettingScreen> createState() => _EnergySettingScreenState();
@@ -24,14 +24,12 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   bool smartScheduling = true;
   bool peakHourAlerts = true;
   double powerSavingLevel = 0.6;
-  int _currentIndex = 4;
   bool _breakerStatus = false;
   double _pricePerKWH = 0.0; // New state variable for price per kWh
+  late RealtimeDbService _realtimeDbService;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
-  late AnimationController _profileController;
-  late Animation<Offset> _profileSlideAnimation;
 
   @override
   void initState() {
@@ -45,17 +43,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
-
-    _profileController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _profileSlideAnimation = Tween<Offset>(
-      begin: const Offset(0.2, -0.2),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _profileController, curve: Curves.easeOutBack),
-    );
+    _realtimeDbService = widget.realtimeDbService;
   }
 
   // Method to save price per kWh to Firestore
@@ -117,7 +105,6 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   @override
   void dispose() {
     _animationController.dispose();
-    _profileController.dispose();
     super.dispose();
   }
 
@@ -130,237 +117,77 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   void _navigateToConnectedDevices() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      MaterialPageRoute(builder: (context) => HomeScreen(realtimeDbService: _realtimeDbService)),
     );
   }
 
   void _navigateToAddDevice() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const DevicesTab()),
+      MaterialPageRoute(builder: (context) => DevicesTab(realtimeDbService: _realtimeDbService)),
     );
   }
 
   void _navigateToProfileSettings() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const EnergyProfileScreen()),
+      MaterialPageRoute(builder: (context) => EnergyProfileScreen(realtimeDbService: _realtimeDbService)),
     );
   }
 
   void _navigateToSchedule() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const EnergySchedulingScreen()),
+      MaterialPageRoute(builder: (context) => EnergySchedulingScreen(realtimeDbService: _realtimeDbService)),
     );
   }
 
   void _navigateToMain() {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      MaterialPageRoute(builder: (context) => HomeScreen(realtimeDbService: _realtimeDbService)),
     );
-  }
-
-  bool _isSmallScreen(BuildContext context) {
-    return MediaQuery.of(context).size.width < 600; // Define your small screen breakpoint
   }
 
   @override
   Widget build(BuildContext context) {
-    // Check screen width to determine layout
-    final isSmallScreen = _isSmallScreen(context);
-
-    return Scaffold(
-      body: isSmallScreen ? _buildMobileLayout() : _buildDesktopLayout(),
-    );
-  }
-
-  // Desktop Layout (Sidebar on Left)
-  Widget _buildDesktopLayout() {
-    return Row(
-      children: [
-        CustomSidebarNav(
-          currentIndex: _currentIndex,
-          isBottomNav: false,
-          onTap: (index, page) {
-            setState(() {
-              _currentIndex = index;
-            });
-            if (index != 4) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => page),
-              );
-            }
-          },
-        ),
-        Expanded(child: _buildMainContent()),
-      ],
-    );
-  }
-
-  // Mobile Layout (Bottom Navigation)
-  Widget _buildMobileLayout() {
-    return Column(
-      children: [
-        Expanded(child: _buildMainContent()),
-        CustomSidebarNav(
-          currentIndex: _currentIndex,
-          isBottomNav: true,
-          onTap: (index, page) {
-            setState(() {
-              _currentIndex = index;
-            });
-            if (index != 4) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => page),
-              );
-            }
-          },
-        ),
-      ],
-    );
+    return _buildMainContent();
   }
 
   Widget _buildMainContent() {
-    return Stack(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Theme.of(context).colorScheme.surface, Theme.of(context).scaffoldBackgroundColor],
-            ),
-          ),
-          child: SafeArea(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 25),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 12),
-                    _buildEnergyUsageAndBreaker(),
-                    const SizedBox(height: 30),
-                    _buildEnergyManagement(),
-                    const SizedBox(height: 40),
-                    _buildDeviceManagement(),
-                    const SizedBox(height: 40),
-                    _buildPreferences(),
-          const SizedBox(height: 40),
-          _buildPricingSettings(),
-                    const SizedBox(height: 100),
-                  ],
-                ),
-              ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Theme.of(context).colorScheme.surface, Theme.of(context).scaffoldBackgroundColor],
+        ),
+      ),
+      child: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 25),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 12),
+                _buildEnergyUsageAndBreaker(),
+                const SizedBox(height: 30),
+                _buildEnergyManagement(),
+                const SizedBox(height: 40),
+                _buildDeviceManagement(),
+                const SizedBox(height: 40),
+                _buildPreferences(),
+                const SizedBox(height: 40),
+                _buildPricingSettings(),
+                const SizedBox(height: 100),
+              ],
             ),
           ),
         ),
-
-        // Top Header
-        CustomHeader(
-          isSidebarOpen: false,
-          // isDarkMode and onToggleDarkMode are now handled internally by CustomHeader
-          // showChatIcon, showNotificationIcon, showProfileIcon default to true
-        ),
-
-        // Profile Popover
-        Positioned(
-          top: 70,
-          right: 12,
-          child: FadeTransition(
-            opacity: _profileController,
-            child: SlideTransition(
-              position: _profileSlideAnimation,
-              child: ScaleTransition(
-                scale: _profileController,
-                alignment: Alignment.topRight,
-                child: Container(
-                  width: 220,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Theme.of(context).shadowColor.withAlpha(150),
-                        blurRadius: 10,
-                        offset: const Offset(2, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Profile',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      CircleAvatar(
-                        radius: 30,
-                        backgroundColor: Theme.of(context).colorScheme.secondary,
-                        child: Icon(Icons.person, size: 30, color: Theme.of(context).colorScheme.onSecondary),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Marie Fe Tapales',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'marie@example.com',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 12),
-                      InkWell(
-                        onTap: () {
-                          _profileController.reverse();
-                          Future.delayed(const Duration(milliseconds: 300), () {
-                            if (!mounted) return;
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const EnergyProfileScreen()),
-                            );
-                          });
-                        },
-                        child: Text(
-                          'View Profile',
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: _profileController.reverse,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.secondary,
-                          minimumSize: const Size.fromHeight(36),
-                        ),
-                        child: Text('Close', style: TextStyle(color: Theme.of(context).colorScheme.onSecondary)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
