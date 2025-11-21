@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -7,9 +6,43 @@ import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart'; // Import for Realtime Database
 import 'dart:async'; // Import for StreamSubscription
 
+import '../realtime_db_service.dart';
 import '../theme_provider.dart';
 import 'login.dart';
 import 'profile.dart';
+
+// ------------------ DEVICE MODEL ------------------
+class DeviceModel {
+  String id;
+  String name;
+  String status;
+  double power;
+  double voltage;
+  double current;
+  double energy;
+
+  DeviceModel({
+    required this.id,
+    required this.name,
+    required this.status,
+    this.power = 0.0,
+    this.voltage = 0.0,
+    this.current = 0.0,
+    this.energy = 0.0,
+  });
+
+  factory DeviceModel.fromMap(String id, Map<dynamic, dynamic> map) {
+    return DeviceModel(
+      id: id,
+      name: map['name'] ?? 'N/A',
+      status: map['status'] ?? 'N/A',
+      power: (map['power'] as num?)?.toDouble() ?? 0.0,
+      voltage: (map['voltage'] as num?)?.toDouble() ?? 0.0,
+      current: (map['current'] as num?)?.toDouble() ?? 0.0,
+      energy: (map['energy'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
 
 // ------------------ USER MODEL ------------------
 class UserModel {
@@ -19,6 +52,7 @@ class UserModel {
   String status;
   String dateRegistered;
   String address;
+  List<DeviceModel> devices; // New field for devices
 
   UserModel({
     required this.uid,
@@ -27,12 +61,14 @@ class UserModel {
     required this.status,
     required this.dateRegistered,
     required this.address,
+    this.devices = const [], // Initialize with an empty list
   });
 }
 
 // ------------------ ADMIN SCREEN ------------------
 class MyAdminScreen extends StatefulWidget {
-  const MyAdminScreen({super.key});
+  final RealtimeDbService realtimeDbService; // New: Add RealtimeDbService
+  const MyAdminScreen({super.key, required this.realtimeDbService});
 
   @override
   State<MyAdminScreen> createState() => _MyAdminScreenState();
@@ -43,15 +79,19 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   List<UserModel> allUsers = [];
   final TextEditingController _searchController = TextEditingController();
   bool _isCentralHubPaused = false; // New state variable
-  final DatabaseReference _centralHubStatusRef =
-      FirebaseDatabase.instance.ref().child('central_hub/data_reception_paused'); // New database reference
+  final DatabaseReference _centralHubStatusRef = FirebaseDatabase.instance
+      .ref()
+      .child('central_hub/data_reception_paused'); // New database reference
   StreamSubscription? _centralHubStatusSubscription; // New stream subscription
 
-  String _currentHubSerialNumber = "default_hub_serial"; // Placeholder, needs to be dynamic
+  String _currentHubSerialNumber =
+      "default_hub_serial"; // Placeholder, needs to be dynamic
+  late RealtimeDbService _realtimeDbService;
 
   @override
   void initState() {
     super.initState();
+    _realtimeDbService = widget.realtimeDbService;
     _fetchUsers();
     _listenToCentralHubStatus(); // Listen to central hub status on init
   }
@@ -67,48 +107,92 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   // LISTEN TO CENTRAL HUB STATUS
   // --------------------------------------------------
   void _listenToCentralHubStatus() {
-    _centralHubStatusSubscription = _centralHubStatusRef.onValue.listen((event) {
-      if (event.snapshot.exists && event.snapshot.value is bool) {
-        setState(() {
-          _isCentralHubPaused = event.snapshot.value as bool;
-        });
-      } else {
-        // If no status exists, set a default in the database
-        _centralHubStatusRef.set(false);
-        setState(() {
-          _isCentralHubPaused = false;
-        });
-      }
-    }, onError: (error) {
-      print("Error listening to central hub status: $error");
-    });
+    _centralHubStatusSubscription = _centralHubStatusRef.onValue.listen(
+      (event) {
+        if (event.snapshot.exists && event.snapshot.value is bool) {
+          setState(() {
+            _isCentralHubPaused = event.snapshot.value as bool;
+          });
+        } else {
+          // If no status exists, set a default in the database
+          _centralHubStatusRef.set(false);
+          setState(() {
+            _isCentralHubPaused = false;
+          });
+        }
+      },
+      onError: (error) {
+        print("Error listening to central hub status: $error");
+      },
+    );
   }
-
-
 
   // --------------------------------------------------
   // FETCH USERS
   // --------------------------------------------------
   Future<void> _fetchUsers() async {
     print('Fetching users from Firestore...');
-    final snapshot = await FirebaseFirestore.instance.collection('users').get();
+    // EFFICIENCY FIX: Add pagination limit to avoid loading all users at once
+    // This prevents excessive bandwidth usage on free tier
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .limit(50) // Load only 50 users at a time
+        .get();
     print('Fetched ${snapshot.docs.length} documents.');
 
-    final fetchedUsers = snapshot.docs.map((doc) {
-      final data = doc.data();
-      return UserModel(
-        uid: doc.id,
-        name: data['displayName'] ?? 'N/A',
-        email: data['email'] ?? 'N/A',
-        status: data['status'] ?? 'Active',
-        dateRegistered: data['createdAt'] != null
-            ? DateFormat('yyyy-MM-dd').format(
-                (data['createdAt'] as Timestamp).toDate(),
-              )
-            : 'N/A',
-        address: data['address'] ?? 'N/A',
-      );
-    }).toList();
+    final fetchedUsers = await Future.wait(
+      snapshot.docs.map((doc) async {
+        final data = doc.data();
+        final userEmail = data['email'] ?? 'N/A';
+        final String safeUserEmail = userEmail.replaceAll(
+          '.',
+          ',',
+        ); // Firebase RTDB key cannot contain '.'
+
+        List<DeviceModel> userDevices = [];
+        if (userEmail != 'N/A') {
+          final hubRef = FirebaseDatabase.instance
+              .ref()
+              .child('users')
+              .child(safeUserEmail)
+              .child('hubs');
+          final hubSnapshot = await hubRef.get();
+
+          if (hubSnapshot.exists &&
+              hubSnapshot.value is Map<dynamic, dynamic>) {
+            final hubs = hubSnapshot.value as Map<dynamic, dynamic>;
+            for (var hubEntry in hubs.entries) {
+              if (hubEntry.value is Map<dynamic, dynamic>) {
+                final hubData = hubEntry.value as Map<dynamic, dynamic>;
+                if (hubData.containsKey('plugs') &&
+                    hubData['plugs'] is Map<dynamic, dynamic>) {
+                  final plugs = hubData['plugs'] as Map<dynamic, dynamic>;
+                  plugs.forEach((plugId, plugData) {
+                    if (plugData is Map<dynamic, dynamic>) {
+                      userDevices.add(DeviceModel.fromMap(plugId, plugData));
+                    }
+                  });
+                }
+              }
+            }
+          }
+        }
+
+        return UserModel(
+          uid: doc.id,
+          name: data['displayName'] ?? 'N/A',
+          email: userEmail,
+          status: data['status'] ?? 'Active',
+          dateRegistered: data['createdAt'] != null
+              ? DateFormat(
+                  'yyyy-MM-dd',
+                ).format((data['createdAt'] as Timestamp).toDate())
+              : 'N/A',
+          address: data['address'] ?? 'N/A',
+          devices: userDevices,
+        );
+      }).toList(),
+    );
     print('Mapped ${fetchedUsers.length} users.');
 
     setState(() {
@@ -153,65 +237,80 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
-        title: const Text(
-          "Add User",
-          style: TextStyle(color: Colors.white),
-        ),
+        title: Text("Add User", style: Theme.of(context).textTheme.titleLarge),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Enter full name",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
             TextField(
               controller: emailController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Enter email",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
             TextField(
               controller: passwordController,
-              style: const TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.bodyMedium,
               obscureText: true,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 hintText: "Enter password",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
             TextField(
               controller: addressController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Enter address",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              dropdownColor:
-                  Theme.of(context).primaryColor.withOpacity(0.8),
+              dropdownColor: Theme.of(context).primaryColor.withOpacity(0.8),
               initialValue: statusValue,
               items: ["Active", "Inactive"]
-                  .map((s) => DropdownMenuItem(
+                  .map(
+                    (s) => DropdownMenuItem(
                       value: s,
                       child: Text(
                         s,
-                        style: const TextStyle(color: Colors.white),
-                      )))
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  )
                   .toList(),
               onChanged: (val) {
                 if (val != null) statusValue = val;
               },
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: "Select Status",
-                labelStyle: TextStyle(color: Colors.white),
+                labelStyle: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
           ],
@@ -219,35 +318,37 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
+            child: Text(
               "Cancel",
-              style: TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
+
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  Theme.of(context).primaryColor.withOpacity(0.8),
+              backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
             ),
             onPressed: () async {
               try {
                 final auth = FirebaseAuth.instance;
-                final userCredential =
-                    await auth.createUserWithEmailAndPassword(
-                  email: emailController.text,
-                  password: passwordController.text,
-                );
+                final userCredential = await auth
+                    .createUserWithEmailAndPassword(
+                      email: emailController.text,
+                      password: passwordController.text,
+                    );
 
                 await FirebaseFirestore.instance
                     .collection('users')
                     .doc(userCredential.user!.uid)
                     .set({
-                  'displayName': nameController.text,
-                  'email': emailController.text,
-                  'address': addressController.text,
-                  'status': statusValue,
-                  'createdAt': FieldValue.serverTimestamp(),
-                });
+                      'displayName': nameController.text,
+                      'email': emailController.text,
+                      'address': addressController.text,
+                      'status': statusValue,
+                      'createdAt': FieldValue.serverTimestamp(),
+                    });
 
                 if (!mounted) return;
                 Navigator.pop(ctx);
@@ -275,16 +376,19 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                        'An unexpected error occurred: ${e.toString()}'),
+                      'An unexpected error occurred: ${e.toString()}',
+                    ),
                     backgroundColor: Colors.red,
                   ),
                 );
                 Navigator.pop(ctx); // Pop the dialog on error
               }
             },
-            child: const Text(
+            child: Text(
               "Add",
-              style: TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
             ),
           ),
         ],
@@ -298,8 +402,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   void _editUser(int index) {
     final nameController = TextEditingController(text: users[index].name);
     final emailController = TextEditingController(text: users[index].email);
-    final addressController =
-        TextEditingController(text: users[index].address);
+    final addressController = TextEditingController(text: users[index].address);
 
     String statusValue = users[index].status;
 
@@ -307,56 +410,67 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
-        title: const Text(
-          "Edit User",
-          style: TextStyle(color: Colors.white),
-        ),
+        title: Text("Edit User", style: Theme.of(context).textTheme.titleLarge),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Update full name",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
             TextField(
               controller: emailController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Update email",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
             TextField(
               controller: addressController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
+              style: Theme.of(context).textTheme.bodyMedium,
+              decoration: InputDecoration(
                 hintText: "Update address",
-                hintStyle: TextStyle(color: Colors.white),
+                hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.7),
+                ),
               ),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
-              dropdownColor:
-                  Theme.of(context).primaryColor.withOpacity(0.8),
+              dropdownColor: Theme.of(context).primaryColor.withOpacity(0.8),
               initialValue: statusValue,
               items: ["Active", "Inactive"]
-                  .map((s) => DropdownMenuItem(
+                  .map(
+                    (s) => DropdownMenuItem(
                       value: s,
                       child: Text(
                         s,
-                        style: const TextStyle(color: Colors.white),
-                      )))
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  )
                   .toList(),
               onChanged: (val) {
                 if (val != null) statusValue = val;
               },
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: "Update Status",
-                labelStyle: TextStyle(color: Colors.white),
+                labelStyle: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
           ],
@@ -364,34 +478,37 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
+            child: Text(
               "Cancel",
-              style: TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  Theme.of(context).primaryColor.withOpacity(0.8),
+              backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
             ),
             onPressed: () async {
               await FirebaseFirestore.instance
                   .collection('users')
                   .doc(users[index].uid)
                   .update({
-                'displayName': nameController.text,
-                'email': emailController.text,
-                'address': addressController.text,
-                'status': statusValue,
-              });
+                    'displayName': nameController.text,
+                    'email': emailController.text,
+                    'address': addressController.text,
+                    'status': statusValue,
+                  });
 
               if (!mounted) return;
               Navigator.pop(ctx);
               _fetchUsers();
             },
-            child: const Text(
+            child: Text(
               "Save",
-              style: TextStyle(color: Colors.white),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onPrimary,
+              ),
             ),
           ),
         ],
@@ -443,10 +560,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _addUser,
         backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
-        child: const Icon(
-          Icons.add,
-          color: Colors.white,
-        ),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
 
       body: SafeArea(
@@ -475,51 +589,48 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
             color: Colors.black.withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Row(
         children: [
           const SizedBox(width: 16),
-          const Icon(Icons.admin_panel_settings, color: Colors.white),
+          const Icon(Icons.admin_panel_settings),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
               'Admin Monitoring List',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
-          IconButton(
-            icon: const Icon(
-              Icons.notifications,
-              color: Colors.white,
-            ),
-            onPressed: () {},
-          ),
+          IconButton(icon: const Icon(Icons.notifications), onPressed: () {}),
           IconButton(
             icon: Icon(
               themeNotifier.darkTheme ? Icons.dark_mode : Icons.light_mode,
-              color: Colors.white,
             ),
             onPressed: () => themeNotifier.toggleTheme(),
           ),
           PopupMenuButton<String>(
-            icon: const Icon(
-              Icons.account_circle,
-              color: Colors.white,
-            ),
+            icon: const Icon(Icons.account_circle),
             onSelected: (value) {
               if (value == 'view_profile') {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const EnergyProfileScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => EnergyProfileScreen(
+                      realtimeDbService: _realtimeDbService,
+                    ),
+                  ),
                 );
               } else if (value == 'logout') {
                 Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(builder: (_) => const AuthPage()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        AuthPage(realtimeDbService: _realtimeDbService),
+                  ),
                   (route) => false,
                 );
               }
@@ -562,12 +673,16 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
           child: TextField(
             controller: _searchController,
             onSubmitted: (q) => _applySearch(q),
-            style: const TextStyle(color: Colors.white),
+            style: Theme.of(context).textTheme.bodyMedium,
             decoration: InputDecoration(
               hintText: "Search user...",
-              hintStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
-              prefixIcon:
-                  Icon(Icons.search, color: Colors.white.withOpacity(0.8)),
+              hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                color: Theme.of(context).iconTheme.color?.withOpacity(0.8),
+              ),
               filled: true,
               fillColor: Theme.of(context).primaryColor.withOpacity(0.8),
               border: OutlineInputBorder(
@@ -587,10 +702,10 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
             ),
           ),
           onPressed: () => _applySearch(_searchController.text),
-          child: const Text(
+          child: Text(
             "Enter",
-            style: TextStyle(
-              color: Colors.white,
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: Theme.of(context).colorScheme.onPrimary,
             ),
           ),
         ),
@@ -612,72 +727,116 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
           headingRowColor: WidgetStateProperty.all(
             Theme.of(context).primaryColor.withOpacity(0.8),
           ),
-          columns: const [
+          columns: [
             DataColumn(
-                label: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text(
-                      "Name",
-                      style: TextStyle(color: Colors.white),
-                    ))),
+              label: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text(
+                  "Name",
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
             DataColumn(
-                label: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text(
-                      "Email",
-                      style: TextStyle(color: Colors.white),
-                    ))),
+              label: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text(
+                  "Email",
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
             DataColumn(
-                label: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text(
-                      "Address",
-                      style: TextStyle(color: Colors.white),
-                    ))),
+              label: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text(
+                  "Address",
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
             DataColumn(
-                label: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text(
-                      "Status",
-                      style: TextStyle(color: Colors.white),
-                    ))),
+              label: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text(
+                  "Status",
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
             DataColumn(
-                label: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text(
-                      "Date Registered",
-                      style: TextStyle(color: Colors.white),
-                    ))),
+              label: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text(
+                  "Date Registered",
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
             DataColumn(
-                label: Padding(
-                    padding: EdgeInsets.all(8.0),
-                    child: Text(
-                      "Actions",
-                      style: TextStyle(color: Colors.white),
-                    ))),
+              label: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text(
+                  "Devices",
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
+            DataColumn(
+              label: Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text(
+                  "Actions",
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+            ),
           ],
           rows: List.generate(users.length, (index) {
             final user = users[index];
             return DataRow(
               cells: [
-                DataCell(Padding(
+                DataCell(
+                  Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       user.name,
-                      style: const TextStyle(color: Colors.white),
-                    ))),
-                DataCell(Padding(
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       user.email,
-                      style: const TextStyle(color: Colors.white),
-                    ))),
-                DataCell(Padding(
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       user.address,
-                      style: const TextStyle(color: Colors.white),
-                    ))),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ),
                 DataCell(
                   Padding(
                     padding: const EdgeInsets.all(8.0),
@@ -696,7 +855,18 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       user.dateRegistered,
-                      style: const TextStyle(color: Colors.amber),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: Colors.amber),
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(
+                      '${user.devices.length} Devices: ${user.devices.map((e) => e.name).join(', ')}',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ),
                 ),
@@ -706,13 +876,17 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                     child: Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.edit,
-                              color: Colors.blueAccent),
+                          icon: const Icon(
+                            Icons.edit,
+                            color: Colors.blueAccent,
+                          ),
                           onPressed: () => _editUser(index),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete,
-                              color: Colors.redAccent),
+                          icon: const Icon(
+                            Icons.delete,
+                            color: Colors.redAccent,
+                          ),
                           onPressed: () => _deleteUser(index),
                         ),
                       ],
@@ -727,194 +901,168 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
     );
   }
 
-    Widget _buildPlugsSection() {
-      // Construct the correct database reference for plugs under the hardcoded user's default hub
-      final dbRef = FirebaseDatabase.instance.ref()
-          .child('users')
-          .child('espthesisbmn_at_gmail_com') // Hardcoded email as per user's request
-          .child('hubs')
-          .child(_currentHubSerialNumber) // Using the placeholder serial number
-          .child('plugs');
+  Widget _buildPlugsSection() {
+    // Construct the correct database reference for plugs under the hardcoded user's default hub
+    final dbRef = FirebaseDatabase.instance
+        .ref()
+        .child('users')
+        .child(
+          'espthesisbmn_at_gmail_com',
+        ) // Hardcoded email as per user's request
+        .child('hubs')
+        .child(_currentHubSerialNumber) // Using the placeholder serial number
+        .child('plugs');
 
-  
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
 
-      return Padding(
+      child: Container(
+        padding: const EdgeInsets.all(16),
 
-        padding: const EdgeInsets.all(16.0),
+        decoration: BoxDecoration(
+          color: Theme.of(context).primaryColor.withOpacity(0.8),
 
-        child: Container(
-
-          padding: const EdgeInsets.all(16),
-
-          decoration: BoxDecoration(
-
-            color: Theme.of(context).primaryColor.withOpacity(0.8),
-
-            borderRadius: BorderRadius.circular(12),
-
-          ),
-
-          child: Column(
-
-            crossAxisAlignment: CrossAxisAlignment.start,
-
-            children: [
-
-                            Text(
-
-                              'Live Energy Consumption (Plugs)',
-
-                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-
-                                    fontWeight: FontWeight.bold,
-
-                                    color: Colors.white,
-
-                                  ),
-
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            Row(
-
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                              children: [
-
-                                Text(
-
-                                  'Pause Data Reception',
-
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-
-                                        color: Colors.white,
-
-                                      ),
-
-                                ),
-
-                                Switch(
-
-                                  value: _isCentralHubPaused,
-
-                                  onChanged: (value) {
-
-                                    _toggleCentralHubStatus(value);
-
-                                  },
-
-                                  activeColor: Colors.greenAccent,
-
-                                  inactiveThumbColor: Colors.redAccent,
-
-                                  inactiveTrackColor: Colors.redAccent.withOpacity(0.5),
-
-                                ),
-
-                              ],
-
-                            ),
-
-                            const SizedBox(height: 16),
-
-              Expanded(
-
-                child: StreamBuilder(
-                  stream: dbRef.onValue,
-                  builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    } else if (snapshot.hasError) {
-                      return Center(child: Text('Error: ${snapshot.error}'));
-                    } else if (!snapshot.hasData ||
-                        snapshot.data!.snapshot.value == null) {
-                      return const Center(child: Text('No data available'));
-                    } else {
-                      final data = snapshot.data!.snapshot.value;
-                      if (data is Map<dynamic, dynamic>) {
-                        final plugs = <String, dynamic>{};
-                        data.forEach((key, value) {
-                          plugs[key] = value;
-                        });
-
-                        return ListView.builder(
-                          itemCount: plugs.length,
-                          itemBuilder: (context, index) {
-                            final plugId = plugs.keys.elementAt(index);
-                            final plugData = plugs[plugId];
-
-                            return Card(
-                              elevation: 5,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              color: Theme.of(context)
-                                  .primaryColor
-                                  .withOpacity(0.8),
-                              margin: const EdgeInsets.symmetric(
-                                  vertical: 8, horizontal: 10),
-                              child: Padding(
-                                padding: const EdgeInsets.all(15),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      plugData['name'] ?? 'N/A',
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                        'Status: ${plugData['status'] ?? 'N/A'}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
-                                    Text('Power: ${plugData['power'] ?? 0} W',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
-                                    Text(
-                                        'Voltage: ${plugData['voltage'] ?? 0} V',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
-                                    Text(
-                                        'Current: ${plugData['current'] ?? 0} A',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
-                                    Text(
-                                        'Energy: ${plugData['energy'] ?? 0} kWh',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                        )),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      } else {
-                        return const Center(
-                            child: Text('Invalid data format'));
-                      }
-                    }
-                  },
-                ),
-
-              ),
-
-            ],
-
-          ),
-
+          borderRadius: BorderRadius.circular(12),
         ),
 
-      );
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
 
-    }
+          children: [
+            Text(
+              'Live Energy Consumption (Plugs)',
+
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 16),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+              children: [
+                Text(
+                  'Pause Data Reception',
+
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+
+                Switch(
+                  value: _isCentralHubPaused,
+
+                  onChanged: (value) {
+                    _toggleCentralHubStatus(value);
+                  },
+
+                  activeColor: Colors.greenAccent,
+
+                  inactiveThumbColor: Colors.redAccent,
+
+                  inactiveTrackColor: Colors.redAccent.withOpacity(0.5),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            Expanded(
+              child: StreamBuilder(
+                stream: dbRef.onValue,
+                builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  } else if (snapshot.hasError) {
+                    return Center(child: Text('Error: ${snapshot.error}'));
+                  } else if (!snapshot.hasData ||
+                      snapshot.data!.snapshot.value == null) {
+                    return const Center(child: Text('No data available'));
+                  } else {
+                    final data = snapshot.data!.snapshot.value;
+                    if (data is Map<dynamic, dynamic>) {
+                      final plugs = <String, dynamic>{};
+                      data.forEach((key, value) {
+                        plugs[key] = value;
+                      });
+
+                      return ListView.builder(
+                        itemCount: plugs.length,
+                        itemBuilder: (context, index) {
+                          final plugId = plugs.keys.elementAt(index);
+                          final plugData = plugs[plugId];
+
+                          return Card(
+                            elevation: 5,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            color: Theme.of(
+                              context,
+                            ).primaryColor.withOpacity(0.8),
+                            margin: const EdgeInsets.symmetric(
+                              vertical: 8,
+                              horizontal: 10,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(15),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    plugData['name'] ?? 'N/A',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Status: ${plugData['status'] ?? 'N/A'}',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                                  Text(
+                                    'Power: ${plugData['power'] ?? 0} W',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                                  Text(
+                                    'Voltage: ${plugData['voltage'] ?? 0} V',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                                  Text(
+                                    'Current: ${plugData['current'] ?? 0} A',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                                  Text(
+                                    'Energy: ${plugData['energy'] ?? 0} kWh',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    } else {
+                      return const Center(child: Text('Invalid data format'));
+                    }
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

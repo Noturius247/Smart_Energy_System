@@ -1,46 +1,34 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+
 import 'package:lottie/lottie.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'screen/login.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'firebase_options.dart';
+import 'realtime_db_service.dart'; // Import the new service
+import 'services/data_cleanup_service.dart'; // Import cleanup service
 
-
+import 'screen/admin_home.dart';
 import 'screen/theadmin.dart';
-import 'screen/explore.dart'; // Import DevicesTab (user home screen)
 import 'theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase
   try {
     await Firebase.initializeApp(
-      options: kIsWeb
-          ? const FirebaseOptions(
-              apiKey: "AIzaSyDBqcfwbFnu8GKAz5MMIhqRwUgMLjN0K-U",
-              authDomain: "smart-plug-and-energy-meter.firebaseapp.com",
-              databaseURL: "https://smart-plug-and-energy-meter-default-rtdb.asia-southeast1.firebasedatabase.app",
-              projectId: "smart-plug-and-energy-meter",
-              storageBucket: "smart-plug-and-energy-meter.firebasestorage.app",
-              messagingSenderId: "163950309353",
-              appId: "1:163950309353:web:3b00a96478d7d0ce066578",
-              measurementId: "G-5Q92FQ78LZ",
-            )
-          : null,
+      options: DefaultFirebaseOptions.currentPlatform,
     );
   } catch (e) {
     debugPrint('Firebase initialization error: $e');
   }
 
   final themeNotifier = await ThemeNotifier.create();
-  
+
   runApp(
-    ChangeNotifierProvider.value(
-      value: themeNotifier,
-      child: const MyApp(),
-    ),
+    ChangeNotifierProvider.value(value: themeNotifier, child: const MyApp()),
   );
 }
 
@@ -62,7 +50,9 @@ class MyApp extends StatelessWidget {
         ),
         builder: (context, child) {
           return MediaQuery(
-            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.0)),
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.0)),
             child: child!,
           );
         },
@@ -71,8 +61,36 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  final RealtimeDbService _realtimeDbService = RealtimeDbService();
+  final DataCleanupService _cleanupService = DataCleanupService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Start cleanup service when user is authenticated
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user != null) {
+        _cleanupService.startCleanupService();
+      } else {
+        _cleanupService.stopCleanupService();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _realtimeDbService.stopAllRealtimeDataStreams();
+    _cleanupService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,29 +102,37 @@ class AuthWrapper extends StatelessWidget {
         }
 
         if (snapshot.hasData) {
+          // User is logged in
           final user = snapshot.data!;
           return FutureBuilder<IdTokenResult>(
-            future: user.getIdTokenResult(true), // Force refresh to get latest claims
+            future: user.getIdTokenResult(
+              true,
+            ), // Force refresh to get latest claims
             builder: (context, tokenSnapshot) {
               if (tokenSnapshot.connectionState == ConnectionState.waiting) {
                 return const LoadingScreen();
               }
 
               if (tokenSnapshot.hasData) {
-                final bool isAdmin = tokenSnapshot.data?.claims?['admin'] == true;
+                final bool isAdmin =
+                    tokenSnapshot.data?.claims?['admin'] == true;
                 if (isAdmin) {
-                  return const MyAdminScreen();
+                  return MyAdminScreen(realtimeDbService: _realtimeDbService);
                 } else {
-                  return const DevicesTab(); // Redirect to user home screen
+                  return HomeScreen(
+                    realtimeDbService: _realtimeDbService,
+                  ); // Redirect to user home screen
                 }
               }
               // Fallback if token claims can't be fetched
-              return const AuthPage();
+              return AuthPage(realtimeDbService: _realtimeDbService);
             },
           );
+        } else {
+          // User is logged out
         }
 
-        return const AuthPage();
+        return AuthPage(realtimeDbService: _realtimeDbService);
       },
     );
   }
@@ -157,6 +183,3 @@ class LoadingScreen extends StatelessWidget {
     );
   }
 }
-
-
-

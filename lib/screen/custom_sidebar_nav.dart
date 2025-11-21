@@ -3,6 +3,7 @@ import 'package:lottie/lottie.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Cloud Firestore
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import 'dart:async'; // Import for StreamSubscription
+import '../realtime_db_service.dart';
 import 'admin_home.dart';
 import 'explore.dart';
 import 'analytics.dart';
@@ -14,12 +15,14 @@ class CustomSidebarNav extends StatefulWidget {
   final int currentIndex;
   final void Function(int, Widget) onTap;
   final bool isBottomNav;
+  final RealtimeDbService realtimeDbService; // New: Add RealtimeDbService
 
   const CustomSidebarNav({
     super.key,
     required this.currentIndex,
     required this.onTap,
     this.isBottomNav = false,
+    required this.realtimeDbService, // New: Make it required
   });
 
   @override
@@ -30,7 +33,8 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
   late bool isCollapsed;
   final Map<int, bool> _hoverStates = {}; // Track hover states per item
   double _pricePerKWH = 0.0; // New state variable for price per kWh
-  StreamSubscription? _priceSubscription; // StreamSubscription for real-time updates
+  StreamSubscription?
+  _priceSubscription; // StreamSubscription for real-time updates
 
   @override
   void initState() {
@@ -41,7 +45,8 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
 
   @override
   void dispose() {
-    _priceSubscription?.cancel(); // Cancel the subscription when the widget is disposed
+    _priceSubscription
+        ?.cancel(); // Cancel the subscription when the widget is disposed
     super.dispose();
   }
 
@@ -59,32 +64,60 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
         .collection('users')
         .doc(user.uid)
         .snapshots()
-        .listen((snapshot) {
-      if (snapshot.exists && snapshot.data()!.containsKey('pricePerKWH')) {
-        setState(() {
-          _pricePerKWH = (snapshot.data()!['pricePerKWH'] as num).toDouble();
-        });
-      } else {
-        setState(() {
-          _pricePerKWH = 0.0;
-        });
-      }
-    }, onError: (error) {
-      print('Error listening to price per kWh: $error');
-      setState(() {
-        _pricePerKWH = 0.0; // Default in case of error
-      });
-    });
+        .listen(
+          (snapshot) {
+            if (snapshot.exists &&
+                snapshot.data()!.containsKey('pricePerKWH')) {
+              setState(() {
+                _pricePerKWH = (snapshot.data()!['pricePerKWH'] as num)
+                    .toDouble();
+              });
+            } else {
+              setState(() {
+                _pricePerKWH = 0.0;
+              });
+            }
+          },
+          onError: (error) {
+            print('Error listening to price per kWh: $error');
+            setState(() {
+              _pricePerKWH = 0.0; // Default in case of error
+            });
+          },
+        );
   }
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> pages = [
+      HomeScreen(realtimeDbService: widget.realtimeDbService),
+      DevicesTab(realtimeDbService: widget.realtimeDbService),
+      AnalyticsScreen(realtimeDbService: widget.realtimeDbService),
+      EnergySchedulingScreen(realtimeDbService: widget.realtimeDbService),
+      EnergySettingScreen(realtimeDbService: widget.realtimeDbService),
+    ];
+
     final List<Map<String, dynamic>> navItems = [
-      {'icon': Icons.flash_on, 'label': 'Energy', 'page': const HomeScreen()},
-      {'icon': Icons.devices, 'label': 'Devices', 'page': const DevicesTab()},
-      {'icon': Icons.show_chart, 'label': 'Analytics', 'page': const AnalyticsScreen()},
-      {'icon': Icons.schedule, 'label': 'Schedule', 'page': const EnergySchedulingScreen()},
-      {'icon': Icons.settings, 'label': 'Settings', 'page': const EnergySettingScreen()},
+      {
+        'icon': Icons.flash_on,
+        'label': 'Energy',
+      },
+      {
+        'icon': Icons.devices,
+        'label': 'Devices',
+      },
+      {
+        'icon': Icons.show_chart,
+        'label': 'Analytics',
+      },
+      {
+        'icon': Icons.schedule,
+        'label': 'Schedule',
+      },
+      {
+        'icon': Icons.settings,
+        'label': 'Settings',
+      },
     ];
 
     // Bottom Navigation (mobile)
@@ -92,7 +125,9 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
       return Container(
         decoration: BoxDecoration(
           color: Theme.of(context).primaryColor,
-          border: Border(top: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
+          border: Border(
+            top: BorderSide(color: Theme.of(context).dividerColor, width: 1),
+          ),
         ),
         child: SafeArea(
           child: Padding(
@@ -105,20 +140,28 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                 final isSelected = index == widget.currentIndex;
 
                 return InkWell(
-                  onTap: () => widget.onTap(index, item['page']), // only navigate
+                  onTap: () {
+                    if (index != widget.currentIndex) {
+                      widget.onTap(index, pages[index]);
+                    }
+                  },
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         item['icon'],
-                        color: isSelected ? Theme.of(context).colorScheme.secondary : Theme.of(context).iconTheme.color,
+                        color: isSelected
+                            ? Theme.of(context).colorScheme.secondary
+                            : Theme.of(context).iconTheme.color,
                         size: 24,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         item['label'],
                         style: TextStyle(
-                          color: isSelected ? Theme.of(context).colorScheme.secondary : Theme.of(context).textTheme.bodyMedium?.color,
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.secondary
+                              : Theme.of(context).textTheme.bodyMedium?.color,
                           fontSize: 10,
                         ),
                       ),
@@ -138,7 +181,9 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
       width: isCollapsed ? 80 : 200,
       decoration: BoxDecoration(
         color: Theme.of(context).primaryColor,
-        border: Border(right: BorderSide(color: Theme.of(context).dividerColor, width: 1)),
+        border: Border(
+          right: BorderSide(color: Theme.of(context).dividerColor, width: 1),
+        ),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -172,27 +217,30 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                   onExit: (_) => setState(() => _hoverStates[index] = false),
                   child: InkWell(
                     onTap: () {
-  Navigator.pushReplacement(
-    context,
-    PageRouteBuilder(
-      pageBuilder: (_, __, ___) => navItems[index]['page'],
-      transitionsBuilder: (_, animation, __, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-      transitionDuration: const Duration(milliseconds: 300),
-    ),
-  );
-},
+                      if (index != widget.currentIndex) {
+                        widget.onTap(index, pages[index]);
+                      }
+                    },
 
                     child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                      margin: const EdgeInsets.symmetric(
+                        vertical: 6,
+                        horizontal: 8,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.2).round())
+                            ? Theme.of(context).colorScheme.secondary.withAlpha(
+                                (255 * 0.2).round(),
+                              )
                             : _hoverStates[index]!
-                                ? Theme.of(context).primaryColor.withAlpha((255 * 0.5).round())
-                                : Colors.transparent,
+                            ? Theme.of(
+                                context,
+                              ).primaryColor.withAlpha((255 * 0.5).round())
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
@@ -213,7 +261,9 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                               style: TextStyle(
                                 color: isSelected || _hoverStates[index]!
                                     ? Theme.of(context).colorScheme.secondary
-                                    : Theme.of(context).textTheme.bodyMedium?.color,
+                                    : Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium?.color,
                                 fontSize: 12,
                               ),
                             ),
@@ -230,15 +280,20 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
           // Display Price per kWh
           if (!widget.isBottomNav && _pricePerKWH > 0)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10.0,
+                vertical: 5.0,
+              ),
               child: AnimatedOpacity(
                 opacity: isCollapsed ? 0.0 : 1.0,
                 duration: const Duration(milliseconds: 200),
                 child: Text(
-                  'Price/kWh: \$${_pricePerKWH.toStringAsFixed(2)}',
+                  'Price/kWh: ₱${_pricePerKWH.toStringAsFixed(2)}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                      ),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.7),
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -254,7 +309,10 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(8),
@@ -287,13 +345,20 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                   onTap: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (_) => const AuthPage()),
+                      MaterialPageRoute(
+                        builder: (_) => AuthPage(
+                          realtimeDbService: widget.realtimeDbService,
+                        ),
+                      ),
                     );
                   },
                   borderRadius: BorderRadius.circular(8),
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.error,
                       borderRadius: BorderRadius.circular(8),
@@ -303,12 +368,19 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                           ? MainAxisAlignment.center
                           : MainAxisAlignment.start,
                       children: [
-                        Icon(Icons.logout, color: Theme.of(context).colorScheme.onError, size: 16),
+                        Icon(
+                          Icons.logout,
+                          color: Theme.of(context).colorScheme.onError,
+                          size: 16,
+                        ),
                         if (!isCollapsed) ...[
                           const SizedBox(width: 8),
                           Text(
                             "Logout",
-                            style: TextStyle(color: Theme.of(context).colorScheme.onError, fontSize: 12),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onError,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ],
