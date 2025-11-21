@@ -89,34 +89,34 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> pages = [
+      HomeScreen(realtimeDbService: widget.realtimeDbService),
+      DevicesTab(realtimeDbService: widget.realtimeDbService),
+      AnalyticsScreen(realtimeDbService: widget.realtimeDbService),
+      EnergySchedulingScreen(realtimeDbService: widget.realtimeDbService),
+      EnergySettingScreen(realtimeDbService: widget.realtimeDbService),
+    ];
+
     final List<Map<String, dynamic>> navItems = [
       {
         'icon': Icons.flash_on,
         'label': 'Energy',
-        'page': () => HomeScreen(realtimeDbService: widget.realtimeDbService),
       },
       {
         'icon': Icons.devices,
         'label': 'Devices',
-        'page': () => DevicesTab(realtimeDbService: widget.realtimeDbService),
       },
       {
         'icon': Icons.show_chart,
         'label': 'Analytics',
-        'page': () =>
-            AnalyticsScreen(realtimeDbService: widget.realtimeDbService),
       },
       {
         'icon': Icons.schedule,
         'label': 'Schedule',
-        'page': () =>
-            EnergySchedulingScreen(realtimeDbService: widget.realtimeDbService),
       },
       {
         'icon': Icons.settings,
         'label': 'Settings',
-        'page': () =>
-            EnergySettingScreen(realtimeDbService: widget.realtimeDbService),
       },
     ];
 
@@ -142,7 +142,7 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                 return InkWell(
                   onTap: () {
                     if (index != widget.currentIndex) {
-                      widget.onTap(index, item['page']()); // call the function
+                      widget.onTap(index, pages[index]);
                     }
                   },
                   child: Column(
@@ -218,20 +218,7 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
                   child: InkWell(
                     onTap: () {
                       if (index != widget.currentIndex) {
-                        Navigator.pushReplacement(
-                          context,
-                          PageRouteBuilder(
-                            pageBuilder: (_, __, ___) =>
-                                navItems[index]['page'](),
-                            transitionsBuilder: (_, animation, __, child) {
-                              return FadeTransition(
-                                opacity: animation,
-                                child: child,
-                              );
-                            },
-                            transitionDuration: const Duration(milliseconds: 300),
-                          ),
-                        );
+                        widget.onTap(index, pages[index]);
                       }
                     },
 

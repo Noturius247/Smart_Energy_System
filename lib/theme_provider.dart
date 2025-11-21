@@ -47,7 +47,11 @@ final ThemeData lightTheme = ThemeData(
     backgroundColor: Colors.white,
     elevation: 0,
     iconTheme: IconThemeData(color: Colors.black),
-    titleTextStyle: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold),
+    titleTextStyle: TextStyle(
+      color: Colors.black,
+      fontSize: 20,
+      fontWeight: FontWeight.bold,
+    ),
   ),
   colorScheme: ColorScheme.fromSwatch(
     primarySwatch: Colors.blue,
@@ -69,6 +73,14 @@ final ThemeData darkTheme = ThemeData(
     backgroundColor: Color(0xFF1a2332),
     elevation: 0,
     iconTheme: IconThemeData(color: Colors.white),
-    titleTextStyle: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-  ), colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.indigo, brightness: Brightness.dark).copyWith(surface: const Color(0xFF0f1419)),
+    titleTextStyle: TextStyle(
+      color: Colors.white,
+      fontSize: 20,
+      fontWeight: FontWeight.bold,
+    ),
+  ),
+  colorScheme: ColorScheme.fromSwatch(
+    primarySwatch: Colors.indigo,
+    brightness: Brightness.dark,
+  ).copyWith(surface: const Color(0xFF0f1419)),
 );

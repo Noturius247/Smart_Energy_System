@@ -1,22 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // Import provider
 import '../theme_provider.dart'; // Import ThemeNotifier
+import '../realtime_db_service.dart';
 import 'profile.dart';
-import 'custom_sidebar_nav.dart';
+
 import 'custom_header.dart';
 
 class EnergySchedulingScreen extends StatefulWidget {
-  const EnergySchedulingScreen({super.key});
+  final RealtimeDbService realtimeDbService; // New: Add RealtimeDbService
+  const EnergySchedulingScreen({super.key, required this.realtimeDbService});
 
   @override
-  State<EnergySchedulingScreen> createState() =>
-      _EnergySchedulingScreenState();
+  State<EnergySchedulingScreen> createState() => _EnergySchedulingScreenState();
 }
 
 class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
     with TickerProviderStateMixin {
   // Removed _isDarkMode internal state
   int _currentIndex = 3;
+  late RealtimeDbService _realtimeDbService;
 
   late AnimationController _profileController;
   late Animation<Offset> _profileSlideAnimation;
@@ -25,23 +27,24 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
   @override
   void initState() {
     super.initState();
+    _realtimeDbService = widget.realtimeDbService;
 
     _profileController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
 
-    _profileSlideAnimation = Tween<Offset>(
-      begin: const Offset(0.2, -0.2),
-      end: Offset.zero,
-    ).animate(
-        CurvedAnimation(parent: _profileController, curve: Curves.easeOutBack));
+    _profileSlideAnimation =
+        Tween<Offset>(begin: const Offset(0.2, -0.2), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _profileController,
+            curve: Curves.easeOutBack,
+          ),
+        );
 
-    _profileScaleAnimation = Tween<double>(
-      begin: 0,
-      end: 1,
-    ).animate(
-        CurvedAnimation(parent: _profileController, curve: Curves.easeOutBack));
+    _profileScaleAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _profileController, curve: Curves.easeOutBack),
+    );
   }
 
   @override
@@ -57,21 +60,21 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
       "time": "2:00 PM - 4:00 PM",
       "energy": "2.4 kWh",
       "cost": "₱18.50",
-      "icon": Icons.ac_unit
+      "icon": Icons.ac_unit,
     },
     {
       "device": "Washing Machine",
       "time": "6:00 PM - 7:30 PM",
       "energy": "1.8 kWh",
       "cost": "₱14.20",
-      "icon": Icons.local_laundry_service
+      "icon": Icons.local_laundry_service,
     },
     {
       "device": "Lights",
       "time": "7:00 PM - 10:00 PM",
       "energy": "0.9 kWh",
       "cost": "₱6.70",
-      "icon": Icons.lightbulb
+      "icon": Icons.lightbulb,
     },
   ];
 
@@ -79,15 +82,19 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
   String? selectedMinute;
   String? selectedDevice;
 
-  final List<String> hours =
-      List.generate(24, (index) => index.toString().padLeft(2, '0'));
-  final List<String> minutes =
-      List.generate(60, (index) => index.toString().padLeft(2, '0'));
+  final List<String> hours = List.generate(
+    24,
+    (index) => index.toString().padLeft(2, '0'),
+  );
+  final List<String> minutes = List.generate(
+    60,
+    (index) => index.toString().padLeft(2, '0'),
+  );
   final List<String> devices = [
     "Air Conditioner",
     "Washing Machine",
     "Lights",
-    "Fan"
+    "Fan",
   ];
 
   // Add task
@@ -96,20 +103,26 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
       context: context,
       builder: (context) {
         return AlertDialog(
-          title:
-              const Text("Schedule New Task", style: TextStyle(fontSize: 15)),
+          title: const Text(
+            "Schedule New Task",
+            style: TextStyle(fontSize: 15),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButton<String>(
-                hint: const Text("Select Device",
-                    style: TextStyle(fontSize: 13)),
+                hint: const Text(
+                  "Select Device",
+                  style: TextStyle(fontSize: 13),
+                ),
                 value: selectedDevice,
                 items: devices
-                    .map((d) => DropdownMenuItem(
+                    .map(
+                      (d) => DropdownMenuItem(
                         value: d,
-                        child:
-                            Text(d, style: const TextStyle(fontSize: 13))))
+                        child: Text(d, style: const TextStyle(fontSize: 13)),
+                      ),
+                    )
                     .toList(),
                 onChanged: (val) => setState(() => selectedDevice = val),
               ),
@@ -117,26 +130,34 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   DropdownButton<String>(
-                    hint:
-                        const Text("Hour", style: TextStyle(fontSize: 13)),
+                    hint: const Text("Hour", style: TextStyle(fontSize: 13)),
                     value: selectedHour,
                     items: hours
-                        .map((h) => DropdownMenuItem(
+                        .map(
+                          (h) => DropdownMenuItem(
                             value: h,
-                            child: Text(h,
-                                style: const TextStyle(fontSize: 13))))
+                            child: Text(
+                              h,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (val) => setState(() => selectedHour = val),
                   ),
                   DropdownButton<String>(
-                    hint:
-                        const Text("Minute", style: TextStyle(fontSize: 13)),
+                    hint: const Text("Minute", style: TextStyle(fontSize: 13)),
                     value: selectedMinute,
                     items: minutes
-                        .map((m) => DropdownMenuItem(
+                        .map(
+                          (m) => DropdownMenuItem(
                             value: m,
-                            child: Text(m,
-                                style: const TextStyle(fontSize: 13))))
+                            child: Text(
+                              m,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        )
                         .toList(),
                     onChanged: (val) => setState(() => selectedMinute = val),
                   ),
@@ -146,9 +167,9 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child:
-                    const Text("Cancel", style: TextStyle(fontSize: 13))),
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(fontSize: 13)),
+            ),
             ElevatedButton(
               onPressed: () {
                 if (selectedDevice != null &&
@@ -160,7 +181,7 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                       "time": "$selectedHour:$selectedMinute",
                       "energy": "0.5 kWh",
                       "cost": "₱5.00",
-                      "icon": Icons.devices_other
+                      "icon": Icons.devices_other,
                     });
                   });
                   Navigator.pop(context);
@@ -221,9 +242,9 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child:
-                    const Text("Cancel", style: TextStyle(fontSize: 13))),
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(fontSize: 13)),
+            ),
             ElevatedButton(
               onPressed: () {
                 setState(() {
@@ -232,7 +253,7 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
                     "time": editedTime,
                     "energy": editedEnergy,
                     "cost": editedCost,
-                    "icon": task["icon"]
+                    "icon": task["icon"],
                   };
                 });
                 Navigator.pop(context);
@@ -276,34 +297,40 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
           CircleAvatar(
             radius: 20,
             backgroundColor: Colors.white.withAlpha(25),
-            child: Icon(task["icon"],
-                size: 18, color: Colors.tealAccent),
+            child: Icon(task["icon"], size: 18, color: Colors.tealAccent),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(task["device"],
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white)),
+                Text(
+                  task["device"],
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(task["time"],
-                    style:
-                        TextStyle(color: Colors.grey[400], fontSize: 12)),
+                Text(
+                  task["time"],
+                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                ),
                 const SizedBox(height: 3),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 5, vertical: 2),
+                    horizontal: 5,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withAlpha(25),
                     borderRadius: BorderRadius.circular(5),
                   ),
-                  child: Text("Energy: ${task["energy"]}",
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.white)),
+                  child: Text(
+                    "Energy: ${task["energy"]}",
+                    style: const TextStyle(fontSize: 11, color: Colors.white),
+                  ),
                 ),
               ],
             ),
@@ -311,326 +338,322 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(task["cost"],
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
+              Text(
+                task["cost"],
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.edit,
-                        color: Colors.orange, size: 18),
+                    icon: const Icon(
+                      Icons.edit,
+                      color: Colors.orange,
+                      size: 18,
+                    ),
                     onPressed: () => _editTask(index),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
                   const SizedBox(width: 6),
                   IconButton(
-                    icon: const Icon(Icons.delete,
-                        color: Colors.red, size: 18),
+                    icon: const Icon(Icons.delete, color: Colors.red, size: 18),
                     onPressed: () => _removeTask(index),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
                 ],
-              )
+              ),
             ],
-          )
+          ),
         ],
       ),
     );
   }
 
-  // --- BEGIN MODIFIED BUILD METHOD ---
   @override
   Widget build(BuildContext context) {
-    final themeNotifier = Provider.of<ThemeNotifier>(context); // Access ThemeNotifier
-    return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isLargeScreen = constraints.maxWidth > 800; // Define your breakpoint
+    final themeNotifier = Provider.of<ThemeNotifier>(
+      context,
+    ); // Access ThemeNotifier
+    // Content of the main screen area
+    return Stack(
+      children: [
+        // Background
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Theme.of(context).colorScheme.surface, // Use theme colors
+                Theme.of(context).primaryColor, // Use theme colors
+              ],
+            ),
+          ),
+        ),
 
-          // Content of the main screen area
-          final mainContent = Stack(
-            children: [
-              // Background
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Theme.of(context).colorScheme.surface, // Use theme colors
-                      Theme.of(context).primaryColor, // Use theme colors
-                    ],
-                  ),
-                ),
-              ),
-
-              SafeArea(
-                bottom: !isLargeScreen, // Control SafeArea based on screen size
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: 16, vertical: isLargeScreen ? 70 : 16), // Adjust padding for mobile
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        // Main content area
+        Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ), // Adjust padding for mobile
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Tip Section (moved up for mobile)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withAlpha(50),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
                       children: [
-                        // Tip Section (moved up for mobile)
-                        if (!isLargeScreen) ...[
-                          const SizedBox(height: 50), // Space for CustomHeader on mobile
-                        ],
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 14),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.teal.withAlpha(50),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.lightbulb,
-                                  color: Colors.teal, size: 16),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  "Tip: Running the Washing Machine at 10 PM could save ₱5 (off-peak rate).",
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.teal.shade900,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                        const Icon(
+                          Icons.lightbulb,
+                          color: Colors.teal,
+                          size: 16,
                         ),
-
-                        if (_scheduledTasks.isNotEmpty) ...[
-                          Text("Next Scheduled Task",
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).textTheme.bodyMedium?.color)), // Use theme color
-                          const SizedBox(height: 8),
-                          _buildTaskCard(_scheduledTasks[0], 0),
-                        ],
-
-                        const SizedBox(height: 18),
-                        Text("Upcoming Tasks",
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            "Tip: Running the Washing Machine at 10 PM could save ₱5 (off-peak rate).",
                             style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).textTheme.bodyLarge?.color)), // Use theme color
-                        const SizedBox(height: 6),
-
-                        Column(
-                          children: _scheduledTasks.length > 1
-                              ? _scheduledTasks
-                                  .sublist(1)
-                                  .asMap()
-                                  .entries
-                                  .map((entry) => _buildTaskCard(
-                                      entry.value, entry.key + 1))
-                                  .toList()
-                              : [
-                                  Text(
-                                    "No upcoming tasks.",
-                                    style: TextStyle(
-                                        color: Theme.of(context).textTheme.bodyMedium?.color, // Use theme color
-                                        fontSize: 12),
-                                  )
-                                ],
-                        ),
-
-                        const SizedBox(height: 14),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
+                              fontSize: 12,
+                              color: Colors.teal.shade900,
+                              fontWeight: FontWeight.w600,
                             ),
-                            onPressed: _addTask,
-                            child: const Text("Add Task",
-                                style: TextStyle(
-                                    fontSize: 14, color: Colors.white)),
                           ),
                         ),
-                        
-                        // Add some padding at the bottom for the mobile nav bar
-                        if (!isLargeScreen) const SizedBox(height: 70),
                       ],
                     ),
                   ),
-                ),
-              ),
 
-              // Top AppBar (CustomHeader) - Always present
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: CustomHeader(
-                  isDarkMode: themeNotifier.darkTheme, // Pass global theme state
-                  isSidebarOpen: false,
-                  onToggleDarkMode: themeNotifier.toggleTheme, // Pass global toggle method
-                ),
-              ),
+                  if (_scheduledTasks.isNotEmpty) ...[
+                    Text(
+                      "Next Scheduled Task",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.color,
+                      ),
+                    ), // Use theme color
+                    const SizedBox(height: 8),
+                    _buildTaskCard(_scheduledTasks[0], 0),
+                  ],
 
-              // Profile Popover - Always present
-              Positioned(
-                top: 70,
-                right: 10,
-                child: FadeTransition(
-                  opacity: _profileController,
-                  child: SlideTransition(
-                    position: _profileSlideAnimation,
-                    child: ScaleTransition(
-                      scale: _profileScaleAnimation,
-                      alignment: Alignment.topRight,
-                      child: Container(
-                        width: 200,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Theme.of(context).cardColor, // Use theme colors
-                              Theme.of(context).primaryColor, // Use theme colors
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(10),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha(150),
-                              blurRadius: 8,
-                              offset: const Offset(2, 2),
-                            ),
-                          ],
+                  const SizedBox(height: 18),
+                  Text(
+                    "Upcoming Tasks",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                    ),
+                  ), // Use theme color
+                  const SizedBox(height: 6),
+
+                  Column(
+                    children: _scheduledTasks.length > 1
+                        ? _scheduledTasks
+                        .sublist(1)
+                        .asMap()
+                        .entries
+                        .map(
+                          (entry) => _buildTaskCard(
+                        entry.value,
+                        entry.key + 1,
+                      ),
+                    )
+                        .toList()
+                        : [
+                      Text(
+                        "No upcoming tasks.",
+                        style: TextStyle(
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color, // Use theme color
+                          fontSize: 12,
                         ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text('Profile',
-                                style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Theme.of(context).textTheme.bodyLarge?.color)), // Use theme color
-                            const SizedBox(height: 8),
-                            CircleAvatar(
-                              radius: 22,
-                              backgroundColor: Theme.of(context).colorScheme.secondary,
-                              child: Icon(Icons.person,
-                                  size: 18, color: Theme.of(context).colorScheme.onSecondary), // Use theme color
-                            ),
-                            const SizedBox(height: 8),
-                            Text('Marie Fe Tapales',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: Theme.of(context).textTheme.bodyLarge?.color, // Use theme color
-                                    fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text('marie@example.com',
-                                style: TextStyle(
-                                    color: Theme.of(context).textTheme.bodyMedium?.color, // Use theme color
-                                    fontSize: 11)),
-                            const SizedBox(height: 10),
-                            InkWell(
-                              onTap: () {
-                                _profileController.reverse();
-                                Future.delayed(
-                                    const Duration(milliseconds: 300),
-                                    () {
-                                  if (!mounted) return;
-                                  // Assuming EnergyProfileScreen is imported from profile.dart
-                                  Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (_) =>
-                                              const EnergyProfileScreen()));
-                                });
-                              },
-                              child: Text('View Profile',
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      color: Theme.of(context).textTheme.bodyLarge?.color, // Use theme color
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                            const SizedBox(height: 8),
-                            ElevatedButton(
-                              onPressed: _profileController.reverse,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.teal,
-                                minimumSize:
-                                    const Size.fromHeight(34),
-                              ),
-                              child: const Text('Close',
-                                  style: TextStyle(fontSize: 13)),
-                            ),
-                          ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: _addTask,
+                      child: const Text(
+                        "Add Task",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            ],
-          );
 
-          if (isLargeScreen) {
-            // Desktop/Tablet Layout (Sidebar on the left)
-            return Row(
-              children: [
-                // Sidebar on the left
-                CustomSidebarNav(
-                  currentIndex: _currentIndex,
-                  onTap: (index, page) {
-                    setState(() => _currentIndex = index);
-                    if (index != 3) {
-                      if (!mounted) return;
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => page), 
-                      );
-                    }
-                  },
-                ),
-                // Main content area
-                Expanded(child: mainContent),
-              ],
-            );
-          } else {
-            // Mobile Layout (Bottom Navigation)
-            return Scaffold(
-              body: mainContent,
-              bottomNavigationBar: CustomSidebarNav(
-                currentIndex: _currentIndex,
-                onTap: (index, page) {
-                  setState(() => _currentIndex = index);
-                  if (index != 3) {
-                    if (!mounted) return;
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => page),
-                    );
-                  }
-                },
-                isBottomNav: true, // Activate bottom navigation mode
+                  // Add some padding at the bottom for the mobile nav bar
+                ],
               ),
-            );
-          }
-        },
-      ),
+            ),
+          ),
+
+        // Profile Popover - Always present
+        Positioned(
+          top: 70,
+          right: 10,
+          child: FadeTransition(
+            opacity: _profileController,
+            child: SlideTransition(
+              position: _profileSlideAnimation,
+              child: ScaleTransition(
+                scale: _profileScaleAnimation,
+                alignment: Alignment.topRight,
+                child: Container(
+                  width: 200,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Theme.of(context).cardColor, // Use theme colors
+                        Theme.of(
+                          context,
+                        ).primaryColor, // Use theme colors
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(150),
+                        blurRadius: 8,
+                        offset: const Offset(2, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Profile',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(
+                            context,
+                          ).textTheme.bodyLarge?.color,
+                        ),
+                      ), // Use theme color
+                      const SizedBox(height: 8),
+                      CircleAvatar(
+                        radius: 22,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.secondary,
+                        child: Icon(
+                          Icons.person,
+                          size: 18,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSecondary,
+                        ), // Use theme color
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Marie Fe Tapales',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Theme.of(
+                            context,
+                          ).textTheme.bodyLarge?.color, // Use theme color
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'marie@example.com',
+                        style: TextStyle(
+                          color: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color, // Use theme color
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      InkWell(
+                        onTap: () {
+                          _profileController.reverse();
+                          Future.delayed(
+                            const Duration(milliseconds: 300),
+                                () {
+                              if (!mounted) return;
+                              // Assuming EnergyProfileScreen is imported from profile.dart
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => EnergyProfileScreen(
+                                    realtimeDbService: _realtimeDbService,
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                        child: Text(
+                          'View Profile',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.color, // Use theme color
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: _profileController.reverse,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.teal,
+                          minimumSize: const Size.fromHeight(34),
+                        ),
+                        child: const Text(
+                          'Close',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
