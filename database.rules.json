@@ -1,0 +1,38 @@
+{
+  "rules": {
+    ".read": "auth != null && (auth.token.email == 'espthesisbmn@gmail.com' || auth.token.email == 'smartenergymeter11@gmail.com')",
+    ".write": "auth != null && (auth.token.email == 'espthesisbmn@gmail.com' || auth.token.email == 'smartenergymeter11@gmail.com')",
+
+    "users": {
+      ".read": "auth != null",
+      "espthesisbmn": {
+        "hubs": {
+          ".indexOn": ["ownerId"],
+          "$serial_number": {
+            ".write": "auth != null && (!data.exists() || data.child('assigned').val() != true || data.child('ownerId').val() == auth.uid)",
+            "ssr_state": {
+              ".write": "auth != null && data.parent().child('ownerId').val() == auth.uid",
+              ".validate": "newData.isBoolean()"
+            },
+            "plugs": {
+              "$plugs_id": {
+                ".write": "auth != null && root.child('users').child('espthesisbmn').child('hubs').child($serial_number).child('ownerId').val() == auth.uid"
+              }
+            },
+            "aggregations": {
+              "per_second": {
+                "data": {
+                  ".read": "auth != null",
+                  ".write": "auth != null",
+                  "$timestamp": {
+                    ".write": "auth != null"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

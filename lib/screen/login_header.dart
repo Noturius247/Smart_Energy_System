@@ -3,9 +3,7 @@ import 'package:provider/provider.dart'; // Import provider
 import '../theme_provider.dart'; // Import ThemeNotifier
 
 class LoginHeader extends StatelessWidget {
-  const LoginHeader({
-    super.key,
-  });
+  const LoginHeader({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -13,7 +11,9 @@ class LoginHeader extends StatelessWidget {
       child: Container(
         height: 60,
         decoration: BoxDecoration(
-          color: Theme.of(context).primaryColor.withAlpha(200), // Use theme color
+          color: Theme.of(
+            context,
+          ).primaryColor.withAlpha(200), // Use theme color
           boxShadow: [
             BoxShadow(
               color: Colors.black.withAlpha(25),
@@ -28,7 +28,8 @@ class LoginHeader extends StatelessWidget {
             Expanded(
               child: Text(
                 'Smart Energy System',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith( // Use theme text style
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  // Use theme text style
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),
@@ -39,12 +40,16 @@ class LoginHeader extends StatelessWidget {
               builder: (context, notifier, child) => IconButton(
                 icon: Icon(
                   notifier.darkTheme ? Icons.dark_mode : Icons.light_mode,
-                  color: Theme.of(context).colorScheme.secondary, // Use theme color
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.secondary, // Use theme color
                 ),
                 onPressed: () {
                   notifier.toggleTheme();
                 },
-                tooltip: notifier.darkTheme ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+                tooltip: notifier.darkTheme
+                    ? 'Switch to Light Mode'
+                    : 'Switch to Dark Mode',
               ),
             ),
             const SizedBox(width: 12),

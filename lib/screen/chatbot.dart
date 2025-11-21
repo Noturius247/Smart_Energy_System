@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../theme_provider.dart';
 import '../theme_provider.dart' show darkTheme;
 
-
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
 
@@ -10,7 +9,8 @@ class ChatbotScreen extends StatefulWidget {
   State<ChatbotScreen> createState() => _ChatbotScreenState();
 }
 
-class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProviderStateMixin {
+class _ChatbotScreenState extends State<ChatbotScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
   final ScrollController _scrollController = ScrollController();
@@ -25,13 +25,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(1, 0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeInOut,
-    ));
+    _slideAnimation = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeInOut),
+        );
     _slideController.forward();
 
     // Welcome message
@@ -40,7 +37,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
         setState(() {
           _messages.add({
             "sender": "bot",
-            "message": "👋 Hello! I'm your smart home assistant. How can I help you today?"
+            "message":
+                "👋 Hello! I'm your smart home assistant. How can I help you today?",
           });
         });
       }
@@ -73,7 +71,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
         setState(() {
           _messages.add({
             "sender": "bot",
-            "message": _generateBotResponse(userMessage)
+            "message": _generateBotResponse(userMessage),
           });
           _isTyping = false;
         });
@@ -92,7 +90,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
       return "✅ Device turned off successfully.";
     } else if (msg.contains('status') || msg.contains('check')) {
       return "📊 Here's the current status of your devices. All systems are running normally.";
-    } else if (msg.contains('energy') || msg.contains('power') || msg.contains('usage')) {
+    } else if (msg.contains('energy') ||
+        msg.contains('power') ||
+        msg.contains('usage')) {
       return "⚡ Your current energy consumption is optimal. I can provide detailed analytics if needed.";
     } else if (msg.contains('schedule')) {
       return "📅 I can help you set up schedules for your devices. What would you like to schedule?";
@@ -120,13 +120,16 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
   }
 
   bool _isSmallScreen(BuildContext context) {
-    return MediaQuery.of(context).size.width < 600; // Define your small screen breakpoint
+    return MediaQuery.of(context).size.width <
+        600; // Define your small screen breakpoint
   }
 
   @override
   Widget build(BuildContext context) {
     final isSmallScreen = _isSmallScreen(context);
-    final panelWidth = isSmallScreen ? MediaQuery.of(context).size.width : MediaQuery.of(context).size.width * 0.4;
+    final panelWidth = isSmallScreen
+        ? MediaQuery.of(context).size.width
+        : MediaQuery.of(context).size.width * 0.4;
 
     return SlideTransition(
       position: _slideAnimation,
@@ -146,230 +149,263 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
                   end: Alignment.bottomCenter,
                   colors: [
                     Theme.of(context).cardColor,
-                    Theme.of(context).scaffoldBackgroundColor
+                    Theme.of(context).scaffoldBackgroundColor,
                   ],
                 ),
               ),
               child: Column(
                 children: [
-                // Header
-                Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha((255 * 0.3).round()),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.teal.withAlpha((255 * 0.2).round()),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.smart_toy,
-                              color: Colors.teal,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Smart Assistant",
-                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                "Online",
-                                style: TextStyle(
-                                  color: Colors.green,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            icon: Icon(Icons.close, color: Theme.of(context).iconTheme.color),
-                            onPressed: () {
-                              _slideController.reverse().then((_) {
-                                Navigator.of(context).pop();
-                              });
-                            },
-                          ),
-                        ],
-                      ),
+                  // Header
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha((255 * 0.3).round()),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-
-                // Messages
-                Expanded(
-                  child: _messages.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.chat_bubble_outline,
-                                size: 64,
-                                color: Theme.of(context).textTheme.bodyLarge?.color?.withAlpha(77),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                "Start a conversation",
-                                style: TextStyle(
-                                  color: Theme.of(context).textTheme.bodyLarge?.color?.withAlpha(128),
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _messages.length,
-                          itemBuilder: (context, index) {
-                            final msg = _messages[index];
-                            final isUser = msg["sender"] == "user";
-                            return _buildMessageBubble(
-                              context,
-                              msg["message"]!,
-                              isUser,
-                            );
-                          },
-                        ),
-                ),
-
-                // Typing indicator
-                if (_isTyping)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
+                    child: SafeArea(
+                      bottom: false,
+                      child: Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2A2F45),
-                          borderRadius: BorderRadius.circular(20),
+                          horizontal: 8,
+                          vertical: 4,
                         ),
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            _buildTypingDot(0),
-                            const SizedBox(width: 4),
-                            _buildTypingDot(1),
-                            const SizedBox(width: 4),
-                            _buildTypingDot(2),
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.teal.withAlpha(
+                                  (255 * 0.2).round(),
+                                ),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.smart_toy,
+                                color: Colors.teal,
+                                size: 24,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Smart Assistant",
+                                  style: Theme.of(context).textTheme.bodyLarge
+                                      ?.copyWith(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                Text(
+                                  "Online",
+                                  style: TextStyle(
+                                    color: Colors.green,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              icon: Icon(
+                                Icons.close,
+                                color: Theme.of(context).iconTheme.color,
+                              ),
+                              onPressed: () {
+                                _slideController.reverse().then((_) {
+                                  Navigator.of(context).pop();
+                                });
+                              },
+                            ),
                           ],
                         ),
                       ),
                     ),
                   ),
 
-                // Input field
-                Container(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha((255 * 0.3).round()),
-                        blurRadius: 8,
-                        offset: const Offset(0, -2),
-                      ),
-                    ],
+                  // Messages
+                  Expanded(
+                    child: _messages.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.chat_bubble_outline,
+                                  size: 64,
+                                  color: Theme.of(
+                                    context,
+                                  ).textTheme.bodyLarge?.color?.withAlpha(77),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  "Start a conversation",
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge
+                                        ?.color
+                                        ?.withAlpha(128),
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _messages.length,
+                            itemBuilder: (context, index) {
+                              final msg = _messages[index];
+                              final isUser = msg["sender"] == "user";
+                              return _buildMessageBubble(
+                                context,
+                                msg["message"]!,
+                                isUser,
+                              );
+                            },
+                          ),
                   ),
-                  child: SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _controller,
-                              style: Theme.of(context).textTheme.bodyLarge,
-                              decoration: InputDecoration(
-                                hintText: "Type your message...",
-                                hintStyle: TextStyle(
-                                  color: Theme.of(context).textTheme.bodyLarge?.color?.withAlpha(128),
-                                ),
-                                filled: true,
-                                fillColor: Theme.of(context).scaffoldBackgroundColor,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                  vertical: 12,
-                                ),
-                              ),
-                              onSubmitted: (_) => _sendMessage(),
-                              textInputAction: TextInputAction.send,
-                            ),
+
+                  // Typing indicator
+                  if (_isTyping)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Theme.of(context).colorScheme.secondary,
-                                  Theme.of(context).colorScheme.secondary.withAlpha(150)
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            child: IconButton(
-                              icon: Icon(Icons.send, color: Theme.of(context).iconTheme.color),
-                              onPressed: _sendMessage,
-                            ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2A2F45),
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                        ],
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildTypingDot(0),
+                              const SizedBox(width: 4),
+                              _buildTypingDot(1),
+                              const SizedBox(width: 4),
+                              _buildTypingDot(2),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Input field
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha((255 * 0.3).round()),
+                          blurRadius: 8,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _controller,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                                decoration: InputDecoration(
+                                  hintText: "Type your message...",
+                                  hintStyle: TextStyle(
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge
+                                        ?.color
+                                        ?.withAlpha(128),
+                                  ),
+                                  filled: true,
+                                  fillColor: Theme.of(
+                                    context,
+                                  ).scaffoldBackgroundColor,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 12,
+                                  ),
+                                ),
+                                onSubmitted: (_) => _sendMessage(),
+                                textInputAction: TextInputAction.send,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Theme.of(context).colorScheme.secondary,
+                                    Theme.of(
+                                      context,
+                                    ).colorScheme.secondary.withAlpha(150),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  Icons.send,
+                                  color: Theme.of(context).iconTheme.color,
+                                ),
+                                onPressed: _sendMessage,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-} 
+    );
+  }
 
-  Widget _buildMessageBubble(BuildContext context, String message, bool isUser) {
+  Widget _buildMessageBubble(
+    BuildContext context,
+    String message,
+    bool isUser,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.2).round()),
+                color: Theme.of(
+                  context,
+                ).colorScheme.secondary.withAlpha((255 * 0.2).round()),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
@@ -382,16 +418,15 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
           ],
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 gradient: isUser
                     ? LinearGradient(
                         colors: [
                           Theme.of(context).colorScheme.secondary,
-                          Theme.of(context).colorScheme.secondary.withAlpha(150)
+                          Theme.of(
+                            context,
+                          ).colorScheme.secondary.withAlpha(150),
                         ],
                       )
                     : null,
@@ -412,10 +447,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
               ),
               child: Text(
                 message,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 15,
-                  height: 1.4,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(fontSize: 15, height: 1.4),
               ),
             ),
           ),
@@ -424,7 +458,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.2).round()),
+                color: Theme.of(
+                  context,
+                ).colorScheme.secondary.withAlpha((255 * 0.2).round()),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
@@ -447,7 +483,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> with SingleTickerProvider
         final delay = index * 0.2;
         final animValue = (value - delay).clamp(0.0, 1.0);
         final opacity = (animValue * 2).clamp(0.3, 1.0);
-        
+
         return Opacity(
           opacity: opacity,
           child: Container(
