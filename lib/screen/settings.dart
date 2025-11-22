@@ -3,8 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Cloud Firestore
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
+import 'package:firebase_database/firebase_database.dart';
+import 'dart:async';
+import 'dart:convert';
 import '../theme_provider.dart';
 import '../realtime_db_service.dart';
+import '../due_date_provider.dart';
+import '../price_provider.dart';
+import '../notification_provider.dart';
+import '../constants.dart';
 import 'admin_home.dart';
 import 'explore.dart';
 import 'schedule.dart';
@@ -31,6 +38,12 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
+  // Hub selection and SSR state management
+  List<Map<String, String>> _availableHubs = [];
+  String? _selectedHubSerial;
+  StreamSubscription? _hubDataSubscription;
+  StreamSubscription? _ssrStateSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +57,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     );
     _animationController.forward();
     _realtimeDbService = widget.realtimeDbService;
+    _loadUserHubs();
+    _listenToHubDataStream();
   }
 
   // Method to save price per kWh to Firestore
@@ -102,9 +117,132 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     }
   }
 
+  // Load user's hubs from Firebase
+  Future<void> _loadUserHubs() async {
+    final User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final hubSnapshot = await FirebaseDatabase.instance
+          .ref('$rtdbUserPath/hubs')
+          .orderByChild('ownerId')
+          .equalTo(currentUser.uid)
+          .get();
+
+      if (!hubSnapshot.exists || hubSnapshot.value == null) {
+        debugPrint('[Settings] No hubs found for user');
+        return;
+      }
+
+      final allHubs = json.decode(json.encode(hubSnapshot.value)) as Map<String, dynamic>;
+      final List<Map<String, String>> hubList = [];
+
+      for (final serialNumber in allHubs.keys) {
+        final hubData = allHubs[serialNumber] as Map<String, dynamic>;
+        final String? nickname = hubData['nickname'] as String?;
+
+        hubList.add({
+          'serialNumber': serialNumber,
+          'nickname': nickname ?? 'Central Hub',
+        });
+      }
+
+      setState(() {
+        _availableHubs = hubList;
+        if (hubList.isNotEmpty) {
+          _selectedHubSerial = hubList.first['serialNumber'];
+          _loadSsrState();
+        }
+      });
+    } catch (e) {
+      debugPrint('[Settings] Error loading hubs: $e');
+    }
+  }
+
+  // Load SSR state for selected hub
+  Future<void> _loadSsrState() async {
+    if (_selectedHubSerial == null) return;
+
+    try {
+      final ssrSnapshot = await FirebaseDatabase.instance
+          .ref('$rtdbUserPath/hubs/$_selectedHubSerial/ssr_state')
+          .get();
+
+      if (ssrSnapshot.exists && ssrSnapshot.value != null) {
+        setState(() {
+          _breakerStatus = ssrSnapshot.value as bool;
+        });
+      }
+    } catch (e) {
+      debugPrint('[Settings] Error loading SSR state: $e');
+    }
+
+    // Subscribe to SSR state changes
+    _ssrStateSubscription?.cancel();
+    _ssrStateSubscription = FirebaseDatabase.instance
+        .ref('$rtdbUserPath/hubs/$_selectedHubSerial/ssr_state')
+        .onValue
+        .listen((event) {
+      if (event.snapshot.exists && event.snapshot.value != null) {
+        setState(() {
+          _breakerStatus = event.snapshot.value as bool;
+        });
+      }
+    });
+  }
+
+  // Listen to hub data stream for real-time updates
+  void _listenToHubDataStream() {
+    _hubDataSubscription = _realtimeDbService.hubDataStream.listen((data) {
+      if (data['type'] == 'hub_state' && data['serialNumber'] == _selectedHubSerial) {
+        setState(() {
+          _breakerStatus = data['ssr_state'] as bool;
+        });
+      }
+    });
+  }
+
+  // Toggle SSR state
+  Future<void> _toggleBreaker() async {
+    if (_selectedHubSerial == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hub selected')),
+      );
+      return;
+    }
+
+    final newState = !_breakerStatus;
+
+    try {
+      await FirebaseDatabase.instance
+          .ref('$rtdbUserPath/hubs/$_selectedHubSerial/ssr_state')
+          .set(newState);
+
+      if (!mounted) return;
+      setState(() {
+        _breakerStatus = newState;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Breaker turned ${newState ? "ON" : "OFF"}'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error toggling breaker: $e')),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _animationController.dispose();
+    _hubDataSubscription?.cancel();
+    _ssrStateSubscription?.cancel();
     super.dispose();
   }
 
@@ -173,6 +311,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
               children: [
                 _buildHeader(),
                 const SizedBox(height: 12),
+                if (_availableHubs.length > 1) _buildHubSelector(),
+                if (_availableHubs.length > 1) const SizedBox(height: 20),
                 _buildEnergyUsageAndBreaker(),
                 const SizedBox(height: 30),
                 _buildEnergyManagement(),
@@ -182,6 +322,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                 _buildPreferences(),
                 const SizedBox(height: 40),
                 _buildPricingSettings(),
+                const SizedBox(height: 40),
+                _buildDueDateSettings(),
                 const SizedBox(height: 100),
               ],
             ),
@@ -199,6 +341,76 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
         style: Theme.of(context).textTheme.headlineMedium?.copyWith(
           fontWeight: FontWeight.w300,
         ),
+      ),
+    );
+  }
+
+  Widget _buildHubSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).shadowColor.withAlpha(60),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.router,
+            color: Theme.of(context).colorScheme.secondary,
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Control Hub',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey,
+                    fontSize: 11,
+                  ),
+                ),
+                DropdownButton<String>(
+                  value: _selectedHubSerial,
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  items: _availableHubs.map((hub) {
+                    final serial = hub['serialNumber']!;
+                    final nickname = hub['nickname']!;
+                    return DropdownMenuItem<String>(
+                      value: serial,
+                      child: Text(
+                        '$nickname (${serial.substring(0, 8)}...)',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedHubSerial = value;
+                      });
+                      _loadSsrState();
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -391,11 +603,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
           ),
           const SizedBox(height: 16),
           GestureDetector(
-            onTap: () {
-              setState(() {
-                _breakerStatus = !_breakerStatus;
-              });
-            },
+            onTap: _toggleBreaker,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               width: 70,
@@ -492,48 +700,214 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   }
 
   Widget _buildPricingSettings() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('PRICING SETTINGS'),
-        const SizedBox(height: 20),
-        _buildSettingItem(
-          icon: Icons.attach_money,
-          iconColor: Colors.green,
-          title: 'Price per kWh',
-          trailing: SizedBox(
-            width: 100,
-            child: TextFormField(
-              initialValue: _pricePerKWH.toStringAsFixed(2),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-              ],
-              textAlign: TextAlign.right,
-              onChanged: (value) {
-                setState(() {
-                  _pricePerKWH = double.tryParse(value) ?? 0.0;
-                });
-              },
-              style: Theme.of(context).textTheme.titleMedium,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                hintText: '0.00',
+    return Consumer<PriceProvider>(
+      builder: (context, priceProvider, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('PRICING SETTINGS'),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).cardColor,
+                  Theme.of(context).primaryColor,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Theme.of(context).shadowColor.withAlpha(80),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '₱',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Electricity Rate',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Set your price per kWh',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).scaffoldBackgroundColor.withAlpha(100),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.secondary.withAlpha(100),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        '₱',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.secondary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          initialValue: priceProvider.pricePerKWH.toStringAsFixed(2),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _pricePerKWH = double.tryParse(value) ?? 0.0;
+                            });
+                          },
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            hintText: '0.00',
+                            hintStyle: TextStyle(
+                              color: Colors.grey.withAlpha(128),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'per kWh',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final oldPrice = priceProvider.pricePerKWH; // Capture old price
+                      final success = await priceProvider.setPrice(_pricePerKWH);
+
+                      if (success) {
+                        // Track price update notification
+                        if (mounted) {
+                          final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
+                          await notificationProvider.trackPriceUpdate(oldPrice, _pricePerKWH);
+                        }
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Price per kWh saved successfully!')),
+                          );
+                        }
+                      } else if (!success && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Error saving price')),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.secondary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: const Text(
+                      'Save Price',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                if (priceProvider.pricePerKWH > 0) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withAlpha(30),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          color: Colors.blue.shade700,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Cost for 1000 kWh: ₱${(priceProvider.pricePerKWH * 1000).toStringAsFixed(2)}',
+                            style: TextStyle(
+                              color: Colors.blue.shade700,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Align(
-          alignment: Alignment.centerRight,
-          child: ElevatedButton(
-            onPressed: () {
-              _savePricePerKWH();
-            },
-            child: const Text('Apply'),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -544,6 +918,125 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
         letterSpacing: 1,
       ),
     );
+  }
+
+  Widget _buildDueDateSettings() {
+    return Consumer<DueDateProvider>(
+      builder: (context, dueDateProvider, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle('DUE DATE SETTINGS'),
+          const SizedBox(height: 20),
+          _buildSettingItem(
+            icon: Icons.calendar_today,
+            iconColor: Colors.red,
+            title: dueDateProvider.dueDate != null
+                ? 'Due Date: ${dueDateProvider.getFormattedDueDate()}'
+                : 'Set Due Date',
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (dueDateProvider.dueDate != null)
+                  IconButton(
+                    icon: const Icon(Icons.clear, size: 20),
+                    onPressed: () async {
+                      final success = await dueDateProvider.clearDueDate();
+                      if (success && mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Due date cleared')),
+                        );
+                      }
+                    },
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.edit, size: 20),
+                  onPressed: () => _showDueDatePicker(dueDateProvider),
+                ),
+              ],
+            ),
+          ),
+          if (dueDateProvider.dueDate != null) ...[
+            const SizedBox(height: 15),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    dueDateProvider.isOverdue
+                        ? 'Overdue by ${dueDateProvider.getDaysRemaining()!.abs()} days'
+                        : 'Days remaining: ${dueDateProvider.getDaysRemaining()}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: dueDateProvider.isOverdue
+                              ? Colors.red
+                              : Theme.of(context).colorScheme.secondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showDueDatePicker(DueDateProvider dueDateProvider) async {
+    final themeNotifier = Provider.of<ThemeNotifier>(context, listen: false);
+    final bool isDarkMode = themeNotifier.darkTheme;
+
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: dueDateProvider.dueDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDarkMode
+                ? ColorScheme.dark(
+                    primary: Theme.of(context).colorScheme.secondary,
+                    onPrimary: Colors.white,
+                    surface: const Color(0xFF1a2332),
+                    onSurface: Colors.white,
+                    secondary: Theme.of(context).colorScheme.secondary,
+                  )
+                : ColorScheme.light(
+                    primary: Theme.of(context).colorScheme.secondary,
+                    onPrimary: Colors.white,
+                    surface: Colors.white,
+                    onSurface: Colors.black,
+                    secondary: Theme.of(context).colorScheme.secondary,
+                  ),
+            dialogTheme: DialogThemeData(
+              backgroundColor: isDarkMode ? const Color(0xFF1a2332) : Colors.white,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.secondary,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate != null && mounted) {
+      final success = await dueDateProvider.setDueDate(pickedDate);
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Due date set to ${dueDateProvider.getFormattedDueDate()}'),
+          ),
+        );
+      } else if (!success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error setting due date')),
+        );
+      }
+    }
   }
 
   Widget _buildSettingItem({
