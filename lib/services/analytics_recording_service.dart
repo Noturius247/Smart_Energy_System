@@ -12,6 +12,9 @@ class AnalyticsRecordingService {
   // Cache the latest plug data from the stream (instead of fetching every second)
   final Map<String, Map<String, dynamic>> _latestPlugData = {};
 
+  // Track paused state for each hub
+  final Map<String, bool> _pausedHubs = {};
+
   // Start recording per-second data for a hub
   void startRecording(String hubSerialNumber) {
     if (_recordingTimers.containsKey(hubSerialNumber)) {
@@ -71,6 +74,7 @@ class AnalyticsRecordingService {
     _plugStreamSubscriptions.remove(hubSerialNumber);
 
     _latestPlugData.remove(hubSerialNumber);
+    _pausedHubs.remove(hubSerialNumber);
 
     // Final cleanup when stopping
     _cleanupOldData(hubSerialNumber);
@@ -104,8 +108,41 @@ class AnalyticsRecordingService {
     }
   }
 
+  // Pause recording for a specific hub (stops writing to database)
+  void pauseRecording(String hubSerialNumber) {
+    if (!_recordingTimers.containsKey(hubSerialNumber)) {
+      debugPrint('[AnalyticsRecording] ⚠️ No active recording for hub: $hubSerialNumber');
+      return;
+    }
+
+    _pausedHubs[hubSerialNumber] = true;
+    debugPrint('[AnalyticsRecording] ⏸️ Paused recording for hub: $hubSerialNumber');
+  }
+
+  // Resume recording for a specific hub
+  void resumeRecording(String hubSerialNumber) {
+    if (!_recordingTimers.containsKey(hubSerialNumber)) {
+      debugPrint('[AnalyticsRecording] ⚠️ No active recording for hub: $hubSerialNumber');
+      return;
+    }
+
+    _pausedHubs[hubSerialNumber] = false;
+    debugPrint('[AnalyticsRecording] ▶️ Resumed recording for hub: $hubSerialNumber');
+  }
+
+  // Check if recording is paused for a hub
+  bool isRecordingPaused(String hubSerialNumber) {
+    return _pausedHubs[hubSerialNumber] ?? false;
+  }
+
   // Record a snapshot of current sensor data
   Future<void> _recordSnapshot(String hubSerialNumber) async {
+    // Skip recording if paused
+    if (isRecordingPaused(hubSerialNumber)) {
+      debugPrint('[AnalyticsRecording] ⏸️ Skipping snapshot for paused hub: $hubSerialNumber');
+      return;
+    }
+
     try {
       final hubRef = _dbRef.child('$rtdbUserPath/hubs/$hubSerialNumber');
 

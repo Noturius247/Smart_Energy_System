@@ -9,6 +9,7 @@ class RealtimeLineChart extends StatefulWidget {
   final double Function(TimestampedFlSpot) getMetricValue;
   final String metricUnit;
   final Color? lineColor;
+  final bool isPaused;
 
   const RealtimeLineChart({
     super.key,
@@ -16,6 +17,7 @@ class RealtimeLineChart extends StatefulWidget {
     required this.getMetricValue,
     required this.metricUnit,
     this.lineColor,
+    this.isPaused = false,
   });
 
   @override
@@ -24,46 +26,74 @@ class RealtimeLineChart extends StatefulWidget {
 
 class RealtimeLineChartState extends State<RealtimeLineChart> {
   List<TimestampedFlSpot> _allSpots = [];
+  List<TimestampedFlSpot> _pausedSpots = [];
   Timer? _timer;
+  StreamSubscription? _dataSubscription;
 
   @override
   void initState() {
     super.initState();
-    widget.dataStream.listen((data) {
-      if (mounted) {
+    _dataSubscription = widget.dataStream.listen((data) {
+      if (mounted && !widget.isPaused) {
         setState(() {
           _allSpots = data;
         });
       }
     });
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
+      if (mounted && !widget.isPaused) {
         setState(() {});
       }
     });
   }
 
   @override
+  void didUpdateWidget(RealtimeLineChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // When paused state changes from false to true, save current data
+    if (!oldWidget.isPaused && widget.isPaused) {
+      _pausedSpots = List.from(_allSpots);
+      debugPrint('[RealtimeLineChart] Chart paused, saved ${_pausedSpots.length} data points');
+    }
+    // When unpaused, clear the paused snapshot
+    if (oldWidget.isPaused && !widget.isPaused) {
+      _pausedSpots = [];
+      debugPrint('[RealtimeLineChart] Chart resumed');
+    }
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
+    _dataSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
+    // Add a 5-second buffer to prevent visible data cutoff at the edges
+    final sixtyFiveSecondsAgo = now.subtract(const Duration(seconds: 65));
     final sixtySecondsAgo = now.subtract(const Duration(seconds: 60));
 
+    // Chart displays from 60 seconds ago to now (visible window)
     final double minX = 0; // Relative to sixtySecondsAgo
     final double maxX = now.difference(sixtySecondsAgo).inMilliseconds.toDouble();
 
-    final recentSpots = _allSpots.where((spot) {
-      return spot.timestamp.isAfter(sixtySecondsAgo);
+    // Use paused data snapshot when paused, otherwise use live data
+    final dataToDisplay = widget.isPaused ? _pausedSpots : _allSpots;
+
+    // Fetch data from 65 seconds ago (5-second buffer) but only display 60 seconds
+    final recentSpots = dataToDisplay.where((spot) {
+      return spot.timestamp.isAfter(sixtyFiveSecondsAgo);
     }).toList();
 
     // Convert TimestampedFlSpot to FlSpot for the chart, using the selected metric as the Y-value
     List<FlSpot> chartSpots = recentSpots.map((tsSpot) {
-      return FlSpot(tsSpot.timestamp.difference(sixtySecondsAgo).inMilliseconds.toDouble(), widget.getMetricValue(tsSpot));
+      final xValue = tsSpot.timestamp.difference(sixtySecondsAgo).inMilliseconds.toDouble();
+      // Clamp X values to ensure they stay within chart boundaries
+      final clampedX = xValue.clamp(minX, maxX);
+      return FlSpot(clampedX, widget.getMetricValue(tsSpot));
     }).toList();
 
     // Show flat chart immediately if no data in the last 60 seconds
@@ -193,6 +223,7 @@ class RealtimeLineChartState extends State<RealtimeLineChart> {
               top: BorderSide.none,
             ),
           ),
+          clipData: const FlClipData.all(), // Clip lines to stay within chart boundaries
           lineBarsData: [
             LineChartBarData(
               spots: chartSpots,
@@ -204,6 +235,7 @@ class RealtimeLineChartState extends State<RealtimeLineChart> {
                 color: (widget.lineColor ?? Theme.of(context).colorScheme.secondary).withAlpha(100),
               ),
               dotData: const FlDotData(show: false),
+              preventCurveOverShooting: true, // Prevent curve from overshooting data points
             ),
           ],
           lineTouchData: LineTouchData(

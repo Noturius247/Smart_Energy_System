@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // Import provider
 import '../theme_provider.dart'; // Import ThemeNotifier
 import '../realtime_db_service.dart';
+import '../notification_provider.dart';
+import '../widgets/notification_panel.dart';
 import 'profile.dart';
 import 'chatbot.dart'; // ✅ Import chatbot
 
@@ -35,6 +37,29 @@ class CustomHeader extends StatelessWidget {
         opaque: false,
         barrierColor: Colors.black.withOpacity(0.3),
         pageBuilder: (_, __, ___) => const ChatbotScreen(),
+        transitionsBuilder: (_, animation, __, child) {
+          const begin = Offset(1, 0); // slide from right
+          const end = Offset(0, 0);
+          final tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: Curves.easeInOut));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+
+  // Function to open Notification Panel as side panel
+  void _openNotificationPanel(BuildContext context) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black.withOpacity(0.3),
+        pageBuilder: (_, __, ___) => const NotificationPanel(),
         transitionsBuilder: (_, animation, __, child) {
           const begin = Offset(1, 0); // slide from right
           const end = Offset(0, 0);
@@ -92,13 +117,52 @@ class CustomHeader extends StatelessWidget {
                 tooltip: 'Open Chatbot',
               ),
             if (showNotificationIcon)
-              IconButton(
-                icon: Icon(
-                  Icons.notifications,
-                  color: Theme.of(context).colorScheme.secondary,
-                ), // Use theme color
-                onPressed: () {
-                  // Optional: Add notifications page navigation here
+              Consumer<NotificationProvider>(
+                builder: (context, notificationProvider, child) {
+                  return Stack(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.notifications,
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
+                        onPressed: () => _openNotificationPanel(context),
+                        tooltip: 'Notifications',
+                      ),
+                      if (notificationProvider.hasUnread)
+                        Positioned(
+                          right: 8,
+                          top: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Theme.of(context).primaryColor,
+                                width: 1.5,
+                              ),
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 18,
+                              minHeight: 18,
+                            ),
+                            child: Center(
+                              child: Text(
+                                notificationProvider.unreadCount > 9
+                                    ? '9+'
+                                    : '${notificationProvider.unreadCount}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
                 },
               ),
             // Theme Toggle (always present, self-managed)
