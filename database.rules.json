@@ -5,6 +5,13 @@
 
     "users": {
       ".read": "auth != null",
+      "$uid": {
+        "notifications": {
+          ".read": "auth != null && auth.uid == $uid",
+          ".write": "auth != null && auth.uid == $uid",
+          ".indexOn": ["timestamp"]
+        }
+      },
       "espthesisbmn": {
         "hubs": {
           ".indexOn": ["ownerId"],

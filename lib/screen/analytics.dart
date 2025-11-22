@@ -7,10 +7,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../realtime_db_service.dart';
 import 'realtime_line_chart.dart';
 import '../constants.dart';
 import '../services/analytics_recording_service.dart';
+import '../due_date_provider.dart';
+import '../widgets/notification_box.dart';
+import '../price_provider.dart';
 
 enum _MetricType {
   power,
@@ -50,6 +54,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   final AnalyticsRecordingService _recordingService = AnalyticsRecordingService();
   int _connectionAlertMinutes = 5; // Default connection alert threshold
 
+  // Hub selection for per-hub analytics
+  List<Map<String, String>> _availableHubs = []; // List of {serialNumber, nickname}
+  String? _selectedHubSerial; // null = show all hubs combined
+
+  // SSR state tracking for pausing the chart
+  bool _isChartPaused = false;
+  StreamSubscription? _ssrStateSubscription;
+
+  // Stream key to force rebuild when time range or hub changes
+  int _streamKey = 0;
+
   // Color mapping for each metric type
   Color _getMetricColor(_MetricType metricType) {
     switch (metricType) {
@@ -69,6 +84,50 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     super.initState();
     _loadUserPreferences(); // Load user preferences from Firestore
     _initializeHubStreams();
+    _startSsrStateListener();
+  }
+
+  void _startSsrStateListener() {
+    // Listen to SSR state changes
+    // If a specific hub is selected, listen to that hub's SSR state
+    // Otherwise, listen to combined SSR state (true if ANY hub is on)
+    _ssrStateSubscription?.cancel();
+
+    Stream<bool> ssrStream;
+    if (_selectedHubSerial != null) {
+      ssrStream = widget.realtimeDbService.getHubSsrStateStream(_selectedHubSerial!);
+    } else {
+      ssrStream = widget.realtimeDbService.getCombinedSsrStateStream();
+    }
+
+    _ssrStateSubscription = ssrStream.listen((isOn) {
+      if (mounted) {
+        setState(() {
+          // Pause chart when SSR is OFF (false), resume when ON (true)
+          _isChartPaused = !isOn;
+        });
+        debugPrint('[AnalyticsScreen] SSR state changed: ${isOn ? "ON" : "OFF"}, Chart paused: $_isChartPaused');
+
+        // Pause/resume recording service for all active hubs based on SSR state
+        _updateRecordingState(isOn);
+      }
+    });
+  }
+
+  void _updateRecordingState(bool isOn) {
+    // Pause or resume recording for each available hub
+    for (final hub in _availableHubs) {
+      final serialNumber = hub['serialNumber'];
+      if (serialNumber != null) {
+        if (isOn) {
+          _recordingService.resumeRecording(serialNumber);
+          debugPrint('[AnalyticsScreen] ▶️ Resumed recording for hub: $serialNumber');
+        } else {
+          _recordingService.pauseRecording(serialNumber);
+          debugPrint('[AnalyticsScreen] ⏸️ Paused recording for hub: $serialNumber');
+        }
+      }
+    }
   }
 
   // Load user preferences from Firestore
@@ -112,6 +171,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   void dispose() {
     _recordingService.dispose();
+    _ssrStateSubscription?.cancel();
     super.dispose();
   }
 
@@ -147,8 +207,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
       debugPrint('[AnalyticsScreen] Fetched ${allHubs.length} hubs from RTDB (filtered by ownerId).');
 
+      // Build list of available hubs with nicknames
+      final List<Map<String, String>> hubList = [];
+
       // Start streams for user's hubs (already filtered by query)
       for (final serialNumber in allHubs.keys) {
+        final hubData = allHubs[serialNumber] as Map<String, dynamic>;
+        final String? nickname = hubData['nickname'] as String?;
+
+        // Add to available hubs list
+        hubList.add({
+          'serialNumber': serialNumber,
+          'nickname': nickname ?? 'Central Hub',
+        });
+
         debugPrint('[AnalyticsScreen] 🚀 Starting stream for hub: $serialNumber');
         widget.realtimeDbService.startRealtimeDataStream(serialNumber);
 
@@ -160,6 +232,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       }
 
       setState(() {
+        _availableHubs = hubList;
+        // Auto-select first hub if only one hub exists
+        if (hubList.length == 1) {
+          _selectedHubSerial = hubList.first['serialNumber'];
+        }
         _isInitialized = true;
       });
     } catch (e) {
@@ -167,7 +244,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
-  String _getMetricUnit(_MetricType metricType) {
+  String _getMetricUnit(_MetricType metricType, {bool showCost = false}) {
     switch (metricType) {
       case _MetricType.power:
         return 'W';
@@ -176,7 +253,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       case _MetricType.current:
         return 'A';
       case _MetricType.energy:
-        return 'kWh';
+        return showCost ? '₱' : 'kWh';
     }
   }
 
@@ -285,7 +362,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     );
   }
 
-  double _getMetricValue(TimestampedFlSpot spot, _MetricType metricType) {
+  double _getMetricValue(TimestampedFlSpot spot, _MetricType metricType, {bool calculateCost = false}) {
     switch (metricType) {
       case _MetricType.power:
         return spot.power;
@@ -294,12 +371,38 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       case _MetricType.current:
         return spot.current;
       case _MetricType.energy:
+        if (calculateCost) {
+          final priceProvider = Provider.of<PriceProvider>(context, listen: false);
+          return priceProvider.calculateCost(spot.energy);
+        }
         return spot.energy;
+    }
+  }
+
+  /// Get the appropriate data stream based on selected time range and hub
+  /// This combines historical aggregated data with live real-time data
+  Stream<List<TimestampedFlSpot>> _getHistoricalDataStream() {
+    final now = DateTime.now();
+    final startTime = now.subtract(_getTimeRangeDuration(_selectedTimeRange));
+
+    if (_selectedHubSerial != null) {
+      // Single hub selected - get combined historical and live data for that hub
+      return widget.realtimeDbService.getCombinedHistoricalAndLiveDataStream(
+        _selectedHubSerial!,
+        startTime,
+      );
+    } else {
+      // All hubs - get combined data for all active hubs
+      return widget.realtimeDbService.getCombinedHistoricalAndLiveDataForAllHubs(
+        startTime,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -315,7 +418,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         children: [
           // Analytics Title Header
           Container(
-            height: 60,
+            height: isSmallScreen ? 50 : 60,
             decoration: BoxDecoration(
               color: Theme.of(context).primaryColor.withAlpha(200),
               boxShadow: [
@@ -328,13 +431,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             ),
             child: Row(
               children: [
-                const SizedBox(width: 16),
+                SizedBox(width: isSmallScreen ? 12 : 16),
                 Expanded(
                   child: Text(
                     'Analytics',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       fontWeight: FontWeight.bold,
-                      fontSize: 18,
+                      fontSize: isSmallScreen ? 16 : 18,
                     ),
                   ),
                 ),
@@ -343,7 +446,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
           Expanded(
             child: StreamBuilder<List<TimestampedFlSpot>>(
-              stream: widget.realtimeDbService.getLiveChartDataStream(),
+              key: ValueKey(_streamKey), // Force rebuild when stream key changes
+              stream: _getHistoricalDataStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   debugPrint('AnalyticsScreen: StreamBuilder connectionState: waiting');
@@ -367,11 +471,183 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 debugPrint('AnalyticsScreen: StreamBuilder hasData: ${snapshot.hasData}, isEmpty: ${filteredData.isEmpty}, count: ${filteredData.length}');
 
                 return SingleChildScrollView(
-                  padding: const EdgeInsets.all(8),
+                  padding: EdgeInsets.all(isSmallScreen ? 6 : 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 10),
+                      SizedBox(height: isSmallScreen ? 6 : 10),
+                      // Hub Selection Dropdown (if multiple hubs available)
+                      if (_availableHubs.length > 1)
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isSmallScreen ? 8 : 12,
+                            vertical: isSmallScreen ? 6 : 8,
+                          ),
+                          margin: EdgeInsets.only(bottom: isSmallScreen ? 12 : 16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+                              width: isSmallScreen ? 1.5 : 2,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.router,
+                                color: Theme.of(context).colorScheme.secondary,
+                                size: isSmallScreen ? 20 : 24,
+                              ),
+                              SizedBox(width: isSmallScreen ? 8 : 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Select Hub',
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Colors.grey,
+                                        fontSize: isSmallScreen ? 10 : 12,
+                                      ),
+                                    ),
+                                    DropdownButton<String?>(
+                                      value: _selectedHubSerial,
+                                      isExpanded: true,
+                                      underline: const SizedBox(),
+                                      style: TextStyle(fontSize: isSmallScreen ? 12 : 14),
+                                      items: [
+                                        DropdownMenuItem<String?>(
+                                          value: null,
+                                          child: Text(
+                                            'All Hubs (Combined)',
+                                            style: TextStyle(fontSize: isSmallScreen ? 12 : 14),
+                                          ),
+                                        ),
+                                        ..._availableHubs.map((hub) {
+                                          final serial = hub['serialNumber']!;
+                                          final nickname = hub['nickname']!;
+                                          return DropdownMenuItem<String?>(
+                                            value: serial,
+                                            child: Text(
+                                              '$nickname (${serial.substring(0, isSmallScreen ? 6 : 8)}...)',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(fontSize: isSmallScreen ? 12 : 14),
+                                            ),
+                                          );
+                                        }),
+                                      ],
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _selectedHubSerial = value;
+                                          _streamKey++; // Force stream rebuild
+                                        });
+                                        // Restart SSR state listener for the new hub selection
+                                        _startSsrStateListener();
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      // Combined Price and Due Date on Same Line
+                      Row(
+                        children: [
+                          Expanded(
+                            child: MiniNotificationBox(isSmallScreen: isSmallScreen),
+                          ),
+                          Consumer<DueDateProvider>(
+                            builder: (context, dueDateProvider, _) {
+                              if (dueDateProvider.dueDate == null) return const SizedBox.shrink();
+                              return const SizedBox(width: 8);
+                            },
+                          ),
+                          Consumer<DueDateProvider>(
+                            builder: (context, dueDateProvider, _) {
+                              if (dueDateProvider.dueDate == null) return const SizedBox.shrink();
+
+                              return Expanded(
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isSmallScreen ? 8 : 12,
+                                    vertical: isSmallScreen ? 6 : 8,
+                                  ),
+                                  margin: EdgeInsets.only(bottom: isSmallScreen ? 12 : 16),
+                                  decoration: BoxDecoration(
+                                    color: dueDateProvider.isOverdue
+                                        ? Colors.red.withValues(alpha: 0.1)
+                                        : Theme.of(context).cardColor,
+                                    borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
+                                    border: Border.all(
+                                      color: dueDateProvider.isOverdue
+                                          ? Colors.red
+                                          : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
+                                      width: isSmallScreen ? 1.5 : 2,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.calendar_today,
+                                        color: dueDateProvider.isOverdue
+                                            ? Colors.red
+                                            : Theme.of(context).colorScheme.secondary,
+                                        size: isSmallScreen ? 20 : 24,
+                                      ),
+                                      SizedBox(width: isSmallScreen ? 8 : 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Due Date',
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                color: Colors.grey,
+                                                fontSize: isSmallScreen ? 10 : 12,
+                                              ),
+                                            ),
+                                            Text(
+                                              dueDateProvider.getFormattedDueDate() ?? '',
+                                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: isSmallScreen ? 12 : 14,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: isSmallScreen ? 8 : 12,
+                                          vertical: isSmallScreen ? 4 : 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: dueDateProvider.isOverdue
+                                              ? Colors.red
+                                              : Theme.of(context).colorScheme.secondary,
+                                          borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 10),
+                                        ),
+                                        child: Text(
+                                          dueDateProvider.isOverdue
+                                              ? 'Overdue ${dueDateProvider.getDaysRemaining()!.abs()}d'
+                                              : '${dueDateProvider.getDaysRemaining()}d left',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: isSmallScreen ? 10 : 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                       // Metric Selection Buttons for Live Chart - At the very top
                       SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -380,7 +656,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           children: _MetricType.values.map((metric) {
                             final metricColor = _getMetricColor(metric);
                             return Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                              padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 3.0 : 4.0),
                               child: ChoiceChip(
                                 label: Text(
                                   metric.toString().split('.').last.toUpperCase(),
@@ -389,6 +665,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                         ? Colors.white
                                         : metricColor,
                                     fontWeight: FontWeight.bold,
+                                    fontSize: isSmallScreen ? 10 : 12,
                                   ),
                                 ),
                                 selected: _liveChartMetric == metric,
@@ -396,7 +673,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                 backgroundColor: metricColor.withOpacity(0.1),
                                 side: BorderSide(
                                   color: metricColor,
-                                  width: 2,
+                                  width: isSmallScreen ? 1.5 : 2,
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isSmallScreen ? 6 : 8,
+                                  vertical: isSmallScreen ? 4 : 6,
                                 ),
                                 onSelected: (selected) {
                                   if (selected) {
@@ -410,68 +691,100 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           }).toList(),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: isSmallScreen ? 12 : 16),
                       // 60-Second Live Chart at the TOP (independent of time range selection)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Live ${_liveChartMetric.toString().split('.').last.capitalize()} Chart (Last 60 Seconds)',
+                                  isSmallScreen
+                                      ? 'Live ${_liveChartMetric.toString().split('.').last.capitalize()} (60s)'
+                                      : 'Live ${_liveChartMetric.toString().split('.').last.capitalize()} Chart (Last 60 Seconds)',
                                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    fontSize: 20,
+                                    fontSize: isSmallScreen ? 14 : 20,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Real-time ${_liveChartMetric.toString().split('.').last} from all active hubs',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.grey,
-                                    fontStyle: FontStyle.italic,
+                                SizedBox(height: isSmallScreen ? 4 : 8),
+                                if (!isSmallScreen)
+                                  Text(
+                                    _selectedHubSerial != null
+                                        ? 'Real-time ${_liveChartMetric.toString().split('.').last} from ${_availableHubs.firstWhere((h) => h['serialNumber'] == _selectedHubSerial)['nickname']}'
+                                        : 'Real-time ${_liveChartMetric.toString().split('.').last} from all active hubs',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Colors.grey,
+                                      fontStyle: FontStyle.italic,
+                                    ),
                                   ),
+                                SizedBox(height: isSmallScreen ? 2 : 4),
+                                // Current time/date display for live chart
+                                StreamBuilder<DateTime>(
+                                  stream: Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now()),
+                                  builder: (context, snapshot) {
+                                    final now = snapshot.data ?? DateTime.now();
+                                    return Text(
+                                      DateFormat('MMM d, yyyy • HH:mm:ss').format(now),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.secondary,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: isSmallScreen ? 11 : 13,
+                                      ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
                           ),
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               // Connection Status Indicator
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isSmallScreen ? 6 : 8,
+                                  vertical: isSmallScreen ? 3 : 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: _isDeviceConnected ? Colors.green : Colors.red,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
                                       _isDeviceConnected ? Icons.wifi : Icons.wifi_off,
-                                      size: 14,
+                                      size: isSmallScreen ? 12 : 14,
                                       color: Colors.white,
                                     ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _isDeviceConnected ? 'Connected' : 'Offline',
-                                      style: const TextStyle(color: Colors.white, fontSize: 11),
-                                    ),
+                                    SizedBox(width: isSmallScreen ? 3 : 4),
+                                    if (!isSmallScreen)
+                                      Text(
+                                        _isDeviceConnected ? 'Connected' : 'Offline',
+                                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                                      ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: isSmallScreen ? 4 : 8),
                               // Export Button
                               IconButton(
-                                icon: const Icon(Icons.download),
+                                icon: Icon(Icons.download, size: isSmallScreen ? 20 : 24),
                                 onPressed: () => _exportDataToCSV(allData),
                                 tooltip: 'Export to CSV',
+                                padding: EdgeInsets.all(isSmallScreen ? 4 : 8),
+                                constraints: BoxConstraints(
+                                  minWidth: isSmallScreen ? 32 : 48,
+                                  minHeight: isSmallScreen ? 32 : 48,
+                                ),
                               ),
                               // Refresh Button
                               IconButton(
-                                icon: const Icon(Icons.refresh),
+                                icon: Icon(Icons.refresh, size: isSmallScreen ? 20 : 24),
                                 onPressed: () {
                                   setState(() {
                                     _isInitialized = false;
@@ -479,129 +792,281 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                   _initializeHubStreams();
                                 },
                                 tooltip: 'Refresh data',
+                                padding: EdgeInsets.all(isSmallScreen ? 4 : 8),
+                                constraints: BoxConstraints(
+                                  minWidth: isSmallScreen ? 32 : 48,
+                                  minHeight: isSmallScreen ? 32 : 48,
+                                ),
                               ),
                             ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      SizedBox(height: isSmallScreen ? 8 : 12),
                       _build60SecondLiveChart(),
-                      const SizedBox(height: 30),
+                      SizedBox(height: isSmallScreen ? 20 : 30),
 
                       // Historical Analytics Section
                       Text(
                         'Historical Analytics',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontSize: 20,
+                          fontSize: isSmallScreen ? 16 : 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      // Last Update Time
-                      Text(
-                        'Last update: ${_getTimeSinceLastUpdate()}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontStyle: FontStyle.italic,
-                          color: Colors.grey,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Metric Selection Buttons and Time Range Buttons
+                      SizedBox(height: isSmallScreen ? 6 : 8),
+                      // Current time/date and last update info
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // Metric buttons on the left
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: _MetricType.values.map((metric) {
-                                final metricColor = _getMetricColor(metric);
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                                  child: ChoiceChip(
-                                    label: Text(
-                                      metric.toString().split('.').last.toUpperCase(),
-                                      style: TextStyle(
-                                        color: _selectedMetric == metric
-                                            ? Colors.white
-                                            : metricColor,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    selected: _selectedMetric == metric,
-                                    selectedColor: metricColor,
-                                    backgroundColor: metricColor.withOpacity(0.1),
-                                    side: BorderSide(
-                                      color: metricColor,
-                                      width: 2,
-                                    ),
-                                    onSelected: (selected) {
-                                      if (selected) {
-                                        setState(() {
-                                          _selectedMetric = metric;
-                                        });
-                                      }
-                                    },
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                          const Spacer(),
-                          // Time Range buttons on the rightmost side
-                          Row(
-                            children: _TimeRange.values.map((timeRange) {
-                              String label;
-                              switch (timeRange) {
-                                case _TimeRange.hourly:
-                                  label = 'H';
-                                  break;
-                                case _TimeRange.daily:
-                                  label = 'D';
-                                  break;
-                                case _TimeRange.weekly:
-                                  label = 'W';
-                                  break;
-                                case _TimeRange.monthly:
-                                  label = 'M';
-                                  break;
-                              }
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                                child: SizedBox(
-                                  width: 40,
-                                  height: 40,
-                                  child: ChoiceChip(
-                                    label: Center(
-                                      child: Text(
-                                        label,
-                                        style: TextStyle(
-                                          color: _selectedTimeRange == timeRange
-                                              ? Colors.white
-                                              : Theme.of(context).colorScheme.onSurface,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ),
-                                    selected: _selectedTimeRange == timeRange,
-                                    selectedColor: Theme.of(context).colorScheme.primary,
-                                    padding: EdgeInsets.zero,
-                                    labelPadding: EdgeInsets.zero,
-                                    onSelected: (selected) {
-                                      if (selected) {
-                                        setState(() {
-                                          _selectedTimeRange = timeRange;
-                                        });
-                                      }
-                                    },
+                          // Current Date/Time for historical chart - FIRST
+                          StreamBuilder<DateTime>(
+                            stream: Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now()),
+                            builder: (context, snapshot) {
+                              final now = snapshot.data ?? DateTime.now();
+                              return Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isSmallScreen ? 8 : 10,
+                                  vertical: isSmallScreen ? 4 : 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
                                   ),
                                 ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.access_time,
+                                      size: isSmallScreen ? 12 : 14,
+                                      color: Theme.of(context).colorScheme.secondary,
+                                    ),
+                                    SizedBox(width: isSmallScreen ? 4 : 6),
+                                    Text(
+                                      DateFormat('MMM d, yyyy • HH:mm:ss').format(now),
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.secondary,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: isSmallScreen ? 10 : 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               );
-                            }).toList(),
+                            },
+                          ),
+                          // Last Update Time - SECOND
+                          Text(
+                            'Last update: ${_getTimeSinceLastUpdate()}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontStyle: FontStyle.italic,
+                              color: Colors.grey,
+                              fontSize: isSmallScreen ? 11 : 13,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      SizedBox(height: isSmallScreen ? 12 : 16),
+                      // Metric Selection Buttons and Time Range Buttons
+                      isSmallScreen
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Metric buttons
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: _MetricType.values.map((metric) {
+                                      final metricColor = _getMetricColor(metric);
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                                        child: ChoiceChip(
+                                          label: Text(
+                                            metric.toString().split('.').last.toUpperCase(),
+                                            style: TextStyle(
+                                              color: _selectedMetric == metric
+                                                  ? Colors.white
+                                                  : metricColor,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                          selected: _selectedMetric == metric,
+                                          selectedColor: metricColor,
+                                          backgroundColor: metricColor.withOpacity(0.1),
+                                          side: BorderSide(
+                                            color: metricColor,
+                                            width: 1.5,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                          onSelected: (selected) {
+                                            if (selected) {
+                                              setState(() {
+                                                _selectedMetric = metric;
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                // Time Range buttons
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: _TimeRange.values.map((timeRange) {
+                                    String label;
+                                    switch (timeRange) {
+                                      case _TimeRange.hourly:
+                                        label = 'H';
+                                        break;
+                                      case _TimeRange.daily:
+                                        label = 'D';
+                                        break;
+                                      case _TimeRange.weekly:
+                                        label = 'W';
+                                        break;
+                                      case _TimeRange.monthly:
+                                        label = 'M';
+                                        break;
+                                    }
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                                      child: SizedBox(
+                                        width: 36,
+                                        height: 36,
+                                        child: ChoiceChip(
+                                          label: Center(
+                                            child: Text(
+                                              label,
+                                              style: TextStyle(
+                                                color: _selectedTimeRange == timeRange
+                                                    ? Colors.white
+                                                    : Theme.of(context).colorScheme.onSurface,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ),
+                                          selected: _selectedTimeRange == timeRange,
+                                          selectedColor: Theme.of(context).colorScheme.primary,
+                                          padding: EdgeInsets.zero,
+                                          labelPadding: EdgeInsets.zero,
+                                          onSelected: (selected) {
+                                            if (selected) {
+                                              setState(() {
+                                                _selectedTimeRange = timeRange;
+                                                _streamKey++; // Force stream rebuild
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                // Metric buttons on the left
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: _MetricType.values.map((metric) {
+                                      final metricColor = _getMetricColor(metric);
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                        child: ChoiceChip(
+                                          label: Text(
+                                            metric.toString().split('.').last.toUpperCase(),
+                                            style: TextStyle(
+                                              color: _selectedMetric == metric
+                                                  ? Colors.white
+                                                  : metricColor,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          selected: _selectedMetric == metric,
+                                          selectedColor: metricColor,
+                                          backgroundColor: metricColor.withOpacity(0.1),
+                                          side: BorderSide(
+                                            color: metricColor,
+                                            width: 2,
+                                          ),
+                                          onSelected: (selected) {
+                                            if (selected) {
+                                              setState(() {
+                                                _selectedMetric = metric;
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                                const Spacer(),
+                                // Time Range buttons on the rightmost side
+                                Row(
+                                  children: _TimeRange.values.map((timeRange) {
+                                    String label;
+                                    switch (timeRange) {
+                                      case _TimeRange.hourly:
+                                        label = 'H';
+                                        break;
+                                      case _TimeRange.daily:
+                                        label = 'D';
+                                        break;
+                                      case _TimeRange.weekly:
+                                        label = 'W';
+                                        break;
+                                      case _TimeRange.monthly:
+                                        label = 'M';
+                                        break;
+                                    }
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                                      child: SizedBox(
+                                        width: 40,
+                                        height: 40,
+                                        child: ChoiceChip(
+                                          label: Center(
+                                            child: Text(
+                                              label,
+                                              style: TextStyle(
+                                                color: _selectedTimeRange == timeRange
+                                                    ? Colors.white
+                                                    : Theme.of(context).colorScheme.onSurface,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+                                          selected: _selectedTimeRange == timeRange,
+                                          selectedColor: Theme.of(context).colorScheme.primary,
+                                          padding: EdgeInsets.zero,
+                                          labelPadding: EdgeInsets.zero,
+                                          onSelected: (selected) {
+                                            if (selected) {
+                                              setState(() {
+                                                _selectedTimeRange = timeRange;
+                                                _streamKey++; // Force stream rebuild
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
+                      SizedBox(height: isSmallScreen ? 12 : 16),
                       _buildLiveChart(filteredData), // Historical chart that changes with time range
                     ],
                   ),
@@ -729,11 +1194,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             final currentValue = _getMetricValue(latestSpot, _liveChartMetric);
             final unit = _getMetricUnit(_liveChartMetric);
 
+            // For energy metric, also show cost
+            final isEnergyMetric = _liveChartMetric == _MetricType.energy;
+            final currentCost = isEnergyMetric ? _getMetricValue(latestSpot, _liveChartMetric, calculateCost: true) : 0.0;
+
             // Calculate stats for 60-second data
             final values = recentData.map((spot) => _getMetricValue(spot, _liveChartMetric)).toList();
             final minValue = values.reduce((a, b) => a < b ? a : b);
             final maxValue = values.reduce((a, b) => a > b ? a : b);
             final avgValue = values.reduce((a, b) => a + b) / values.length;
+
+            // Calculate cost stats if energy metric
+            final List<double> costValues = isEnergyMetric ? recentData.map((spot) => _getMetricValue(spot, _liveChartMetric, calculateCost: true)).toList() : <double>[];
+            final minCost = isEnergyMetric ? costValues.reduce((a, b) => a < b ? a : b) : 0.0;
+            final maxCost = isEnergyMetric ? costValues.reduce((a, b) => a > b ? a : b) : 0.0;
+            final avgCost = isEnergyMetric ? costValues.reduce((a, b) => a + b) / costValues.length : 0.0;
 
             return Column(
               children: [
@@ -786,6 +1261,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                               fontSize: 32,
                             ),
                           ),
+                          if (isEnergyMetric)
+                            Text(
+                              '≈ ₱${currentCost.toStringAsFixed(2)}',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.9),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
+                            ),
                         ],
                       ),
                     ],
@@ -796,15 +1280,27 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: _statCard('Min', '${minValue.toStringAsFixed(2)} $unit', Colors.blue),
+                      child: _statCard(
+                        'Min',
+                        '${minValue.toStringAsFixed(2)} $unit${isEnergyMetric ? '\n₱${minCost.toStringAsFixed(2)}' : ''}',
+                        Colors.blue
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: _statCard('Avg', '${avgValue.toStringAsFixed(2)} $unit', Colors.green),
+                      child: _statCard(
+                        'Avg',
+                        '${avgValue.toStringAsFixed(2)} $unit${isEnergyMetric ? '\n₱${avgCost.toStringAsFixed(2)}' : ''}',
+                        Colors.green
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: _statCard('Max', '${maxValue.toStringAsFixed(2)} $unit', Colors.orange),
+                      child: _statCard(
+                        'Max',
+                        '${maxValue.toStringAsFixed(2)} $unit${isEnergyMetric ? '\n₱${maxCost.toStringAsFixed(2)}' : ''}',
+                        Colors.orange
+                      ),
                     ),
                   ],
                 ),
@@ -813,11 +1309,39 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           },
         ),
         const SizedBox(height: 12),
+        // Pause indicator
+        if (_isChartPaused)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1.5),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.pause_circle_outline, color: Colors.orange, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Chart paused - Central Hub SSR is OFF',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         RealtimeLineChart(
           dataStream: widget.realtimeDbService.getLiveChartDataStream(),
           getMetricValue: (spot) => _getMetricValue(spot, _liveChartMetric),
           metricUnit: _getMetricUnit(_liveChartMetric),
           lineColor: _getMetricColor(_liveChartMetric),
+          isPaused: _isChartPaused,
         ),
       ],
     );
@@ -826,6 +1350,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildLiveChart(List<TimestampedFlSpot> spots) {
     // Calculate statistics
     final stats = _calculateStats(spots);
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
+    final isEnergyMetric = _selectedMetric == _MetricType.energy;
+
+    // Calculate cost stats if energy metric is selected
+    Map<String, double> costStats = {'min': 0.0, 'max': 0.0, 'avg': 0.0};
+    if (isEnergyMetric && spots.isNotEmpty) {
+      final List<double> costValues = spots.map((spot) => _getMetricValue(spot, _selectedMetric, calculateCost: true)).toList();
+      final minCost = costValues.reduce((a, b) => a < b ? a : b);
+      final maxCost = costValues.reduce((a, b) => a > b ? a : b);
+      final avgCost = costValues.reduce((a, b) => a + b) / costValues.length;
+      costStats = {'min': minCost, 'max': maxCost, 'avg': avgCost};
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -875,56 +1411,95 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         if (spots.isNotEmpty)
           Column(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? 14 : 18,
+                  vertical: isSmallScreen ? 12 : 16,
+                ),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Theme.of(context).colorScheme.surface,
-                      Theme.of(context).colorScheme.primaryContainer,
-                      Theme.of(context).primaryColor,
+                      _getMetricColor(_selectedMetric),
+                      _getMetricColor(_selectedMetric).withOpacity(0.8),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: _getMetricColor(_selectedMetric).withOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 5),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
                       blurRadius: 8,
-                      offset: const Offset(0, 4),
+                      offset: const Offset(0, 3),
                     ),
                   ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      _getMetricIcon(_selectedMetric),
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      size: 32,
+                    Container(
+                      padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.white.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _getMetricIcon(_selectedMetric),
+                        color: Colors.white,
+                        size: isSmallScreen ? 28 : 36,
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Current ${_selectedMetric.toString().split('.').last.capitalize()}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.9),
-                            fontWeight: FontWeight.w500,
+                    SizedBox(width: isSmallScreen ? 12 : 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Current ${_selectedMetric.toString().split('.').last.capitalize()}',
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.95),
+                              fontWeight: FontWeight.w600,
+                              fontSize: isSmallScreen ? 13 : 15,
+                              letterSpacing: 0.5,
+                            ),
                           ),
-                        ),
-                        Text(
-                          '${_getMetricValue(spots.last, _selectedMetric).toStringAsFixed(2)} ${_getMetricUnit(_selectedMetric)}',
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 32,
+                          const SizedBox(height: 4),
+                          Text(
+                            '${_getMetricValue(spots.last, _selectedMetric).toStringAsFixed(2)} ${_getMetricUnit(_selectedMetric)}',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: isSmallScreen ? 26 : 34,
+                              letterSpacing: 1,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                          if (isEnergyMetric)
+                            Text(
+                              '≈ ₱${_getMetricValue(spots.last, _selectedMetric, calculateCost: true).toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.95),
+                                fontWeight: FontWeight.w600,
+                                fontSize: isSmallScreen ? 16 : 20,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -934,15 +1509,27 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _statCard('Min', '${stats['min']!.toStringAsFixed(2)} ${_getMetricUnit(_selectedMetric)}', Colors.blue),
+                    child: _statCard(
+                      'Min',
+                      '${stats['min']!.toStringAsFixed(2)} ${_getMetricUnit(_selectedMetric)}${isEnergyMetric ? '\n₱${costStats['min']!.toStringAsFixed(2)}' : ''}',
+                      Colors.blue
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _statCard('Avg', '${stats['avg']!.toStringAsFixed(2)} ${_getMetricUnit(_selectedMetric)}', Colors.green),
+                    child: _statCard(
+                      'Avg',
+                      '${stats['avg']!.toStringAsFixed(2)} ${_getMetricUnit(_selectedMetric)}${isEnergyMetric ? '\n₱${costStats['avg']!.toStringAsFixed(2)}' : ''}',
+                      Colors.green
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _statCard('Max', '${stats['max']!.toStringAsFixed(2)} ${_getMetricUnit(_selectedMetric)}', Colors.orange),
+                    child: _statCard(
+                      'Max',
+                      '${stats['max']!.toStringAsFixed(2)} ${_getMetricUnit(_selectedMetric)}${isEnergyMetric ? '\n₱${costStats['max']!.toStringAsFixed(2)}' : ''}',
+                      Colors.orange
+                    ),
                   ),
                 ],
               ),
@@ -951,7 +1538,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         const SizedBox(height: 12),
         // Use same approach as first chart - animated chart that moves the X-axis
         SizedBox(
-          height: 300,
+          height: MediaQuery.of(context).size.width < 600 ? 250 : 300,
           child: _AnimatedHistoricalChart(
             spots: spots,
             selectedMetric: _selectedMetric,
@@ -969,32 +1556,59 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _statCard(String label, String value, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: EdgeInsets.all(isSmallScreen ? 10 : 14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            color.withOpacity(0.15),
+            color.withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(isSmallScreen ? 14 : 16),
+        border: Border.all(
+          color: color.withOpacity(0.4),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: isSmallScreen ? 11 : 13,
               color: color,
               fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: isSmallScreen ? 4 : 6),
           Text(
             value,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 13 : 16,
               color: color,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
           ),
         ],
       ),
@@ -1002,40 +1616,76 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget summaryCard(String title, String value, String change) {
-    return Container(
-      padding: const EdgeInsets.all(20),
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(isSmallScreen ? 18 : 22),
         gradient: LinearGradient(
-          colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).cardColor,
+            Theme.of(context).primaryColor.withOpacity(0.8),
+          ],
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha((255 * 0.3).round()),
+            color: Theme.of(context).primaryColor.withOpacity(0.3),
             blurRadius: 20,
-            offset: const Offset(0, 10),
+            offset: const Offset(0, 8),
+            spreadRadius: -5,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 8),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontSize: isSmallScreen ? 13 : 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+          SizedBox(height: isSmallScreen ? 10 : 12),
           Text(
             value,
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontSize: 28,
-              fontWeight: FontWeight.w600,
+              fontSize: isSmallScreen ? 24 : 30,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            change,
-            style: TextStyle(
-              fontSize: 14,
-              color: Theme.of(context).colorScheme.secondary,
-              fontWeight: FontWeight.w500,
+          SizedBox(height: isSmallScreen ? 6 : 8),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: isSmallScreen ? 8 : 10,
+              vertical: isSmallScreen ? 4 : 5,
+            ),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.secondary.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Text(
+              change,
+              style: TextStyle(
+                fontSize: isSmallScreen ? 12 : 14,
+                color: Theme.of(context).colorScheme.secondary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -1170,18 +1820,40 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
     final now = DateTime.now();
     final startTime = now.subtract(widget.getTimeRangeDuration(widget.selectedTimeRange));
 
-    // X-axis range based on current time (moves as time progresses)
-    final double minX = startTime.millisecondsSinceEpoch.toDouble();
-    final double maxX = now.millisecondsSinceEpoch.toDouble();
-
-    // Filter spots to time range and convert to FlSpot with absolute timestamps
+    // Filter spots to time range first
     final filteredSpots = widget.spots.where((spot) {
-      return spot.timestamp.isAfter(startTime) && spot.timestamp.isBefore(now);
+      final spotTime = spot.timestamp.millisecondsSinceEpoch.toDouble();
+      final theoreticalMinX = startTime.millisecondsSinceEpoch.toDouble();
+      final theoreticalMaxX = now.millisecondsSinceEpoch.toDouble();
+      return spotTime >= theoreticalMinX && spotTime <= theoreticalMaxX;
     }).toList();
 
+    // X-axis range: Use actual data range if available, otherwise use theoretical range
+    double minX;
+    double maxX;
+
+    if (filteredSpots.isNotEmpty) {
+      // Use the actual data's min/max timestamps
+      minX = filteredSpots.map((s) => s.timestamp.millisecondsSinceEpoch.toDouble()).reduce((a, b) => a < b ? a : b);
+      maxX = filteredSpots.map((s) => s.timestamp.millisecondsSinceEpoch.toDouble()).reduce((a, b) => a > b ? a : b);
+
+      // Add small padding (2% on each side) for better visualization
+      final range = maxX - minX;
+      final padding = range * 0.02;
+      minX = minX - padding;
+      maxX = maxX + padding;
+    } else {
+      // No data: use theoretical time range
+      minX = startTime.millisecondsSinceEpoch.toDouble();
+      maxX = now.millisecondsSinceEpoch.toDouble();
+    }
+
     List<FlSpot> chartSpots = filteredSpots.map((spot) {
+      final xValue = spot.timestamp.millisecondsSinceEpoch.toDouble();
+      // Clamp X values to ensure they stay within chart boundaries
+      final clampedX = xValue.clamp(minX, maxX);
       return FlSpot(
-        spot.timestamp.millisecondsSinceEpoch.toDouble(),
+        clampedX,
         widget.getMetricValue(spot, widget.selectedMetric),
       );
     }).toList();
@@ -1263,10 +1935,12 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
             top: BorderSide.none,
           ),
         ),
+        clipData: FlClipData.all(), // Clip lines to stay within chart boundaries
         lineBarsData: [
           LineChartBarData(
             spots: chartSpots,
-            isCurved: true,
+            isCurved: true, // Use smooth curves
+            curveSmoothness: 0.2, // Low smoothness to prevent extreme curves
             color: chartColor,
             barWidth: 3,
             belowBarData: BarAreaData(
@@ -1274,8 +1948,18 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
               color: chartColor.withAlpha((255 * 0.2).round()),
             ),
             dotData: FlDotData(
-              show: chartSpots.length < 50, // Show dots only if not too many points
+              show: true, // Always show dots to mark specific data points
+              getDotPainter: (spot, percent, barData, index) {
+                return FlDotCirclePainter(
+                  radius: 4,
+                  color: chartColor,
+                  strokeWidth: 2,
+                  strokeColor: chartColor.withAlpha((255 * 0.5).round()),
+                );
+              },
             ),
+            preventCurveOverShooting: true, // Prevent curve from going beyond data points
+            preventCurveOvershootingThreshold: 10.0, // Strict threshold to prevent sideways curves
           ),
         ],
         lineTouchData: LineTouchData(

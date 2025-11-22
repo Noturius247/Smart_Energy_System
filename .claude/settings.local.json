@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(flutter run:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)",
+      "Bash(\"C:/Android/sdk/cmdline-tools/latest/bin/sdkmanager.bat\" --list_installed)",
+      "Bash(test:*)",
+      "Bash(\"C:/Android/sdk/cmdline-tools/latest/bin/sdkmanager.bat\" \"system-images;android-35;google_apis_playstore;x86_64\")",
+      "Bash(flutter analyze:*)"
     ],
     "deny": [],
     "ask": []
