@@ -1,4 +1,3 @@
-import 'package:intl/intl.dart';
 import 'package:rflutter_alert/rflutter_alert.dart';
 import 'dart:convert';
 import 'dart:async';
@@ -8,12 +7,11 @@ import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:collection/collection.dart'; // Added for firstWhereOrNull
-import '../theme_provider.dart';
 import '../constants.dart';
 import 'connected_devices.dart';
 
-import 'custom_header.dart';
 import '../realtime_db_service.dart';
+import '../notification_provider.dart';
 
 class DevicesTab extends StatefulWidget {
   final RealtimeDbService realtimeDbService;
@@ -146,6 +144,18 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       // Process user's hubs (already filtered by query)
       for (final serialNumber in allHubs.keys) {
         final hubData = allHubs[serialNumber] as Map<String, dynamic>;
+
+        // IMPORTANT: Double-check the hub is actually assigned and belongs to this user
+        final bool isAssigned = hubData['assigned'] as bool? ?? false;
+        final String? hubOwnerId = hubData['ownerId'] as String?;
+
+        if (!isAssigned || hubOwnerId != authenticatedUserUID) {
+          print(
+            '[_fetchLinkedCentralHubs] Skipping hub $serialNumber - not assigned or wrong owner (assigned: $isAssigned, ownerId: $hubOwnerId)',
+          );
+          continue; // Skip this hub
+        }
+
         print(
           '[_fetchLinkedCentralHubs] Found owned hub with serial number: $serialNumber.',
         );
@@ -206,16 +216,16 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         print('[_fetchUserDevices] Document data: $data');
 
         final device = ConnectedDevice(
-          name: data['name'] ?? 'Unknown Device',
-          status: data['status'] ?? 'off',
+          name: data['name']?.toString() ?? 'Unknown Device',
+          status: data['status']?.toString() ?? 'off',
           icon: getIconFromCodePoint(
             data['icon'] as int? ?? Icons.devices_other.codePoint,
           ), // Use helper for tree-shaking
           usage: (data['usage'] as num?)?.toDouble() ?? 0.0,
           percent: (data['percent'] as num?)?.toDouble() ?? 0.0,
-          plug: (data['plug']?.toString()),
+          plug: data['plug']?.toString(),
           serialNumber: data['serialNumber']?.toString(),
-          userEmail: data['user_email'] as String?, // Populate userEmail
+          userEmail: data['user_email']?.toString(), // Safely convert to string
           createdAt: (data['createdAt'] as Timestamp?)
               ?.toDate()
               .toString(), // Populate createdAt
@@ -315,10 +325,18 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
             final bool? ssrState = data['ssr_state'] as bool?;
             print('[_listenToHubDataStream] Hub state update - Serial: $serialNumber, SSR: $ssrState');
 
-            // Ignore listener updates if we have a pending toggle for this hub
+            // Only skip update if we're actively toggling AND the state matches what we just set
+            // This prevents conflicts but still allows database to override if values differ
             if (_pendingHubToggles.contains(serialNumber)) {
-              print('[_listenToHubDataStream] Ignoring listener update during pending toggle for: $serialNumber');
-              return;
+              final List<ConnectedDevice>? devices = _groupedDevices[serialNumber];
+              if (devices != null) {
+                final hubIndex = devices.indexWhere((d) => d.plug == null);
+                if (hubIndex != -1 && devices[hubIndex].ssr_state == ssrState) {
+                  // State matches our pending toggle, safe to ignore
+                  print('[_listenToHubDataStream] State matches pending toggle, skipping update for: $serialNumber');
+                  return;
+                }
+              }
             }
 
             if (ssrState != null) {
@@ -620,6 +638,12 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 .collection('devices')
                 .doc(serialNumber)
                 .set(firestoreData);
+
+            // Track device added notification
+            if (mounted) {
+              final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
+              await notificationProvider.trackDeviceAdded('Central Hub ($serialNumber)');
+            }
 
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
@@ -956,113 +980,275 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   Widget _buildPlugDeviceRow(ConnectedDevice plug, bool isSmallScreen) {
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: isSmallScreen ? 16.0 : 24.0,
-        vertical: isSmallScreen ? 8.0 : 10.0,
+        horizontal: isSmallScreen ? 14.0 : 20.0,
+        vertical: isSmallScreen ? 12.0 : 16.0,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
+          Expanded(
+            child: Row(
+              children: [
+                // Modern Icon Container
+                Container(
+                  padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Theme.of(context).colorScheme.secondary,
+                        Theme.of(context).colorScheme.secondary.withOpacity(0.7),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    plug.icon,
+                    color: Colors.white,
+                    size: isSmallScreen ? 20 : 24,
+                  ),
+                ),
+                SizedBox(width: isSmallScreen ? 12 : 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Device Name with modern styling
+                      Text(
+                        plug.name,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontSize: isSmallScreen ? 15 : 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: isSmallScreen ? 4 : 6),
+                      // Status Badge
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isSmallScreen ? 8 : 10,
+                          vertical: isSmallScreen ? 3 : 4,
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: plug.status == "on"
+                                ? [Colors.green.shade400, Colors.green.shade600]
+                                : [Colors.red.shade400, Colors.red.shade600],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: isSmallScreen ? 6 : 8,
+                              height: isSmallScreen ? 6 : 8,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            SizedBox(width: 6),
+                            Text(
+                              plug.status == "on" ? "ONLINE" : "OFFLINE",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: isSmallScreen ? 10 : 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: isSmallScreen ? 6 : 8),
+                      // Metrics with modern layout
+                      Wrap(
+                        spacing: isSmallScreen ? 12 : 16,
+                        runSpacing: isSmallScreen ? 4 : 6,
+                        children: [
+                          if (plug.current != null)
+                            _buildMetricChip(
+                              Icons.flash_on_rounded,
+                              '${plug.current?.toStringAsFixed(2)} A',
+                              Colors.amber,
+                              isSmallScreen,
+                            ),
+                          if (plug.power != null)
+                            _buildMetricChip(
+                              Icons.power_rounded,
+                              '${plug.power?.toStringAsFixed(2)} W',
+                              Colors.orange,
+                              isSmallScreen,
+                            ),
+                          if (plug.voltage != null)
+                            _buildMetricChip(
+                              Icons.electrical_services_rounded,
+                              '${plug.voltage?.toStringAsFixed(2)} V',
+                              Colors.blue,
+                              isSmallScreen,
+                            ),
+                          if (plug.energy != null)
+                            _buildMetricChip(
+                              Icons.battery_charging_full_rounded,
+                              '${plug.energy?.toStringAsFixed(2)} kWh',
+                              Colors.green,
+                              isSmallScreen,
+                            ),
+                        ],
+                      ),
+                      if (plug.energy != null) ...[
+                        SizedBox(height: isSmallScreen ? 4 : 6),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isSmallScreen ? 8 : 10,
+                            vertical: isSmallScreen ? 3 : 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.purple.shade200,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.attach_money_rounded,
+                                size: isSmallScreen ? 12 : 14,
+                                color: Colors.purple.shade700,
+                              ),
+                              SizedBox(width: 4),
+                              Text(
+                                'Cost: $_currencySymbol${(plug.energy! * _pricePerKWH).toStringAsFixed(2)}',
+                                style: TextStyle(
+                                  fontSize: isSmallScreen ? 10 : 12,
+                                  color: Colors.purple.shade700,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: isSmallScreen ? 8 : 12),
+          // Modern Action Buttons
+          Column(
             children: [
-              Icon(
-                plug.icon,
-                color: Theme.of(context).colorScheme.secondary,
-                size: isSmallScreen ? 24 : 32,
+              // Edit Button
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _editNicknameDialog(plug),
+                  child: Container(
+                    padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.blue.shade200,
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.edit_rounded,
+                      color: Colors.blue.shade700,
+                      size: isSmallScreen ? 18 : 22,
+                    ),
+                  ),
+                ),
               ),
-              SizedBox(width: isSmallScreen ? 10 : 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    plug.name,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontSize: isSmallScreen ? 14 : null,
+              SizedBox(height: isSmallScreen ? 8 : 10),
+              // Toggle Button with animation
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(25),
+                  onTap: () => _togglePlugSsrState(plug),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 10 : 12,
+                      vertical: isSmallScreen ? 8 : 10,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: (plug.ssr_state ?? false)
+                            ? [Colors.green.shade400, Colors.green.shade600]
+                            : [Colors.grey.shade300, Colors.grey.shade500],
+                      ),
+                      borderRadius: BorderRadius.circular(25),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (plug.ssr_state ?? false)
+                              ? Colors.green.withOpacity(0.3)
+                              : Colors.grey.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      (plug.ssr_state ?? false)
+                          ? Icons.power_settings_new_rounded
+                          : Icons.power_off_rounded,
+                      color: Colors.white,
+                      size: isSmallScreen ? 20 : 24,
                     ),
                   ),
-                  Text(
-                    plug.status == "on" ? "Status: On" : "Status: Off",
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontSize: isSmallScreen ? 12 : null,
-                      color: plug.status == "on" ? Colors.green : Colors.red,
-                    ),
-                  ),
-                  Text(
-                    'SSR State: ${plug.ssr_state ?? false}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontSize: isSmallScreen ? 10 : null,
-                    ),
-                  ),
-                  if (plug.current != null)
-                    Text(
-                      'Current: ${plug.current?.toStringAsFixed(2)} A',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: isSmallScreen ? 10 : null,
-                      ),
-                    ),
-                  if (plug.energy != null) ...[
-                    Text(
-                      'Energy: ${plug.energy?.toStringAsFixed(2)} kWh',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: isSmallScreen ? 10 : null,
-                      ),
-                    ),
-                    Text(
-                      'Cost: $_currencySymbol${(plug.energy! * _pricePerKWH).toStringAsFixed(2)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: isSmallScreen ? 10 : null,
-                      ),
-                    ),
-                  ],
-                  if (plug.power != null)
-                    Text(
-                      'Power: ${plug.power?.toStringAsFixed(2)} W',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: isSmallScreen ? 10 : null,
-                      ),
-                    ),
-                  if (plug.voltage != null)
-                    Text(
-                      'Voltage: ${plug.voltage?.toStringAsFixed(2)} V',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: isSmallScreen ? 10 : null,
-                      ),
-                    ),
-                ],
+                ),
               ),
             ],
           ),
-          Row(
-            children: [
-              IconButton(
-                icon: Icon(
-                  Icons.edit,
-                  color: Colors.blueAccent,
-                  size: isSmallScreen ? 20 : 28,
-                ),
-                tooltip: "Edit Nickname",
-                onPressed: () => _editNicknameDialog(plug),
-              ),
-              IconButton(
-                icon: Icon(
-                  Icons.delete,
-                  color: Colors.redAccent,
-                  size: isSmallScreen ? 20 : 28,
-                ),
-                tooltip: "Delete Device",
-                onPressed: () => _deletePlugDialog(plug),
-              ),
-              IconButton(
-                icon: Icon(
-                  (plug.ssr_state ?? false)
-                      ? Icons.toggle_on
-                      : Icons.toggle_off,
-                  color: (plug.ssr_state ?? false) ? Colors.green : Colors.grey,
-                  size: isSmallScreen ? 32 : 40,
-                ),
-                tooltip: (plug.ssr_state ?? false) ? "Turn Off" : "Turn On",
-                onPressed: () => _togglePlugSsrState(plug),
-              ),
-            ],
+        ],
+      ),
+    );
+  }
+
+  // Helper method for metric chips
+  Widget _buildMetricChip(IconData icon, String label, MaterialColor color, bool isSmallScreen) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? 6 : 8,
+        vertical: isSmallScreen ? 3 : 4,
+      ),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: isSmallScreen ? 12 : 14,
+            color: color.shade700,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: isSmallScreen ? 10 : 12,
+              color: color.shade700,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -1098,9 +1284,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
     try {
       await dbRef.set(newSsrState);
-
-      // Wait a brief moment for database to settle before removing the lock
-      await Future.delayed(const Duration(milliseconds: 500));
+      debugPrint('[_toggleHubSsrState] Successfully set hub $serialNumber ssr_state to $newSsrState');
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1110,6 +1294,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         ),
       );
     } catch (e) {
+      debugPrint('[_toggleHubSsrState] Error updating hub state: $e');
       // Revert UI on error
       setState(() {
         hub.ssr_state = !newSsrState;
@@ -1123,7 +1308,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         ),
       );
     } finally {
+      // Remove from pending set immediately after database operation completes
       _pendingHubToggles.remove(serialNumber);
+      debugPrint('[_toggleHubSsrState] Removed $serialNumber from pending toggles');
     }
   }
 
@@ -1360,6 +1547,12 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
             .collection('devices')
             .doc(docId)
             .delete();
+
+        // Track device removed notification
+        if (mounted) {
+          final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
+          await notificationProvider.trackDeviceRemoved(device.name);
+        }
       }
 
       if (!mounted) return;
@@ -1374,55 +1567,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     }
   }
 
-  void _deletePlugDialog(ConnectedDevice plug) async {
-    final confirmDelete = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).cardColor,
-        title: Text(
-          "Delete Plug from UI",
-          style: Theme.of(context).textTheme.bodyLarge,
-        ),
-        content: Text(
-          "Are you sure you want to hide '${plug.name}'? This will only remove it from your view.",
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(
-              "Cancel",
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Hide"),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmDelete == true) {
-      if (plug.serialNumber != null && plug.plug != null) {
-        setState(() {
-          _groupedDevices[plug.serialNumber]?.removeWhere(
-            (d) => d.plug == plug.plug,
-          );
-        });
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("${plug.name} has been hidden."),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    }
-  }
 
   void _deleteHubDialog(ConnectedDevice hub) async {
     final confirmDelete = await showDialog<bool>(
@@ -1468,18 +1612,28 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       }
 
       if (hub.serialNumber != null) {
-        // 1. Unassign hub in Realtime Database by setting fields to null/false
+        // 1. Stop the realtime data stream for this hub
+        _realtimeDbService.stopRealtimeDataStream(hub.serialNumber!);
+        print('[_deleteHubDialog] Stopped realtime stream for hub: ${hub.serialNumber}');
+
+        // 2. Unassign hub in Realtime Database by setting fields to null/false
         await FirebaseDatabase.instance
             .ref('$rtdbUserPath/hubs/${hub.serialNumber}')
             .update({'assigned': false, 'ownerId': null, 'user_email': null});
 
-        // 2. Delete hub metadata from Firestore
+        // 3. Delete hub metadata from Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('devices')
             .doc(hub.serialNumber)
             .delete();
+
+        // Track device removed notification
+        if (mounted) {
+          final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
+          await notificationProvider.trackDeviceRemoved(hub.name);
+        }
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1490,7 +1644,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           ),
         );
 
-        // 3. Optimistic UI update
+        // 4. Optimistic UI update
         setState(() {
           _groupedDevices.remove(hub.serialNumber);
         });
@@ -1524,17 +1678,14 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     );
   }
 
-  bool _isSmallScreen(BuildContext context) {
-    return MediaQuery.of(context).size.width <
-        600; // Define your small screen breakpoint
-  }
-
   @override
   Widget build(BuildContext context) {
     return _buildMainContent();
   }
 
   Widget _buildMainContent() {
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -1553,374 +1704,550 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                           child: FadeTransition(
                             opacity: _fadeAnimation,
                             child: ListView(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isSmallScreen ? 12 : 16,
+                                vertical: isSmallScreen ? 8 : 12,
                               ),
                               children: [
                                 // Removed redundant 'Devices' title
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Add Central Hub',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: isSmallScreen ? 12 : 20),
+                                // Modern Header with Icon
                                 Row(
                                   children: [
-                                    Expanded(
-                                      child: TextField(
-                                        controller: _serialNumberController,
-                                        decoration: InputDecoration(
-                                          hintText: 'Enter Serial Number...',
-                                          prefixIcon: Icon(
-                                            Icons.search,
-                                            color: Theme.of(context).colorScheme.secondary,
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Theme.of(context).colorScheme.primary,
+                                            Theme.of(context).colorScheme.secondary,
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.add_circle_outline_rounded,
+                                        color: Colors.white,
+                                        size: isSmallScreen ? 20 : 24,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      'Add Central Hub',
+                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                        fontSize: isSmallScreen ? 18 : 22,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: isSmallScreen ? 12 : 16),
+                                // Modern Search Container
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).cardColor,
+                                    borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                        blurRadius: 20,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _serialNumberController,
+                                          decoration: InputDecoration(
+                                            hintText: 'Enter hub serial number...',
+                                            hintStyle: TextStyle(
+                                              fontSize: isSmallScreen ? 13 : 15,
+                                              color: Colors.grey.shade400,
+                                            ),
+                                            prefixIcon: Container(
+                                              margin: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Icon(
+                                                Icons.qr_code_scanner_rounded,
+                                                color: Theme.of(context).colorScheme.primary,
+                                                size: isSmallScreen ? 20 : 24,
+                                              ),
+                                            ),
+                                            filled: false,
+                                            border: InputBorder.none,
+                                            contentPadding: EdgeInsets.symmetric(
+                                              horizontal: isSmallScreen ? 12 : 16,
+                                              vertical: isSmallScreen ? 14 : 16,
+                                            ),
                                           ),
-                                          filled: true,
-                                          fillColor: Theme.of(
-                                            context,
-                                          ).primaryColor.withAlpha(200),
-                                          border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(24),
-                                            borderSide: BorderSide.none,
+                                          style: TextStyle(
+                                            fontSize: isSmallScreen ? 13 : 15,
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ElevatedButton(
-                                      onPressed: _searchSerialNumber,
-                                      child: const Text('Link'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-            
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Connected Devices',
-                                      style: Theme.of(context).textTheme.bodyLarge
-                                          ?.copyWith(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                    ),
-                                    Text(
-                                      'Price per kWh: $_currencySymbol$_pricePerKWH',
-                                      style: Theme.of(context).textTheme.bodyMedium
-                                          ?.copyWith(
-                                            fontSize: 16,
-                                            color: Theme.of(context).colorScheme.primary,
-                                          ),
-                                    ),
-                                    if (_dueDate != null)
-                                      Text(
-                                        'Due: ${DateFormat.yMMMd().format(_dueDate!)}',
-                                        style: Theme.of(context).textTheme.bodyMedium
-                                            ?.copyWith(
-                                              fontSize: 16,
-                                              color: Theme.of(context).colorScheme.primary,
+                                      Padding(
+                                        padding: const EdgeInsets.all(6),
+                                        child: ElevatedButton(
+                                          onPressed: _searchSerialNumber,
+                                          style: ElevatedButton.styleFrom(
+                                            padding: EdgeInsets.symmetric(
+                                              horizontal: isSmallScreen ? 16 : 24,
+                                              vertical: isSmallScreen ? 14 : 16,
                                             ),
+                                            backgroundColor: Theme.of(context).colorScheme.primary,
+                                            foregroundColor: Colors.white,
+                                            elevation: 0,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(14),
+                                            ),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.link_rounded,
+                                                size: isSmallScreen ? 18 : 20,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                'Link',
+                                                style: TextStyle(
+                                                  fontSize: isSmallScreen ? 13 : 15,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                                const SizedBox(height: 12),
+                                SizedBox(height: isSmallScreen ? 12 : 16),
+
+                                // Connected Devices Header - Responsive Layout
+                                Text(
+                                  'Connected Devices',
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    fontSize: isSmallScreen ? 18 : 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(height: isSmallScreen ? 8 : 12),
             
-                                // Device Cards
-                                ..._groupedDevices.entries.map((entry) {
-                                  final serialNumber = entry.key;
-                                  final devices = entry.value;
-            
-                                  if (serialNumber == 'generic') {
-                                    // Handle generic devices (without serial number)
-                                    return Column(
-                                      children: devices.map((device) {
+                                // Separate sections per hub
+                                if (_groupedDevices.containsKey('generic'))
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Generic Devices',
+                                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold,
+                                          color: Theme.of(context).colorScheme.secondary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      ..._groupedDevices['generic']!.map((device) {
                                         return _buildGenericDeviceCard(
                                           device,
-                                          isSmallScreen(context),
+                                          isSmallScreen,
                                         );
-                                      }).toList(),
-                                    );
-                                  } else {
-                                    // Handle hubs and their plugs
-                                    final hub = devices.firstWhere(
-                                      (d) => d.plug == null,
-                                      orElse: () => devices.first,
-                                    );
-                                    final plugs = devices
-                                        .where((d) => d.plug != null)
-                                        .toList();
-            
-                                    // Calculate aggregated values for all plugs under this hub
-                                    double totalCurrent = 0.0;
-                                    double totalEnergy = 0.0;
-                                    double totalPower = 0.0;
-                                    double totalVoltage = 0.0;
-                                    int activePlugs = 0;
-            
-                                    for (final plug in plugs) {
-                                      if (plug.current != null)
-                                        totalCurrent += plug.current!;
-                                      if (plug.energy != null) totalEnergy += plug.energy!;
-                                      if (plug.power != null) totalPower += plug.power!;
-                                      if (plug.voltage != null)
-                                        totalVoltage += plug.voltage!;
-                                      if (plug.current != null ||
-                                          plug.energy != null ||
-                                          plug.power != null ||
-                                          plug.voltage != null) {
-                                        activePlugs++;
-                                      }
+                                      }),
+                                      const SizedBox(height: 24),
+                                    ],
+                                  ),
+
+                                // Display each hub in its own section
+                                ..._groupedDevices.entries.where((entry) => entry.key != 'generic').map((entry) {
+                                  final serialNumber = entry.key;
+                                  final devices = entry.value;
+
+                                  // Get hub and plugs
+                                  final hub = devices.firstWhere(
+                                    (d) => d.plug == null,
+                                    orElse: () => devices.first,
+                                  );
+                                  final plugs = devices.where((d) => d.plug != null).toList();
+
+                                  // Calculate aggregated values for all plugs under this hub
+                                  double totalEnergy = 0.0;
+                                  double totalPower = 0.0;
+                                  int activePlugs = 0;
+
+                                  for (final plug in plugs) {
+                                    if (plug.energy != null) totalEnergy += plug.energy!;
+                                    if (plug.power != null) totalPower += plug.power!;
+                                    if (plug.current != null ||
+                                        plug.energy != null ||
+                                        plug.power != null ||
+                                        plug.voltage != null) {
+                                      activePlugs++;
                                     }
-            
-                                    return Card(
-                                      color: Theme.of(context).cardColor,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
-                                      margin: EdgeInsets.symmetric(
-                                        vertical: isSmallScreen(context) ? 8 : 12,
-                                      ),
-                                      child: ExpansionTile(
-                                        title: Row(
+                                  }
+
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      // Hub Section Header - Modern Design
+                                      AnimatedContainer(
+                                        duration: const Duration(milliseconds: 300),
+                                        curve: Curves.easeInOut,
+                                        padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
+                                        margin: EdgeInsets.only(
+                                          bottom: isSmallScreen ? 10 : 14,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              Theme.of(context).colorScheme.surface,
+                                              Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                                              Theme.of(context).colorScheme.secondary.withOpacity(0.08),
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                                            width: 1,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                              blurRadius: 20,
+                                              offset: const Offset(0, 8),
+                                              spreadRadius: -5,
+                                            ),
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.05),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Icon(
-                                              hub.icon,
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.secondary,
-                                              size: isSmallScreen(context) ? 28 : 40,
-                                            ),
-                                            SizedBox(
-                                              width: isSmallScreen(context) ? 10 : 16,
-                                            ),
-                                            Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                            Row(
                                               children: [
-                                                Text(
-                                                  hub.name,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        fontSize: isSmallScreen(context)
-                                                            ? 16
-                                                            : null,
+                                                // Modern Icon with background
+                                                Container(
+                                                  padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      begin: Alignment.topLeft,
+                                                      end: Alignment.bottomRight,
+                                                      colors: [
+                                                        Theme.of(context).colorScheme.primary,
+                                                        Theme.of(context).colorScheme.secondary,
+                                                      ],
+                                                    ),
+                                                    borderRadius: BorderRadius.circular(16),
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                                                        blurRadius: 12,
+                                                        offset: const Offset(0, 4),
                                                       ),
+                                                    ],
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.router_rounded,
+                                                    size: isSmallScreen ? 22 : 28,
+                                                    color: Colors.white,
+                                                  ),
                                                 ),
-                                                Text(
-                                                  (hub.ssr_state ?? false)
-                                                      ? "Status: Active"
-                                                      : "Status: Inactive",
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .bodyMedium
-                                                      ?.copyWith(
-                                                        fontSize: isSmallScreen(context)
-                                                            ? 12
-                                                            : null,
+                                                SizedBox(width: isSmallScreen ? 12 : 16),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        hub.nickname != null && hub.nickname!.isNotEmpty
+                                                            ? hub.nickname!
+                                                            : 'Central Hub',
+                                                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                                          fontSize: isSmallScreen ? 18 : 22,
+                                                          fontWeight: FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        'Serial: $serialNumber',
+                                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                          color: Colors.grey[600],
+                                                          fontSize: isSmallScreen ? 11 : 13,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                // Modern Status Badge
+                                                AnimatedContainer(
+                                                  duration: const Duration(milliseconds: 300),
+                                                  padding: EdgeInsets.symmetric(
+                                                    horizontal: isSmallScreen ? 10 : 14,
+                                                    vertical: isSmallScreen ? 6 : 8,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      colors: (hub.ssr_state ?? false)
+                                                          ? [Colors.green.shade400, Colors.green.shade600]
+                                                          : [Colors.red.shade400, Colors.red.shade600],
+                                                    ),
+                                                    borderRadius: BorderRadius.circular(25),
+                                                    boxShadow: [
+                                                      BoxShadow(
                                                         color: (hub.ssr_state ?? false)
-                                                            ? Colors.green
-                                                            : Colors.red,
+                                                            ? Colors.green.withOpacity(0.4)
+                                                            : Colors.red.withOpacity(0.4),
+                                                        blurRadius: 8,
+                                                        offset: const Offset(0, 3),
                                                       ),
+                                                    ],
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Container(
+                                                        width: isSmallScreen ? 6 : 8,
+                                                        height: isSmallScreen ? 6 : 8,
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.white,
+                                                          shape: BoxShape.circle,
+                                                          boxShadow: [
+                                                            BoxShadow(
+                                                              color: Colors.white.withOpacity(0.5),
+                                                              blurRadius: 4,
+                                                              spreadRadius: 1,
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      SizedBox(width: isSmallScreen ? 4 : 6),
+                                                      Text(
+                                                        (hub.ssr_state ?? false) ? 'ACTIVE' : 'OFFLINE',
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontWeight: FontWeight.bold,
+                                                          fontSize: isSmallScreen ? 10 : 12,
+                                                          letterSpacing: 0.5,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
                                                 ),
-                                                if (hub.serialNumber != null)
-                                                  Text(
-                                                    'S/N: ${hub.serialNumber}',
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodySmall
-                                                        ?.copyWith(
-                                                          color: Colors.grey,
-                                                          fontSize: isSmallScreen(context)
-                                                              ? 10
-                                                              : null,
+                                              ],
+                                            ),
+                                            SizedBox(height: isSmallScreen ? 8 : 12),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        'Connected Plugs: ${plugs.length}',
+                                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                          fontSize: isSmallScreen ? 13 : 15,
+                                                          fontWeight: FontWeight.w600,
                                                         ),
-                                                  ),
-                                                if (hub.userEmail != null)
-                                                  Text(
-                                                    'Owner: ${hub.userEmail}',
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodySmall
-                                                        ?.copyWith(
-                                                          color: Colors.grey,
-                                                          fontSize: isSmallScreen(context)
-                                                              ? 10
-                                                              : null,
+                                                      ),
+                                                      if (activePlugs > 0) ...[
+                                                        const SizedBox(height: 4),
+                                                        Text(
+                                                          'Total Power: ${totalPower.toStringAsFixed(2)} W',
+                                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                            fontSize: isSmallScreen ? 11 : 13,
+                                                          ),
                                                         ),
-                                                  ),
-                                                if (hub.createdAt != null)
-                                                  Text(
-                                                    'Added: ${hub.createdAt}',
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .bodySmall
-                                                        ?.copyWith(
-                                                          color: Colors.grey,
-                                                          fontSize: isSmallScreen(context)
-                                                              ? 10
-                                                              : null,
+                                                        Text(
+                                                          'Total Energy: ${totalEnergy.toStringAsFixed(2)} kWh',
+                                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                            fontSize: isSmallScreen ? 11 : 13,
+                                                          ),
                                                         ),
+                                                        Text(
+                                                          'Total Cost: $_currencySymbol${(totalEnergy * _pricePerKWH).toStringAsFixed(2)}',
+                                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                            fontSize: isSmallScreen ? 11 : 13,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: Theme.of(context).colorScheme.secondary,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ],
                                                   ),
+                                                ),
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    // Edit Button - Modern Style
+                                                    Material(
+                                                      color: Colors.transparent,
+                                                      child: InkWell(
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        onTap: () => _editNicknameDialog(hub),
+                                                        child: Container(
+                                                          padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.blue.shade50,
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.edit_rounded,
+                                                            color: Colors.blue.shade600,
+                                                            size: isSmallScreen ? 18 : 22,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: isSmallScreen ? 6 : 8),
+                                                    // Unlink Button - Modern Style
+                                                    Material(
+                                                      color: Colors.transparent,
+                                                      child: InkWell(
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        onTap: () => _deleteHubDialog(hub),
+                                                        child: Container(
+                                                          padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.red.shade50,
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.link_off_rounded,
+                                                            color: Colors.red.shade600,
+                                                            size: isSmallScreen ? 18 : 22,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: isSmallScreen ? 6 : 8),
+                                                    // Toggle Button - Animated
+                                                    Material(
+                                                      color: Colors.transparent,
+                                                      child: InkWell(
+                                                        borderRadius: BorderRadius.circular(25),
+                                                        onTap: () => _toggleHubSsrState(hub),
+                                                        child: AnimatedContainer(
+                                                          duration: const Duration(milliseconds: 300),
+                                                          padding: EdgeInsets.symmetric(
+                                                            horizontal: isSmallScreen ? 12 : 16,
+                                                            vertical: isSmallScreen ? 8 : 10,
+                                                          ),
+                                                          decoration: BoxDecoration(
+                                                            gradient: LinearGradient(
+                                                              colors: (hub.ssr_state ?? false)
+                                                                  ? [Colors.green.shade400, Colors.green.shade600]
+                                                                  : [Colors.grey.shade300, Colors.grey.shade500],
+                                                            ),
+                                                            borderRadius: BorderRadius.circular(25),
+                                                            boxShadow: [
+                                                              BoxShadow(
+                                                                color: (hub.ssr_state ?? false)
+                                                                    ? Colors.green.withOpacity(0.3)
+                                                                    : Colors.grey.withOpacity(0.2),
+                                                                blurRadius: 8,
+                                                                offset: const Offset(0, 3),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          child: Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              Icon(
+                                                                (hub.ssr_state ?? false)
+                                                                    ? Icons.power_settings_new_rounded
+                                                                    : Icons.power_off_rounded,
+                                                                color: Colors.white,
+                                                                size: isSmallScreen ? 16 : 20,
+                                                              ),
+                                                              SizedBox(width: isSmallScreen ? 4 : 6),
+                                                              Text(
+                                                                (hub.ssr_state ?? false) ? 'ON' : 'OFF',
+                                                                style: TextStyle(
+                                                                  color: Colors.white,
+                                                                  fontWeight: FontWeight.bold,
+                                                                  fontSize: isSmallScreen ? 11 : 13,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ],
                                             ),
                                           ],
                                         ),
-                                        trailing: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            IconButton(
-                                              icon: Icon(
-                                                Icons.edit,
-                                                color: Colors.blueAccent,
-                                                size: isSmallScreen(context) ? 20 : 28,
-                                              ),
-                                              tooltip: 'Edit Nickname',
-                                              onPressed: () => _editNicknameDialog(hub),
+                                      ),
+
+                                      // Plugs under this hub
+                                      if (plugs.isNotEmpty)
+                                        ...plugs.map((plug) {
+                                          return AnimatedContainer(
+                                            duration: const Duration(milliseconds: 300),
+                                            margin: EdgeInsets.only(
+                                              bottom: isSmallScreen ? 8 : 12,
+                                              left: isSmallScreen ? 8 : 16,
                                             ),
-                                            const SizedBox(width: 8),
-                                            IconButton(
-                                              icon: Icon(
-                                                Icons.link_off,
-                                                color: Colors.redAccent,
-                                                size: isSmallScreen(context) ? 24 : 32,
-                                              ),
-                                              tooltip: 'Unlink Hub',
-                                              onPressed: () => _deleteHubDialog(hub),
-                                            ),
-                                            IconButton(
-                                              icon: Icon(
-                                                (hub.ssr_state ?? false)
-                                                    ? Icons.toggle_on
-                                                    : Icons.toggle_off,
-                                                color: (hub.ssr_state ?? false)
-                                                    ? Colors.green
-                                                    : Colors.grey,
-                                                size: isSmallScreen(context) ? 32 : 40,
-                                              ),
-                                              tooltip: (hub.ssr_state ?? false)
-                                                  ? "Turn Hub Off"
-                                                  : "Turn Hub On",
-                                              onPressed: () => _toggleHubSsrState(hub),
-                                            ),
-                                          ],
-                                        ),
-                                        children: [
-                                          if (plugs.isNotEmpty)
-                                            Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: isSmallScreen(context)
-                                                    ? 16.0
-                                                    : 24.0,
-                                                vertical: isSmallScreen(context)
-                                                    ? 8.0
-                                                    : 12.0,
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    'Overall Plug Output:',
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .titleMedium
-                                                        ?.copyWith(
-                                                          fontSize: isSmallScreen(context)
-                                                              ? 16
-                                                              : null,
-                                                        ),
-                                                  ),
-                                                  if (activePlugs > 0) ...[
-                                                    Text(
-                                                      'Total Current: ${totalCurrent.toStringAsFixed(2)} A',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                            fontSize: isSmallScreen(context)
-                                                                ? 14
-                                                                : null,
-                                                          ),
-                                                    ),
-                                                    Text(
-                                                      'Total Energy: ${totalEnergy.toStringAsFixed(2)} kWh',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                            fontSize: isSmallScreen(context)
-                                                                ? 14
-                                                                : null,
-                                                          ),
-                                                    ),
-                                                    Text(
-                                                      'Total Cost: $_currencySymbol${(totalEnergy * _pricePerKWH).toStringAsFixed(2)}',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                            fontSize: isSmallScreen(context)
-                                                                ? 14
-                                                                : null,
-                                                          ),
-                                                    ),
-                                                    Text(
-                                                      'Total Power: ${totalPower.toStringAsFixed(2)} W',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                            fontSize: isSmallScreen(context)
-                                                                ? 14
-                                                                : null,
-                                                          ),
-                                                    ),
-                                                    Text(
-                                                      'Total Voltage: ${totalVoltage.toStringAsFixed(2)} V',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                            fontSize: isSmallScreen(context)
-                                                                ? 14
-                                                                : null,
-                                                          ),
-                                                    ),
-                                                  ] else
-                                                    Text(
-                                                      'No active plug data available.',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                            fontStyle: FontStyle.italic,
-                                                            fontSize: isSmallScreen(context)
-                                                                ? 14
-                                                                : null,
-                                                          ),
-                                                    ),
-                                                  const Divider(), // Separator
+                                            decoration: BoxDecoration(
+                                              gradient: LinearGradient(
+                                                begin: Alignment.topLeft,
+                                                end: Alignment.bottomRight,
+                                                colors: [
+                                                  Theme.of(context).colorScheme.surface,
+                                                  Theme.of(context).colorScheme.primary.withOpacity(0.03),
                                                 ],
                                               ),
+                                              borderRadius: BorderRadius.circular(16),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.05),
+                                                  blurRadius: 10,
+                                                  offset: const Offset(0, 4),
+                                                ),
+                                                BoxShadow(
+                                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                                  blurRadius: 20,
+                                                  offset: const Offset(0, 8),
+                                                ),
+                                              ],
                                             ),
-                                          ...plugs.map((plug) {
-                                            return _buildPlugDeviceRow(
-                                              plug,
-                                              isSmallScreen(context),
-                                            );
-                                          }).toList(),
-                                        ],
-                                      ),
-                                    );
-                                  }
-                                }).toList(),
+                                            child: _buildPlugDeviceRow(plug, isSmallScreen),
+                                          );
+                                        })
+                                      else
+                                        Padding(
+                                          padding: EdgeInsets.only(
+                                            left: isSmallScreen ? 8 : 16,
+                                            bottom: isSmallScreen ? 8 : 12,
+                                          ),
+                                          child: Text(
+                                            'No plugs connected to this hub',
+                                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                              fontStyle: FontStyle.italic,
+                                              color: Colors.grey,
+                                              fontSize: isSmallScreen ? 13 : 15,
+                                            ),
+                                          ),
+                                        ),
+
+                                      SizedBox(height: isSmallScreen ? 16 : 24),
+                                    ],
+                                  );
+                                }),
                               ],
                             ),
                           ),

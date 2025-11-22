@@ -12,6 +12,9 @@ import 'services/data_cleanup_service.dart'; // Import cleanup service
 import 'screen/admin_home.dart';
 import 'screen/theadmin.dart';
 import 'theme_provider.dart';
+import 'due_date_provider.dart';
+import 'price_provider.dart';
+import 'notification_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,7 +31,15 @@ void main() async {
   final themeNotifier = await ThemeNotifier.create();
 
   runApp(
-    ChangeNotifierProvider.value(value: themeNotifier, child: const MyApp()),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: themeNotifier),
+        ChangeNotifierProvider(create: (_) => DueDateProvider()),
+        ChangeNotifierProvider(create: (_) => PriceProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+      ],
+      child: const MyApp(),
+    ),
   );
 }
 
@@ -106,8 +117,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
           final user = snapshot.data!;
           return FutureBuilder<IdTokenResult>(
             future: user.getIdTokenResult(
-              true,
-            ), // Force refresh to get latest claims
+              false,
+            ), // Use cached token for faster load
             builder: (context, tokenSnapshot) {
               if (tokenSnapshot.connectionState == ConnectionState.waiting) {
                 return const LoadingScreen();

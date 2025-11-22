@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // Import provider
 import '../theme_provider.dart'; // Import ThemeNotifier
 import '../realtime_db_service.dart';
+import '../due_date_provider.dart';
 import 'profile.dart';
 
 import 'custom_header.dart';
@@ -407,6 +408,91 @@ class _EnergySchedulingScreenState extends State<EnergySchedulingScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Due Date Display
+                  Consumer<DueDateProvider>(
+                    builder: (context, dueDateProvider, _) {
+                      if (dueDateProvider.dueDate == null) return const SizedBox.shrink();
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 14),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: dueDateProvider.isOverdue
+                              ? Colors.red.withOpacity(0.1)
+                              : Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: dueDateProvider.isOverdue
+                                ? Colors.red
+                                : Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: dueDateProvider.isOverdue
+                                    ? Colors.red.withOpacity(0.2)
+                                    : Theme.of(context).colorScheme.secondary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(
+                                Icons.calendar_today,
+                                color: dueDateProvider.isOverdue
+                                    ? Colors.red
+                                    : Theme.of(context).colorScheme.secondary,
+                                size: 20,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Payment Due Date',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Colors.grey,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    dueDateProvider.getFormattedDueDate() ?? '',
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: dueDateProvider.isOverdue
+                                    ? Colors.red
+                                    : Theme.of(context).colorScheme.secondary,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                dueDateProvider.isOverdue
+                                    ? 'Overdue ${dueDateProvider.getDaysRemaining()!.abs()}d'
+                                    : '${dueDateProvider.getDaysRemaining()}d left',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
                   // Tip Section (moved up for mobile)
                   Container(
                     margin: const EdgeInsets.only(bottom: 14),
