@@ -14,7 +14,7 @@ import '../notification_provider.dart';
 import '../constants.dart';
 import 'admin_home.dart';
 import 'explore.dart';
-import 'schedule.dart';
+import 'history.dart';
 import 'profile.dart';
 
 
@@ -202,6 +202,135 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     });
   }
 
+  // Show dialog to edit hub nickname
+  Future<void> _showEditNicknameDialog() async {
+    if (_selectedHubSerial == null) return;
+
+    // Get current nickname
+    final currentHub = _availableHubs.firstWhere(
+      (hub) => hub['serialNumber'] == _selectedHubSerial,
+      orElse: () => {'serialNumber': '', 'nickname': 'Central Hub'},
+    );
+    final currentNickname = currentHub['nickname'] ?? 'Central Hub';
+
+    final TextEditingController nicknameController = TextEditingController(text: currentNickname);
+    final themeNotifier = Provider.of<ThemeNotifier>(context, listen: false);
+    final bool isDarkMode = themeNotifier.darkTheme;
+
+    final String? newNickname = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1a2332) : Colors.white,
+          title: Text(
+            'Edit Hub Nickname',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Hub: ${_selectedHubSerial!.length > 8 ? _selectedHubSerial!.substring(0, 8) : _selectedHubSerial!}...',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nicknameController,
+                autofocus: true,
+                maxLength: 30,
+                decoration: InputDecoration(
+                  labelText: 'Nickname',
+                  hintText: 'Enter hub nickname',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Theme.of(context).colorScheme.secondary,
+                      width: 2,
+                    ),
+                  ),
+                  counterStyle: TextStyle(
+                    color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                  ),
+                ),
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final nickname = nicknameController.text.trim();
+                if (nickname.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Nickname cannot be empty')),
+                  );
+                  return;
+                }
+                Navigator.of(context).pop(nickname);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // If user provided a new nickname, update Firebase
+    if (newNickname != null && newNickname != currentNickname && mounted) {
+      try {
+        await FirebaseDatabase.instance
+            .ref('$rtdbUserPath/hubs/$_selectedHubSerial/nickname')
+            .set(newNickname);
+
+        // Update local state
+        setState(() {
+          final index = _availableHubs.indexWhere((hub) => hub['serialNumber'] == _selectedHubSerial);
+          if (index != -1) {
+            _availableHubs[index]['nickname'] = newNickname;
+          }
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Hub nickname updated to "$newNickname"')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error updating nickname: $e')),
+          );
+        }
+      }
+    }
+  }
+
   // Toggle SSR state
   Future<void> _toggleBreaker() async {
     if (_selectedHubSerial == null) {
@@ -276,7 +405,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   void _navigateToSchedule() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => EnergySchedulingScreen(realtimeDbService: _realtimeDbService)),
+      MaterialPageRoute(builder: (context) => EnergyHistoryScreen(realtimeDbService: _realtimeDbService)),
     );
   }
 
@@ -311,8 +440,8 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
               children: [
                 _buildHeader(),
                 const SizedBox(height: 12),
-                if (_availableHubs.length > 1) _buildHubSelector(),
-                if (_availableHubs.length > 1) const SizedBox(height: 20),
+                if (_availableHubs.isNotEmpty) _buildHubSelector(),
+                if (_availableHubs.isNotEmpty) const SizedBox(height: 20),
                 _buildEnergyUsageAndBreaker(),
                 const SizedBox(height: 30),
                 _buildEnergyManagement(),
@@ -380,35 +509,53 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
                     fontSize: 11,
                   ),
                 ),
-                DropdownButton<String>(
-                  value: _selectedHubSerial,
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                if (_availableHubs.length > 1)
+                  DropdownButton<String>(
+                    value: _selectedHubSerial,
+                    isExpanded: true,
+                    underline: const SizedBox(),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    items: _availableHubs.map((hub) {
+                      final serial = hub['serialNumber']!;
+                      final nickname = hub['nickname']!;
+                      final serialDisplay = serial.length > 8 ? serial.substring(0, 8) : serial;
+                      return DropdownMenuItem<String>(
+                        value: serial,
+                        child: Text(
+                          '$nickname ($serialDisplay...)',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _selectedHubSerial = value;
+                        });
+                        _loadSsrState();
+                      }
+                    },
                   ),
-                  items: _availableHubs.map((hub) {
-                    final serial = hub['serialNumber']!;
-                    final nickname = hub['nickname']!;
-                    return DropdownMenuItem<String>(
-                      value: serial,
-                      child: Text(
-                        '$nickname (${serial.substring(0, 8)}...)',
-                        overflow: TextOverflow.ellipsis,
+                if (_availableHubs.length == 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text(
+                      '${_availableHubs.first['nickname']} (${_availableHubs.first['serialNumber']!.length > 8 ? _availableHubs.first['serialNumber']!.substring(0, 8) : _availableHubs.first['serialNumber']!}...)',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        _selectedHubSerial = value;
-                      });
-                      _loadSsrState();
-                    }
-                  },
-                ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit, size: 20),
+            tooltip: 'Edit Hub Nickname',
+            onPressed: _selectedHubSerial != null ? () => _showEditNicknameDialog() : null,
           ),
         ],
       ),

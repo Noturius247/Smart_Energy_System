@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -61,31 +60,91 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   // Metric selection
   _MetricType _selectedMetric = _MetricType.power;
 
-  // Connection state
-  bool _isDeviceConnected = false;
-  DateTime? _lastDataUpdate;
-
   // Hub management
   List<Map<String, String>> _availableHubs = [];
   String? _selectedHubSerial;
   bool _isInitialized = false;
+  bool _isHubActive = true; // Track hub ssr_state
+  StreamSubscription<bool>? _ssrStateSubscription;
+  StreamSubscription<String?>? _primaryHubSubscription; // Added for primary hub
+  StreamSubscription<String>? _hubRemovedSubscription; // Added for hub removal
+  StreamSubscription<Map<String, String>>? _hubAddedSubscription; // Added for hub addition
 
   // Settings
   double _pricePerKWH = 0.0;
   String _currencySymbol = '₱';
 
   // Calculator input state
-  final TextEditingController _wattageController = TextEditingController(text: '100');
-  final TextEditingController _hoursController = TextEditingController(text: '1');
+  final TextEditingController _wattageController =
+      TextEditingController(text: '100');
+  final TextEditingController _hoursController =
+      TextEditingController(text: '1');
   double _calculatedCost = 0.0;
+
+  // Device data caching
+  List<DeviceData> _cachedDevices = [];
+  DateTime? _lastDeviceFetch;
+  Timer? _deviceRefreshTimer;
+
+  /// Returns a stream of LIVE per-second data for the selected hub or all hubs.
+  Stream<List<TimestampedFlSpot>> _getLiveDataStream() {
+    if (_selectedHubSerial != null) {
+      return widget.realtimeDbService
+          .getLiveChartDataStreamForHub(_selectedHubSerial!);
+    } else {
+      // Fallback to the combined stream for all active hubs
+      return widget.realtimeDbService.getLiveChartDataStream();
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    // Prioritize the primary hub from the service on initial load
+    _selectedHubSerial = widget.realtimeDbService.primaryHub;
+
     _initializeHubStreams();
     _loadPricePerKWH();
     _loadCurrencySymbol();
     _calculateCustomCost(); // Initialize calculator with default values
+    _startDeviceRefreshTimer();
+    _startHubRemovedListener();
+    _startHubAddedListener();
+
+    // Listen for changes to the primary hub
+    _primaryHubSubscription =
+        widget.realtimeDbService.primaryHubStream.listen((hubSerial) {
+      // If the hub is different, update the state and re-initialize listeners
+      if (hubSerial != null && _selectedHubSerial != hubSerial) {
+        debugPrint(
+            '[EnergyOverview] Primary hub changed to: $hubSerial. Updating screen...');
+        setState(() {
+          _selectedHubSerial = hubSerial;
+          // Re-initialize listeners for the new hub and force a rebuild to get new data
+          _initializeSsrStateListener();
+        });
+      }
+    });
+  }
+
+  void _startDeviceRefreshTimer() {
+    // Fetch devices immediately
+    _refreshDevices();
+
+    // Refresh device data every 30 seconds instead of on every stream update
+    _deviceRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _refreshDevices();
+    });
+  }
+
+  Future<void> _refreshDevices() async {
+    final devices = await _fetchAllDevices();
+    if (mounted) {
+      setState(() {
+        _cachedDevices = devices;
+        _lastDeviceFetch = DateTime.now();
+      });
+    }
   }
 
   Future<void> _initializeHubStreams() async {
@@ -126,14 +185,42 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
 
       setState(() {
         _availableHubs = hubList;
-        if (hubList.length == 1) {
+        // If no hub is selected yet (i.e., not set by primary hub), select the first one.
+        if (_selectedHubSerial == null && hubList.length == 1) {
           _selectedHubSerial = hubList.first['serialNumber'];
         }
         _isInitialized = true;
       });
+
+      // Initialize SSR state listener
+      _initializeSsrStateListener();
     } catch (e) {
       debugPrint('[EnergyOverview] Error initializing hubs: $e');
     }
+  }
+
+  void _initializeSsrStateListener() {
+    // Cancel any existing subscription before creating a new one
+    _ssrStateSubscription?.cancel();
+
+    final Stream<bool> ssrStream;
+
+    if (_selectedHubSerial != null) {
+      ssrStream =
+          widget.realtimeDbService.getHubSsrStateStream(_selectedHubSerial!);
+    } else {
+      ssrStream = widget.realtimeDbService.getCombinedSsrStateStream();
+    }
+
+    _ssrStateSubscription = ssrStream.listen((isOn) {
+      if (mounted) {
+        setState(() {
+          _isHubActive = isOn;
+        });
+        debugPrint(
+            '[EnergyOverview] Hub active state changed: ${isOn ? "ACTIVE" : "INACTIVE"}');
+      }
+    });
   }
 
   Future<void> _loadPricePerKWH() async {
@@ -227,18 +314,14 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   }
 
   Stream<List<TimestampedFlSpot>> _getHistoricalDataStream() {
-    final now = DateTime.now();
-    final startTime = now.subtract(const Duration(hours: 24)); // Last 24 hours
-
     if (_selectedHubSerial != null) {
-      return widget.realtimeDbService.getCombinedHistoricalAndLiveDataStream(
+      // Use the new, efficient listener stream for the overview screen
+      return widget.realtimeDbService.getOverviewHourlyStream(
         _selectedHubSerial!,
-        startTime,
       );
     } else {
-      return widget.realtimeDbService.getCombinedHistoricalAndLiveDataForAllHubs(
-        startTime,
-      );
+      // Fallback to the combined listener stream for all hubs
+      return widget.realtimeDbService.getOverviewHourlyStreamForAllHubs();
     }
   }
 
@@ -298,21 +381,25 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     }
   }
 
-  Widget _currentEnergyCard(List<TimestampedFlSpot> data) {
+  Widget _currentEnergyCard(List<TimestampedFlSpot> data,
+      {required bool isDeviceConnected}) {
     final now = DateTime.now();
-    final formattedDate = DateFormat('EEEE, MMMM d, yyyy - hh:mm a').format(now);
+    final formattedDate =
+        DateFormat('EEEE, MMMM d, yyyy - hh:mm a').format(now);
 
     // Get current value from latest data
-    final currentValue = data.isNotEmpty
-        ? _getMetricValue(data.last, _selectedMetric)
-        : 0.0;
+    final currentValue =
+        data.isNotEmpty ? _getMetricValue(data.last, _selectedMetric) : 0.0;
     final unit = _getMetricUnit(_selectedMetric);
 
     // Calculate percentage (simplified - using max value as 100%)
     final maxValue = data.isNotEmpty
-        ? data.map((d) => _getMetricValue(d, _selectedMetric)).reduce((a, b) => a > b ? a : b)
+        ? data
+            .map((d) => _getMetricValue(d, _selectedMetric))
+            .reduce((a, b) => a > b ? a : b)
         : 100.0;
-    final percentage = maxValue > 0 ? (currentValue / maxValue).clamp(0.0, 1.0) : 0.0;
+    final percentage =
+        maxValue > 0 ? (currentValue / maxValue).clamp(0.0, 1.0) : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -336,7 +423,8 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                     ),
                     const SizedBox(width: 4),
                     Tooltip(
-                      message: 'Real-time ${_selectedMetric.toString().split('.').last} reading from your energy hub. The percentage shows current value relative to the maximum recorded in the last 24 hours.',
+                      message:
+                          'Real-time ${_selectedMetric.toString().split('.').last} reading from your energy hub. The percentage shows current value relative to the maximum recorded in the last 24 hours.',
                       child: Icon(
                         Icons.info_outline,
                         size: 14,
@@ -354,15 +442,17 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                 Text(
                   '${currentValue.toStringAsFixed(2)} $unit',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 Text(
-                  _isDeviceConnected ? 'Connected' : 'Offline',
+                  (isDeviceConnected && _isHubActive) ? 'Connected' : 'Offline',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: _isDeviceConnected ? Colors.green : Colors.red,
-                  ),
+                        color: (isDeviceConnected && _isHubActive)
+                            ? Colors.green
+                            : Colors.red,
+                      ),
                 ),
               ],
             ),
@@ -385,9 +475,9 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
               Text(
                 '${(percentage * 100).toStringAsFixed(0)}%',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
             ],
           ),
@@ -1150,7 +1240,8 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     );
   }
 
-  Widget _historicalChart(List<TimestampedFlSpot> spots) {
+  Widget _historicalChart(List<TimestampedFlSpot> spots,
+      {required bool isDeviceConnected}) {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
 
     return Container(
@@ -1178,7 +1269,8 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                   ),
                   const SizedBox(width: 6),
                   Tooltip(
-                    message: 'View trends over the last 24 hours. Switch between Power, Voltage, Current, and Energy metrics using the chips below.',
+                    message:
+                        'View trends over the last 24 hours. Switch between Power, Voltage, Current, and Energy metrics using the chips below.',
                     child: Icon(
                       Icons.info_outline,
                       size: 16,
@@ -1187,9 +1279,10 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                   ),
                 ],
               ),
-              if (_isDeviceConnected)
+              if (isDeviceConnected)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.green,
                     borderRadius: BorderRadius.circular(10),
@@ -1470,16 +1563,14 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
           ],
         ),
         const SizedBox(height: 10),
-        _tipTile(
-          Icons.battery_charging_full,
-          'Unplug Chargers',
-          'Unplug devices once fully charged to avoid phantom load.',
-        ),
-        const SizedBox(height: 6),
-        _tipTile(
-          Icons.ac_unit,
-          'Efficient AC Use',
-          'Set air conditioners between 24–25°C for efficiency.',
+
+        // Lighting Tips
+        Text(
+          'Lighting',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.secondary,
+          ),
         ),
         const SizedBox(height: 6),
         _tipTile(
@@ -1489,9 +1580,81 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
         ),
         const SizedBox(height: 6),
         _tipTile(
+          Icons.wb_sunny,
+          'Use Natural Light',
+          'Open curtains during the day to reduce artificial lighting needs.',
+        ),
+        const SizedBox(height: 12),
+
+        // Cooling & Heating Tips
+        Text(
+          'Cooling & Heating',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.secondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.ac_unit,
+          'Efficient AC Use',
+          'Set air conditioners between 24–25°C for efficiency.',
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.mode_fan_off,
+          'Use Ceiling Fans',
+          'Fans make rooms feel 3–4°C cooler, reducing AC dependence.',
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.filter_alt,
+          'Clean AC Filters',
+          'Clean or replace AC filters monthly to maintain efficiency.',
+        ),
+        const SizedBox(height: 12),
+
+        // Appliance Tips
+        Text(
+          'Appliances',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.secondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.kitchen,
+          'Refrigerator Efficiency',
+          'Keep refrigerator at 2–4°C and freezer at -18°C.',
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
           Icons.local_laundry_service,
           'Run Full Loads',
           'Washers and dishwashers are most efficient when fully loaded.',
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.water_drop,
+          'Cold Water Washing',
+          'Wash clothes in cold water to save on water heating costs.',
+        ),
+        const SizedBox(height: 12),
+
+        // Electronics & Standby Power
+        Text(
+          'Electronics & Standby Power',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.secondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.battery_charging_full,
+          'Unplug Chargers',
+          'Unplug devices once fully charged to avoid phantom load.',
         ),
         const SizedBox(height: 6),
         _tipTile(
@@ -1499,141 +1662,301 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
           'Use Smart Plugs',
           'Monitor and control appliances remotely with smart plugs.',
         ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.power_settings_new,
+          'Enable Sleep Mode',
+          'Put computers and monitors to sleep when not in use.',
+        ),
+        const SizedBox(height: 12),
+
+        // Water Heating
+        Text(
+          'Water Heating',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.secondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.thermostat,
+          'Lower Water Heater Temp',
+          'Set water heater to 50–55°C to save energy safely.',
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.shower,
+          'Shorter Showers',
+          'Reduce shower time by 2–3 minutes to save hot water.',
+        ),
+        const SizedBox(height: 12),
+
+        // General Habits
+        Text(
+          'General Habits',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.secondary,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.access_time,
+          'Off-Peak Usage',
+          'Use high-energy appliances during off-peak hours if available.',
+        ),
+        const SizedBox(height: 6),
+        _tipTile(
+          Icons.shield,
+          'Seal Air Leaks',
+          'Check windows and doors for air leaks to improve insulation.',
+        ),
       ],
     );
+  }
+
+  void _startHubRemovedListener() {
+    // Listen to hub removal events from the service
+    _hubRemovedSubscription = widget.realtimeDbService.hubRemovedStream.listen((removedHubSerial) {
+      if (!mounted) return;
+
+      debugPrint('[EnergyOverview] Hub removed event received: $removedHubSerial');
+
+      setState(() {
+        // Remove the hub from available hubs list
+        _availableHubs.removeWhere((hub) => hub['serialNumber'] == removedHubSerial);
+
+        // If the removed hub was selected, switch to another hub or clear selection
+        if (_selectedHubSerial == removedHubSerial) {
+          if (_availableHubs.isNotEmpty) {
+            _selectedHubSerial = _availableHubs.first['serialNumber'];
+            debugPrint('[EnergyOverview] Switched to hub: $_selectedHubSerial');
+            // Restart SSR state listener for the new hub
+            _initializeSsrStateListener();
+          } else {
+            _selectedHubSerial = null;
+            _isHubActive = false;
+            debugPrint('[EnergyOverview] No hubs available after removal');
+          }
+        }
+      });
+
+      // Show notification to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hub $removedHubSerial has been unlinked'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    });
+  }
+
+  void _startHubAddedListener() {
+    // Listen to hub addition events from the service
+    _hubAddedSubscription = widget.realtimeDbService.hubAddedStream.listen((hubData) {
+      if (!mounted) return;
+
+      final String serialNumber = hubData['serialNumber']!;
+      final String nickname = hubData['nickname']!;
+
+      debugPrint('[EnergyOverview] Hub added event received: $serialNumber');
+
+      setState(() {
+        // Add the hub to available hubs list if not already present
+        if (!_availableHubs.any((hub) => hub['serialNumber'] == serialNumber)) {
+          _availableHubs.add({
+            'serialNumber': serialNumber,
+            'nickname': nickname,
+          });
+          debugPrint('[EnergyOverview] Added hub to list: $serialNumber');
+
+          // If this is the first hub, select it automatically
+          if (_availableHubs.length == 1) {
+            _selectedHubSerial = serialNumber;
+            debugPrint('[EnergyOverview] Auto-selected first hub: $serialNumber');
+            // Start SSR state listener for the new hub
+            _initializeSsrStateListener();
+          }
+        }
+      });
+
+      // Show notification to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hub $serialNumber has been linked'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
     _wattageController.dispose();
     _hoursController.dispose();
+    _deviceRefreshTimer?.cancel();
+    _ssrStateSubscription?.cancel();
+    _primaryHubSubscription?.cancel(); // Cancel the primary hub subscription
+    _hubRemovedSubscription?.cancel(); // Cancel the hub removed subscription
+    _hubAddedSubscription?.cancel(); // Cancel the hub added subscription
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<TimestampedFlSpot>>(
-      stream: _getHistoricalDataStream(),
-      builder: (context, snapshot) {
-        final List<TimestampedFlSpot> data = snapshot.data ?? [];
+    // Use cached devices instead of fetching on every stream update
+    final List<DeviceData> devices = _cachedDevices;
 
-        // Update connection status
-        if (data.isNotEmpty) {
-          _lastDataUpdate = data.last.timestamp;
-          _isDeviceConnected = DateTime.now().difference(data.last.timestamp).inMinutes < 5;
-        }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          // This StreamBuilder handles all widgets that depend on LIVE data
+          StreamBuilder<List<TimestampedFlSpot>>(
+            stream: _getLiveDataStream(),
+            builder: (context, liveSnapshot) {
+              final List<TimestampedFlSpot> liveData = liveSnapshot.data ?? [];
+              // Determine connection status based on the live data stream
+              final bool isDeviceConnected = liveData.isNotEmpty &&
+                  DateTime.now().difference(liveData.last.timestamp).inMinutes <
+                      2;
 
-        return FutureBuilder<List<DeviceData>>(
-          future: _fetchAllDevices(),
-          builder: (context, deviceSnapshot) {
-            final List<DeviceData> devices = deviceSnapshot.data ?? [];
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
-              child: Column(
+              return Column(
                 children: [
                   const SizedBox(height: 12),
-                  // Combined Price and Due Date on Same Line
-                  Row(
-                children: [
-                  const Expanded(
-                    child: MiniNotificationBox(),
-                  ),
-                  Consumer<DueDateProvider>(
-                    builder: (context, dueDateProvider, _) {
-                      if (dueDateProvider.dueDate == null) return const SizedBox.shrink();
-                      return const SizedBox(width: 8);
-                    },
-                  ),
-                  Consumer<DueDateProvider>(
-                    builder: (context, dueDateProvider, _) {
-                      if (dueDateProvider.dueDate == null) return const SizedBox.shrink();
-
-                      return Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: dueDateProvider.isOverdue
-                                ? Colors.red.withValues(alpha: 0.1)
-                                : Theme.of(context).cardColor,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: dueDateProvider.isOverdue
-                                  ? Colors.red
-                                  : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
-                              width: 2,
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.calendar_today,
-                                color: dueDateProvider.isOverdue
-                                    ? Colors.red
-                                    : Theme.of(context).colorScheme.secondary,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Due Date',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Colors.grey,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      dueDateProvider.getFormattedDueDate() ?? '',
-                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: dueDateProvider.isOverdue
-                                      ? Colors.red
-                                      : Theme.of(context).colorScheme.secondary,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  dueDateProvider.isOverdue
-                                      ? 'Overdue ${dueDateProvider.getDaysRemaining()!.abs()}d'
-                                      : '${dueDateProvider.getDaysRemaining()}d left',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
+                  // Due Date and Notification Box Row
                   Row(
                     children: [
-                      Expanded(child: _currentEnergyCard(data)),
+                      const Expanded(
+                        child: MiniNotificationBox(),
+                      ),
+                      Consumer<DueDateProvider>(
+                        builder: (context, dueDateProvider, _) {
+                          if (dueDateProvider.dueDate == null) {
+                            return const SizedBox.shrink();
+                          }
+                          return const SizedBox(width: 8);
+                        },
+                      ),
+                      Consumer<DueDateProvider>(
+                        builder: (context, dueDateProvider, _) {
+                          if (dueDateProvider.dueDate == null) {
+                            return const SizedBox.shrink();
+                          }
+
+                          return Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: dueDateProvider.isOverdue
+                                    ? Colors.red.withAlpha(25)
+                                    : Theme.of(context).cardColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: dueDateProvider.isOverdue
+                                      ? Colors.red
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .secondary
+                                          .withAlpha(77),
+                                  width: 2,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.calendar_today,
+                                    color: dueDateProvider.isOverdue
+                                        ? Colors.red
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .secondary,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Due Date',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: Colors.grey,
+                                                fontSize: 11,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          dueDateProvider
+                                                  .getFormattedDueDate() ??
+                                              '',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: dueDateProvider.isOverdue
+                                          ? Colors.red
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .secondary,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      dueDateProvider.isOverdue
+                                          ? 'Overdue ${dueDateProvider.getDaysRemaining()!.abs()}d'
+                                          : '${dueDateProvider.getDaysRemaining()}d left',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  // Current Energy and Daily Cost Row
+                  Row(
+                    children: [
+                      Expanded(
+                          child: _currentEnergyCard(liveData,
+                              isDeviceConnected: isDeviceConnected)),
                       const SizedBox(width: 10),
-                      _solarProductionCard(data),
+                      _solarProductionCard(liveData),
                     ],
                   ),
                   const SizedBox(height: 12),
                   // Monthly Cost Estimate
-                  _monthlyCostCard(data),
+                  _monthlyCostCard(liveData),
                   const SizedBox(height: 12),
                   // Cost Calculator
                   _costCalculator(),
@@ -1648,15 +1971,24 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                     _topEnergyConsumer(devices),
                     const SizedBox(height: 12),
                   ],
-                  _historicalChart(data),
+                  // This StreamBuilder handles the historical chart
+                  StreamBuilder<List<TimestampedFlSpot>>(
+                    stream: _getHistoricalDataStream(),
+                    builder: (context, historicalSnapshot) {
+                      final List<TimestampedFlSpot> historicalData =
+                          historicalSnapshot.data ?? [];
+                      return _historicalChart(historicalData,
+                          isDeviceConnected: isDeviceConnected);
+                    },
+                  ),
                   const SizedBox(height: 12),
                   _energyTipsSection(),
                 ],
-              ),
-            );
-          },
-        );
-      },
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }

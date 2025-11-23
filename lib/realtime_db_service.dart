@@ -21,20 +21,54 @@ class TimestampedFlSpot {
   });
 }
 
+// Helper class for stream triggering
+class _TriggerData {
+  final List<String> hubSerialNumbers;
+  _TriggerData(this.hubSerialNumbers);
+}
+
 class RealtimeDbService {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
   // Store a map of subscriptions, keyed by hub serial number
   final Map<String, List<StreamSubscription>> _hubSubscriptions = {};
   final _activeHubController = BehaviorSubject<List<String>>.seeded([]);
 
+  // START: Added for primary hub tracking
+  final _primaryHubController = BehaviorSubject<String?>.seeded(null);
+
   // Public stream for the UI to listen to
   Stream<List<String>> get activeHubStream => _activeHubController.stream;
+
+  // Stream and getter for the primary hub
+  Stream<String?> get primaryHubStream => _primaryHubController.stream;
+  String? get primaryHub => _primaryHubController.value;
+
+  /// Sets the primary hub for analytics across the app.
+  void setPrimaryHub(String? serialNumber) {
+    if (_primaryHubController.value != serialNumber) {
+      _primaryHubController.add(serialNumber);
+      debugPrint('[RealtimeDbService] Primary hub set to: $serialNumber');
+    }
+  }
+  // END: Added for primary hub tracking
 
   // StreamController to broadcast structured hub data events to the UI
   final _hubDataController = StreamController<Map<String, dynamic>>.broadcast();
 
   // Public stream for the UI to listen to
   Stream<Map<String, dynamic>> get hubDataStream => _hubDataController.stream;
+
+  // StreamController to broadcast hub removal events to all pages
+  final _hubRemovedController = StreamController<String>.broadcast();
+
+  // Public stream for pages to listen to hub removal events
+  Stream<String> get hubRemovedStream => _hubRemovedController.stream;
+
+  // StreamController to broadcast hub addition events to all pages
+  final _hubAddedController = StreamController<Map<String, String>>.broadcast();
+
+  // Public stream for pages to listen to hub addition events (contains serialNumber and nickname)
+  Stream<Map<String, String>> get hubAddedStream => _hubAddedController.stream;
 
   // New getter to expose the current active hubs synchronously
   List<String> get currentActiveHubs => _activeHubController.value;
@@ -139,6 +173,49 @@ class RealtimeDbService {
     debugPrint('Real-time data streams stopped for hub: $hubSerialNumber.');
   }
 
+  /// Handles hub removal - stops streams, clears primary hub if needed, and broadcasts removal event
+  void notifyHubRemoved(String hubSerialNumber) {
+    debugPrint('[RealtimeDbService] Hub removed: $hubSerialNumber');
+
+    // Stop all streams for this hub
+    stopRealtimeDataStream(hubSerialNumber);
+
+    // Clear primary hub if it matches the removed hub
+    if (_primaryHubController.value == hubSerialNumber) {
+      _primaryHubController.add(null);
+      debugPrint('[RealtimeDbService] Primary hub cleared as it was removed.');
+    }
+
+    // Broadcast removal event to all listening pages
+    if (!_hubRemovedController.isClosed) {
+      _hubRemovedController.add(hubSerialNumber);
+      debugPrint('[RealtimeDbService] Broadcasted hub removal event for: $hubSerialNumber');
+    }
+  }
+
+  /// Handles hub addition - starts streams, sets as primary if first hub, and broadcasts addition event
+  void notifyHubAdded(String hubSerialNumber, {String? nickname}) {
+    debugPrint('[RealtimeDbService] Hub added: $hubSerialNumber (nickname: $nickname)');
+
+    // Start real-time data stream for the new hub
+    startRealtimeDataStream(hubSerialNumber);
+
+    // Set as primary hub if no other hub is currently primary
+    if (_primaryHubController.value == null) {
+      setPrimaryHub(hubSerialNumber);
+      debugPrint('[RealtimeDbService] Set new hub as primary hub.');
+    }
+
+    // Broadcast addition event to all listening pages
+    if (!_hubAddedController.isClosed) {
+      _hubAddedController.add({
+        'serialNumber': hubSerialNumber,
+        'nickname': nickname ?? 'Central Hub',
+      });
+      debugPrint('[RealtimeDbService] Broadcasted hub addition event for: $hubSerialNumber');
+    }
+  }
+
   void stopAllRealtimeDataStreams() {
     for (final subs in _hubSubscriptions.values) {
       for (final sub in subs) {
@@ -161,6 +238,9 @@ class RealtimeDbService {
     stopAllRealtimeDataStreams();
     _hubDataController.close();
     _activeHubController.close();
+    _primaryHubController.close(); // Close the new controller
+    _hubRemovedController.close(); // Close the hub removed controller
+    _hubAddedController.close(); // Close the hub added controller
   }
 
   Future<List<Map<String, dynamic>>> getHistoricalEnergyData(
@@ -187,6 +267,7 @@ class RealtimeDbService {
           // Further assumption: energy_consumption_kWh is directly under the timestamp
           if (value is Map<dynamic, dynamic> &&
               value.containsKey('energy_consumption_kWh')) {
+                
             historicalData.add({
               'timestamp': DateTime.parse(key),
               'energy_consumption_kWh': (value['energy_consumption_kWh'] as num)
@@ -632,9 +713,14 @@ class RealtimeDbService {
               timestamp = DateTime.parse(value['timestamp'] as String);
             }
 
+            debugPrint('[getMonthlyAggregationData] Processing key: $key, timestamp: $timestamp, startTime: $startTime, endTime: $endTime');
+
             if (timestamp != null) {
               // Filter by time range (inclusive of boundaries)
-              if (!timestamp.isBefore(startTime) && !timestamp.isAfter(endTime)) {
+              final isInRange = !timestamp.isBefore(startTime) && !timestamp.isAfter(endTime);
+              debugPrint('[getMonthlyAggregationData] Key $key in range: $isInRange');
+
+              if (isInRange) {
                 final averagePower = (value['average_power'] as num? ?? 0.0).toDouble();
                 final averageVoltage = (value['average_voltage'] as num? ?? 0.0).toDouble();
                 final averageCurrent = (value['average_current'] as num? ?? 0.0).toDouble();
@@ -647,6 +733,7 @@ class RealtimeDbService {
                   current: averageCurrent,
                   energy: totalEnergy,
                 ));
+                debugPrint('[getMonthlyAggregationData] ✅ Added key $key to spots');
               }
             }
           }
@@ -656,7 +743,11 @@ class RealtimeDbService {
       });
 
       spots.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-      debugPrint('[getMonthlyAggregationData] Loaded ${spots.length} monthly data points for hub $hubSerialNumber');
+      debugPrint('[getMonthlyAggregationData] ✅ Loaded ${spots.length} monthly data points for hub $hubSerialNumber');
+      debugPrint('[getMonthlyAggregationData] Date range: $startTime to $endTime');
+      for (final spot in spots) {
+        debugPrint('[getMonthlyAggregationData]   - ${spot.timestamp}: ${spot.power}W');
+      }
       return spots;
     } catch (e) {
       debugPrint('[getMonthlyAggregationData] Error fetching monthly data: $e');
@@ -664,81 +755,221 @@ class RealtimeDbService {
     }
   }
 
-  /// Get combined historical data stream that merges past aggregated data with live per-second data
-  /// This provides a seamless transition from historical to real-time data
+  /// Returns an efficient, listening stream of the last 24 hours of HOURLY data.
+  /// This is specifically for the Energy Overview screen's 24h chart.
+  /// The stream re-emits every minute to update the 24-hour rolling window.
+  Stream<List<TimestampedFlSpot>> getOverviewHourlyStream(
+      String hubSerialNumber) {
+    // This is more efficient than polling. It listens for any changes on the 'hourly' node.
+    final hourlyRef =
+        _dbRef.child('$rtdbUserPath/hubs/$hubSerialNumber/aggregations/hourly');
+
+    // Combine Firebase updates with periodic timer to keep the 24h window current
+    final periodicStream = Stream.periodic(const Duration(minutes: 1), (count) => count).startWith(0);
+
+    return Rx.combineLatest2<DatabaseEvent, int, List<TimestampedFlSpot>>(
+      hourlyRef.onValue,
+      periodicStream,
+      (event, _) {
+        if (!event.snapshot.exists || event.snapshot.value == null) {
+          debugPrint(
+              '[getOverviewHourlyStream] No hourly data found for hub: $hubSerialNumber');
+          return <TimestampedFlSpot>[];
+        }
+
+        final data = event.snapshot.value as Map<dynamic, dynamic>;
+        final List<TimestampedFlSpot> spots = [];
+        // Define the 24-hour window based on the current time.
+        final windowEnd = DateTime.now();
+        final windowStart = windowEnd.subtract(const Duration(hours: 24));
+
+        data.forEach((key, value) {
+          try {
+            if (value is Map) {
+              // Key format: "2025-11-22-02" (YYYY-MM-DD-HH)
+              final parts = (key as String).split('-');
+              if (parts.length == 4) {
+                final timestamp = DateTime(
+                  int.parse(parts[0]), // year
+                  int.parse(parts[1]), // month
+                  int.parse(parts[2]), // day
+                  int.parse(parts[3]), // hour
+                );
+
+                // Filter for the last 24 hours on the client side.
+                if (!timestamp.isBefore(windowStart) &&
+                    !timestamp.isAfter(windowEnd)) {
+                  final averagePower =
+                      (value['average_power'] as num? ?? 0.0).toDouble();
+                  final averageVoltage =
+                      (value['average_voltage'] as num? ?? 0.0).toDouble();
+                  final averageCurrent =
+                      (value['average_current'] as num? ?? 0.0).toDouble();
+                  final totalEnergy =
+                      (value['total_energy'] as num? ?? 0.0).toDouble();
+
+                  spots.add(TimestampedFlSpot(
+                    timestamp: timestamp,
+                    power: averagePower,
+                    voltage: averageVoltage,
+                    current: averageCurrent,
+                    energy: totalEnergy,
+                  ));
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint(
+                '[getOverviewHourlyStream] Error parsing hourly data key $key: $e');
+          }
+        });
+
+        spots.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        debugPrint(
+            '[getOverviewHourlyStream] Loaded ${spots.length} hourly data points for hub $hubSerialNumber (window: $windowStart to $windowEnd)');
+        return spots;
+      },
+    );
+  }
+
+  /// Returns a combined efficient, listening stream of the last 24 hours of HOURLY data for ALL active hubs.
+  /// This is specifically for the Energy Overview screen's 24h chart.
+  Stream<List<TimestampedFlSpot>> getOverviewHourlyStreamForAllHubs() {
+    return _activeHubController.switchMap((hubSerialNumbers) {
+      if (hubSerialNumbers.isEmpty) {
+        return Stream.value(<TimestampedFlSpot>[]);
+      }
+
+      final List<Stream<List<TimestampedFlSpot>>> hubStreams =
+          hubSerialNumbers.map((serial) {
+        // Reuse the efficient single-hub stream for each active hub
+        return getOverviewHourlyStream(serial);
+      }).toList();
+
+      // Combine the latest data from all individual hub streams
+      return Rx.combineLatestList(hubStreams).map((listOfHubData) {
+        // listOfHubData is a List<List<TimestampedFlSpot>>
+        // We flatten it into a single list, then sort it by time.
+        final List<TimestampedFlSpot> allSpots =
+            listOfHubData.expand((spots) => spots).toList();
+        allSpots.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        debugPrint(
+            '[getOverviewHourlyStreamForAllHubs] Combined data from ${hubSerialNumbers.length} hubs, total points: ${allSpots.length}');
+        return allSpots;
+      });
+    });
+  }
+
+  /// Get historical aggregated data stream (WITHOUT live per-second data)
   /// Uses appropriate aggregation level: H (hourly), D (daily), W (weekly), M (monthly)
+  /// This is for the historical chart only - the 60-second live chart uses getLiveChartDataStream()
+  /// The stream re-emits periodically to update the rolling time window.
   Stream<List<TimestampedFlSpot>> getCombinedHistoricalAndLiveDataStream(
     String hubSerialNumber,
     DateTime startTime,
-  ) async* {
-    final now = DateTime.now();
+  ) {
+    // Determine which aggregation level to use based on initial time range
+    final initialNow = DateTime.now();
+    final duration = initialNow.difference(startTime);
 
-    // Determine which aggregation level to use based on time range
-    // H: hourly (last 24 hours), D: daily (last 7 days), W: weekly (last 30 days), M: monthly (last 365 days)
-    final duration = now.difference(startTime);
-    List<TimestampedFlSpot> historicalData = [];
-
+    // For hourly data (24h), use the efficient streaming method
     if (duration.inHours <= 24) {
-      // H: For last 24 hours, use hourly aggregation
-      debugPrint('[getCombinedHistoricalAndLiveDataStream] Using HOURLY aggregation for ${duration.inHours} hours');
-      historicalData = await getHourlyAggregationData(hubSerialNumber, startTime, now);
-    } else if (duration.inDays <= 7) {
-      // D: For last 7 days, use daily aggregation
-      debugPrint('[getCombinedHistoricalAndLiveDataStream] Using DAILY aggregation for ${duration.inDays} days');
-      historicalData = await getDailyAggregationData(hubSerialNumber, startTime, now);
-    } else if (duration.inDays <= 30) {
-      // W: For last 30 days, use weekly aggregation
-      debugPrint('[getCombinedHistoricalAndLiveDataStream] Using WEEKLY aggregation for ${duration.inDays} days');
-      historicalData = await getWeeklyAggregationData(hubSerialNumber, startTime, now);
-    } else {
-      // M: For longer periods (up to 365 days), use monthly aggregation
-      debugPrint('[getCombinedHistoricalAndLiveDataStream] Using MONTHLY aggregation for ${duration.inDays} days');
-      historicalData = await getMonthlyAggregationData(hubSerialNumber, startTime, now);
+      debugPrint(
+          '[getCombinedHistoricalAndLiveDataStream] Using HOURLY streaming for ${duration.inHours} hours');
+      return getOverviewHourlyStream(hubSerialNumber);
     }
 
-    // Get live data stream for the last 65 seconds
-    await for (final liveData in getLiveChartDataStreamForHub(hubSerialNumber)) {
-      // Combine historical and live data
-      final combinedData = [...historicalData, ...liveData];
-      combinedData.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-      yield combinedData;
-    }
+    // For other time ranges, create a stream that re-emits periodically
+    final updateInterval = duration.inDays <= 7
+        ? const Duration(minutes: 5) // Daily: update every 5 minutes
+        : const Duration(minutes: 15); // Weekly/Monthly: update every 15 minutes
+
+    // Combine periodic timer with manual refresh capability
+    final periodicStream = Stream.periodic(updateInterval, (count) => count).startWith(0);
+
+    return periodicStream.asyncMap((_) async {
+      final now = DateTime.now();
+      final currentDuration = now.difference(startTime);
+
+      List<TimestampedFlSpot> historicalData = [];
+
+      if (currentDuration.inDays <= 7) {
+        // D: For last 7 days, use daily aggregation
+        debugPrint(
+            '[getCombinedHistoricalAndLiveDataStream] Using DAILY aggregation for ${currentDuration.inDays} days');
+        historicalData =
+            await getDailyAggregationData(hubSerialNumber, startTime, now);
+      } else if (currentDuration.inDays <= 28) {
+        // W: For last 28 days (4 weeks), use weekly aggregation
+        debugPrint(
+            '[getCombinedHistoricalAndLiveDataStream] Using WEEKLY aggregation for ${currentDuration.inDays} days');
+        historicalData =
+            await getWeeklyAggregationData(hubSerialNumber, startTime, now);
+      } else {
+        // M: For longer periods (28-180 days / 6 months), use monthly aggregation
+        debugPrint(
+            '[getCombinedHistoricalAndLiveDataStream] Using MONTHLY aggregation for ${currentDuration.inDays} days');
+        historicalData =
+            await getMonthlyAggregationData(hubSerialNumber, startTime, now);
+      }
+
+      return historicalData;
+    });
   }
 
-  /// Get combined data for all active hubs
+  /// Get historical aggregated data for all active hubs (WITHOUT live per-second data)
   /// Uses appropriate aggregation level: H (hourly), D (daily), W (weekly), M (monthly)
+  /// The stream re-emits periodically to update the rolling time window.
   Stream<List<TimestampedFlSpot>> getCombinedHistoricalAndLiveDataForAllHubs(
     DateTime startTime,
-  ) async* {
-    await for (final hubSerialNumbers in _activeHubController.stream) {
-      if (hubSerialNumbers.isEmpty) {
-        yield <TimestampedFlSpot>[];
-        continue;
+  ) {
+    // Determine which aggregation level to use based on initial time range
+    final initialNow = DateTime.now();
+    final duration = initialNow.difference(startTime);
+
+    // For hourly data (24h), use the efficient streaming method
+    if (duration.inHours <= 24) {
+      debugPrint(
+          '[getCombinedHistoricalAndLiveDataForAllHubs] Using HOURLY streaming for ${duration.inHours} hours');
+      return getOverviewHourlyStreamForAllHubs();
+    }
+
+    // For other time ranges, create a stream that re-emits periodically
+    final updateInterval = duration.inDays <= 7
+        ? const Duration(minutes: 5) // Daily: update every 5 minutes
+        : const Duration(minutes: 15); // Weekly/Monthly: update every 15 minutes
+
+    // Combine periodic timer with hub changes
+    final periodicStream = Stream.periodic(updateInterval, (count) => count).startWith(0);
+
+    return Rx.combineLatest2<List<String>, int, _TriggerData>(
+      _activeHubController.stream,
+      periodicStream,
+      (hubSerialNumbers, _) => _TriggerData(hubSerialNumbers),
+    ).asyncMap((trigger) async {
+      if (trigger.hubSerialNumbers.isEmpty) {
+        return <TimestampedFlSpot>[];
       }
 
       final now = DateTime.now();
-      final duration = now.difference(startTime);
+      final currentDuration = now.difference(startTime);
 
       // Collect historical data from all hubs
       final List<TimestampedFlSpot> allHistoricalData = [];
 
-      for (final hubSerial in hubSerialNumbers) {
+      for (final hubSerial in trigger.hubSerialNumbers) {
         List<TimestampedFlSpot> hubHistoricalData = [];
 
-        if (duration.inHours <= 24) {
-          // H: For last 24 hours, use hourly aggregation
-          debugPrint('[getCombinedHistoricalAndLiveDataForAllHubs] Hub $hubSerial: Using HOURLY aggregation');
-          hubHistoricalData = await getHourlyAggregationData(hubSerial, startTime, now);
-        } else if (duration.inDays <= 7) {
+        if (currentDuration.inDays <= 7) {
           // D: For last 7 days, use daily aggregation
           debugPrint('[getCombinedHistoricalAndLiveDataForAllHubs] Hub $hubSerial: Using DAILY aggregation');
           hubHistoricalData = await getDailyAggregationData(hubSerial, startTime, now);
-        } else if (duration.inDays <= 30) {
-          // W: For last 30 days, use weekly aggregation
+        } else if (currentDuration.inDays <= 28) {
+          // W: For last 28 days (4 weeks), use weekly aggregation
           debugPrint('[getCombinedHistoricalAndLiveDataForAllHubs] Hub $hubSerial: Using WEEKLY aggregation');
           hubHistoricalData = await getWeeklyAggregationData(hubSerial, startTime, now);
         } else {
-          // M: For longer periods (up to 365 days), use monthly aggregation
+          // M: For longer periods (28-180 days / 6 months), use monthly aggregation
           debugPrint('[getCombinedHistoricalAndLiveDataForAllHubs] Hub $hubSerial: Using MONTHLY aggregation');
           hubHistoricalData = await getMonthlyAggregationData(hubSerial, startTime, now);
         }
@@ -746,13 +977,9 @@ class RealtimeDbService {
         allHistoricalData.addAll(hubHistoricalData);
       }
 
-      // Get live data for all hubs
-      await for (final liveData in getLiveChartDataStream()) {
-        final combinedData = [...allHistoricalData, ...liveData];
-        combinedData.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-        yield combinedData;
-        break; // Only emit once per active hub change
-      }
-    }
+      // Sort aggregated data by timestamp
+      allHistoricalData.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return allHistoricalData;
+    });
   }
 }
