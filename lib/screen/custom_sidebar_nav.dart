@@ -7,7 +7,7 @@ import '../realtime_db_service.dart';
 import 'admin_home.dart';
 import 'explore.dart';
 import 'analytics.dart';
-import 'schedule.dart';
+import 'history.dart';
 import 'settings.dart';
 import 'login.dart';
 
@@ -93,7 +93,7 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
       HomeScreen(realtimeDbService: widget.realtimeDbService),
       DevicesTab(realtimeDbService: widget.realtimeDbService),
       AnalyticsScreen(realtimeDbService: widget.realtimeDbService),
-      EnergySchedulingScreen(realtimeDbService: widget.realtimeDbService),
+      EnergyHistoryScreen(realtimeDbService: widget.realtimeDbService),
       EnergySettingScreen(realtimeDbService: widget.realtimeDbService),
     ];
 
@@ -111,8 +111,8 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
         'label': 'Analytics',
       },
       {
-        'icon': Icons.schedule,
-        'label': 'Schedule',
+        'icon': Icons.history,
+        'label': 'History',
       },
       {
         'icon': Icons.settings,
