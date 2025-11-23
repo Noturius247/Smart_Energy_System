@@ -61,6 +61,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   // SSR state tracking for pausing the chart
   bool _isChartPaused = false;
   StreamSubscription? _ssrStateSubscription;
+  StreamSubscription? _hubRemovedSubscription;
+  StreamSubscription? _hubAddedSubscription;
 
   // Stream key to force rebuild when time range or hub changes
   int _streamKey = 0;
@@ -85,6 +87,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     _loadUserPreferences(); // Load user preferences from Firestore
     _initializeHubStreams();
     _startSsrStateListener();
+    _startHubRemovedListener();
+    _startHubAddedListener();
   }
 
   void _startSsrStateListener() {
@@ -168,10 +172,96 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
+  void _startHubRemovedListener() {
+    // Listen to hub removal events from the service
+    _hubRemovedSubscription = widget.realtimeDbService.hubRemovedStream.listen((removedHubSerial) {
+      if (!mounted) return;
+
+      debugPrint('[AnalyticsScreen] Hub removed event received: $removedHubSerial');
+
+      setState(() {
+        // Remove the hub from available hubs list
+        _availableHubs.removeWhere((hub) => hub['serialNumber'] == removedHubSerial);
+
+        // If the removed hub was selected, switch to another hub or clear selection
+        if (_selectedHubSerial == removedHubSerial) {
+          if (_availableHubs.isNotEmpty) {
+            _selectedHubSerial = _availableHubs.first['serialNumber'];
+            debugPrint('[AnalyticsScreen] Switched to hub: $_selectedHubSerial');
+            // Restart SSR state listener for the new hub
+            _startSsrStateListener();
+          } else {
+            _selectedHubSerial = null;
+            debugPrint('[AnalyticsScreen] No hubs available after removal');
+          }
+          // Increment stream key to force rebuild
+          _streamKey++;
+        }
+      });
+
+      // Show notification to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hub $removedHubSerial has been unlinked'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    });
+  }
+
+  void _startHubAddedListener() {
+    // Listen to hub addition events from the service
+    _hubAddedSubscription = widget.realtimeDbService.hubAddedStream.listen((hubData) {
+      if (!mounted) return;
+
+      final String serialNumber = hubData['serialNumber']!;
+      final String nickname = hubData['nickname']!;
+
+      debugPrint('[AnalyticsScreen] Hub added event received: $serialNumber');
+
+      setState(() {
+        // Add the hub to available hubs list if not already present
+        if (!_availableHubs.any((hub) => hub['serialNumber'] == serialNumber)) {
+          _availableHubs.add({
+            'serialNumber': serialNumber,
+            'nickname': nickname,
+          });
+          debugPrint('[AnalyticsScreen] Added hub to list: $serialNumber');
+
+          // If this is the first hub, select it automatically
+          if (_availableHubs.length == 1) {
+            _selectedHubSerial = serialNumber;
+            debugPrint('[AnalyticsScreen] Auto-selected first hub: $serialNumber');
+            // Start SSR state listener for the new hub
+            _startSsrStateListener();
+            // Increment stream key to force rebuild
+            _streamKey++;
+          }
+        }
+      });
+
+      // Show notification to user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Hub $serialNumber has been linked'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    });
+  }
+
   @override
   void dispose() {
     _recordingService.dispose();
     _ssrStateSubscription?.cancel();
+    _hubRemovedSubscription?.cancel();
+    _hubAddedSubscription?.cancel();
     super.dispose();
   }
 
@@ -270,29 +360,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
-  String _getTimeRangeLabel(_TimeRange timeRange) {
-    switch (timeRange) {
-      case _TimeRange.hourly:
-        return 'Hourly';
-      case _TimeRange.daily:
-        return 'Daily';
-      case _TimeRange.weekly:
-        return 'Weekly';
-      case _TimeRange.monthly:
-        return 'Monthly';
-    }
-  }
-
   Duration _getTimeRangeDuration(_TimeRange timeRange) {
     switch (timeRange) {
       case _TimeRange.hourly:
-        return const Duration(hours: 24); // Show 24 hours (daily timeframe)
+        return const Duration(hours: 24); // Show 24 hours - uses hourly aggregation
       case _TimeRange.daily:
-        return const Duration(days: 7); // Show 7 days (weekly timeframe)
+        return const Duration(days: 7); // Show 7 days - uses daily aggregation
       case _TimeRange.weekly:
-        return const Duration(days: 30); // Show 30 days (monthly timeframe)
+        return const Duration(days: 28); // Show 28 days (4 weeks) - uses weekly aggregation
       case _TimeRange.monthly:
-        return const Duration(days: 365); // Show 365 days (yearly timeframe)
+        return const Duration(days: 180); // Show 180 days (6 months) - uses monthly aggregation
     }
   }
 
@@ -692,184 +769,281 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         ),
                       ),
                       SizedBox(height: isSmallScreen ? 12 : 16),
-                      // 60-Second Live Chart at the TOP (independent of time range selection)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
+                      // 60-Second Live Chart Panel with Status-Based Colors
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
+                        margin: EdgeInsets.only(bottom: isSmallScreen ? 12 : 16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Theme.of(context).colorScheme.surface,
+                              // Status-based transparent green or red
+                              !_isChartPaused
+                                  ? Colors.green.withValues(alpha: 0.15)
+                                  : Colors.red.withValues(alpha: 0.15),
+                              !_isChartPaused
+                                  ? Colors.green.withValues(alpha: 0.08)
+                                  : Colors.red.withValues(alpha: 0.08),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: !_isChartPaused
+                                ? Colors.green.withValues(alpha: 0.3)
+                                : Colors.red.withValues(alpha: 0.3),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: !_isChartPaused
+                                  ? Colors.green.withValues(alpha: 0.15)
+                                  : Colors.red.withValues(alpha: 0.15),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                              spreadRadius: -5,
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Panel Header
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  isSmallScreen
-                                      ? 'Live ${_liveChartMetric.toString().split('.').last.capitalize()} (60s)'
-                                      : 'Live ${_liveChartMetric.toString().split('.').last.capitalize()} Chart (Last 60 Seconds)',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    fontSize: isSmallScreen ? 14 : 20,
-                                    fontWeight: FontWeight.bold,
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        _selectedHubSerial != null
+                                            ? 'Central Live Data (${_selectedHubSerial!.length > 8 ? _selectedHubSerial!.substring(0, 8) : _selectedHubSerial}...)'
+                                            : 'Central Live Data (All Hubs)',
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          fontSize: isSmallScreen ? 16 : 22,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      SizedBox(height: isSmallScreen ? 4 : 6),
+                                      Text(
+                                        isSmallScreen
+                                            ? 'Live ${_liveChartMetric.toString().split('.').last.capitalize()} (60s)'
+                                            : 'Live ${_liveChartMetric.toString().split('.').last.capitalize()} Chart (Last 60 Seconds)',
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                          fontSize: isSmallScreen ? 13 : 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      SizedBox(height: isSmallScreen ? 2 : 4),
+                                      // Current time/date display for live chart
+                                      StreamBuilder<DateTime>(
+                                        stream: Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now()),
+                                        builder: (context, snapshot) {
+                                          final now = snapshot.data ?? DateTime.now();
+                                          return Text(
+                                            DateFormat('MMM d, yyyy • HH:mm:ss').format(now),
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: Theme.of(context).colorScheme.secondary,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: isSmallScreen ? 11 : 13,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                SizedBox(height: isSmallScreen ? 4 : 8),
-                                if (!isSmallScreen)
-                                  Text(
-                                    _selectedHubSerial != null
-                                        ? 'Real-time ${_liveChartMetric.toString().split('.').last} from ${_availableHubs.firstWhere((h) => h['serialNumber'] == _selectedHubSerial)['nickname']}'
-                                        : 'Real-time ${_liveChartMetric.toString().split('.').last} from all active hubs',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.grey,
-                                      fontStyle: FontStyle.italic,
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Connection Status Indicator
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isSmallScreen ? 6 : 8,
+                                        vertical: isSmallScreen ? 3 : 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: (_isDeviceConnected && !_isChartPaused) ? Colors.green : Colors.red,
+                                        borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            (_isDeviceConnected && !_isChartPaused) ? Icons.wifi : Icons.wifi_off,
+                                            size: isSmallScreen ? 12 : 14,
+                                            color: Colors.white,
+                                          ),
+                                          SizedBox(width: isSmallScreen ? 3 : 4),
+                                          if (!isSmallScreen)
+                                            Text(
+                                              (_isDeviceConnected && !_isChartPaused) ? 'Connected' : 'Offline',
+                                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                SizedBox(height: isSmallScreen ? 2 : 4),
-                                // Current time/date display for live chart
+                                    SizedBox(width: isSmallScreen ? 4 : 8),
+                                    // Export Button
+                                    IconButton(
+                                      icon: Icon(Icons.download, size: isSmallScreen ? 20 : 24),
+                                      onPressed: () => _exportDataToCSV(allData),
+                                      tooltip: 'Export to CSV',
+                                      padding: EdgeInsets.all(isSmallScreen ? 4 : 8),
+                                      constraints: BoxConstraints(
+                                        minWidth: isSmallScreen ? 32 : 48,
+                                        minHeight: isSmallScreen ? 32 : 48,
+                                      ),
+                                    ),
+                                    // Refresh Button
+                                    IconButton(
+                                      icon: Icon(Icons.refresh, size: isSmallScreen ? 20 : 24),
+                                      onPressed: () {
+                                        setState(() {
+                                          _isInitialized = false;
+                                        });
+                                        _initializeHubStreams();
+                                      },
+                                      tooltip: 'Refresh data',
+                                      padding: EdgeInsets.all(isSmallScreen ? 4 : 8),
+                                      constraints: BoxConstraints(
+                                        minWidth: isSmallScreen ? 32 : 48,
+                                        minHeight: isSmallScreen ? 32 : 48,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: isSmallScreen ? 8 : 12),
+                            _build60SecondLiveChart(),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: isSmallScreen ? 20 : 30),
+
+                      // Historical Analytics Panel with Status-Based Colors
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        padding: EdgeInsets.all(isSmallScreen ? 14 : 18),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Theme.of(context).colorScheme.surface,
+                              // Status-based transparent green or red
+                              !_isChartPaused
+                                  ? Colors.green.withValues(alpha: 0.15)
+                                  : Colors.red.withValues(alpha: 0.15),
+                              !_isChartPaused
+                                  ? Colors.green.withValues(alpha: 0.08)
+                                  : Colors.red.withValues(alpha: 0.08),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: !_isChartPaused
+                                ? Colors.green.withValues(alpha: 0.3)
+                                : Colors.red.withValues(alpha: 0.3),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: !_isChartPaused
+                                  ? Colors.green.withValues(alpha: 0.15)
+                                  : Colors.red.withValues(alpha: 0.15),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                              spreadRadius: -5,
+                            ),
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Panel Header
+                            Text(
+                              _selectedHubSerial != null
+                                  ? 'Historical Analytics (${_selectedHubSerial!.length > 8 ? _selectedHubSerial!.substring(0, 8) : _selectedHubSerial}...)'
+                                  : 'Historical Analytics (All Hubs)',
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                fontSize: isSmallScreen ? 16 : 22,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: isSmallScreen ? 6 : 10),
+                            // Current time/date and last update info
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // Current Date/Time for historical chart - FIRST
                                 StreamBuilder<DateTime>(
                                   stream: Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now()),
                                   builder: (context, snapshot) {
                                     final now = snapshot.data ?? DateTime.now();
-                                    return Text(
-                                      DateFormat('MMM d, yyyy • HH:mm:ss').format(now),
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.secondary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: isSmallScreen ? 11 : 13,
+                                    return Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isSmallScreen ? 8 : 10,
+                                        vertical: isSmallScreen ? 4 : 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.access_time,
+                                            size: isSmallScreen ? 12 : 14,
+                                            color: Theme.of(context).colorScheme.secondary,
+                                          ),
+                                          SizedBox(width: isSmallScreen ? 4 : 6),
+                                          Text(
+                                            DateFormat('MMM d, yyyy • HH:mm:ss').format(now),
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: Theme.of(context).colorScheme.secondary,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: isSmallScreen ? 10 : 12,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     );
                                   },
                                 ),
-                              ],
-                            ),
-                          ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Connection Status Indicator
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: isSmallScreen ? 6 : 8,
-                                  vertical: isSmallScreen ? 3 : 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: _isDeviceConnected ? Colors.green : Colors.red,
-                                  borderRadius: BorderRadius.circular(isSmallScreen ? 10 : 12),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _isDeviceConnected ? Icons.wifi : Icons.wifi_off,
-                                      size: isSmallScreen ? 12 : 14,
-                                      color: Colors.white,
-                                    ),
-                                    SizedBox(width: isSmallScreen ? 3 : 4),
-                                    if (!isSmallScreen)
-                                      Text(
-                                        _isDeviceConnected ? 'Connected' : 'Offline',
-                                        style: const TextStyle(color: Colors.white, fontSize: 11),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(width: isSmallScreen ? 4 : 8),
-                              // Export Button
-                              IconButton(
-                                icon: Icon(Icons.download, size: isSmallScreen ? 20 : 24),
-                                onPressed: () => _exportDataToCSV(allData),
-                                tooltip: 'Export to CSV',
-                                padding: EdgeInsets.all(isSmallScreen ? 4 : 8),
-                                constraints: BoxConstraints(
-                                  minWidth: isSmallScreen ? 32 : 48,
-                                  minHeight: isSmallScreen ? 32 : 48,
-                                ),
-                              ),
-                              // Refresh Button
-                              IconButton(
-                                icon: Icon(Icons.refresh, size: isSmallScreen ? 20 : 24),
-                                onPressed: () {
-                                  setState(() {
-                                    _isInitialized = false;
-                                  });
-                                  _initializeHubStreams();
-                                },
-                                tooltip: 'Refresh data',
-                                padding: EdgeInsets.all(isSmallScreen ? 4 : 8),
-                                constraints: BoxConstraints(
-                                  minWidth: isSmallScreen ? 32 : 48,
-                                  minHeight: isSmallScreen ? 32 : 48,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: isSmallScreen ? 8 : 12),
-                      _build60SecondLiveChart(),
-                      SizedBox(height: isSmallScreen ? 20 : 30),
-
-                      // Historical Analytics Section
-                      Text(
-                        'Historical Analytics',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontSize: isSmallScreen ? 16 : 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: isSmallScreen ? 6 : 8),
-                      // Current time/date and last update info
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Current Date/Time for historical chart - FIRST
-                          StreamBuilder<DateTime>(
-                            stream: Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now()),
-                            builder: (context, snapshot) {
-                              final now = snapshot.data ?? DateTime.now();
-                              return Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: isSmallScreen ? 8 : 10,
-                                  vertical: isSmallScreen ? 4 : 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
+                                // Last Update Time - SECOND
+                                Text(
+                                  'Last update: ${_getTimeSinceLastUpdate()}',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.grey,
+                                    fontSize: isSmallScreen ? 11 : 13,
                                   ),
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.access_time,
-                                      size: isSmallScreen ? 12 : 14,
-                                      color: Theme.of(context).colorScheme.secondary,
-                                    ),
-                                    SizedBox(width: isSmallScreen ? 4 : 6),
-                                    Text(
-                                      DateFormat('MMM d, yyyy • HH:mm:ss').format(now),
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.secondary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: isSmallScreen ? 10 : 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                          // Last Update Time - SECOND
-                          Text(
-                            'Last update: ${_getTimeSinceLastUpdate()}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              fontStyle: FontStyle.italic,
-                              color: Colors.grey,
-                              fontSize: isSmallScreen ? 11 : 13,
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: isSmallScreen ? 12 : 16),
+                            SizedBox(height: isSmallScreen ? 12 : 16),
                       // Metric Selection Buttons and Time Range Buttons
                       isSmallScreen
                           ? Column(
@@ -1066,8 +1240,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                 ),
                               ],
                             ),
-                      SizedBox(height: isSmallScreen ? 12 : 16),
-                      _buildLiveChart(filteredData), // Historical chart that changes with time range
+                            SizedBox(height: isSmallScreen ? 12 : 16),
+                            _buildLiveChart(filteredData), // Historical chart that changes with time range
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -1716,8 +1893,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         return const Duration(days: 1).inMilliseconds.toDouble(); // Every day
       case _TimeRange.weekly: // 30 days
         return const Duration(days: 5).inMilliseconds.toDouble(); // Every 5 days
-      case _TimeRange.monthly: // 365 days (yearly)
-        return const Duration(days: 60).inMilliseconds.toDouble(); // Every 2 months
+      case _TimeRange.monthly: // 180 days (6 months)
+        return const Duration(days: 30).inMilliseconds.toDouble(); // Every month
     }
   }
 }
@@ -1815,6 +1992,61 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
     super.dispose();
   }
 
+  /// Split data into segments when there are time gaps
+  /// This prevents connecting lines across disconnected periods
+  List<List<FlSpot>> _splitIntoSegments(List<TimestampedFlSpot> spots) {
+    if (spots.isEmpty) return [];
+
+    final List<List<FlSpot>> segments = [];
+    List<FlSpot> currentSegment = [];
+
+    // Determine gap threshold based on time range
+    // Thresholds are set to detect REAL disconnections, not normal data intervals
+    Duration gapThreshold;
+    switch (widget.selectedTimeRange) {
+      case _TimeRange.hourly:
+        gapThreshold = const Duration(hours: 3); // 3+ hours gap = disconnection
+        break;
+      case _TimeRange.daily:
+        gapThreshold = const Duration(days: 2); // 2+ days gap = disconnection
+        break;
+      case _TimeRange.weekly:
+        gapThreshold = const Duration(days: 10); // 10+ days gap = disconnection
+        break;
+      case _TimeRange.monthly:
+        gapThreshold = const Duration(days: 45); // 45+ days gap = disconnection
+        break;
+    }
+
+    for (int i = 0; i < spots.length; i++) {
+      final spot = spots[i];
+      final xValue = spot.timestamp.millisecondsSinceEpoch.toDouble();
+      final yValue = widget.getMetricValue(spot, widget.selectedMetric);
+
+      if (i > 0) {
+        final previousSpot = spots[i - 1];
+        final timeDiff = spot.timestamp.difference(previousSpot.timestamp);
+
+        // If gap is too large, start a new segment
+        if (timeDiff > gapThreshold) {
+          if (currentSegment.isNotEmpty) {
+            segments.add(currentSegment);
+            currentSegment = [];
+          }
+        }
+      }
+
+      currentSegment.add(FlSpot(xValue, yValue));
+    }
+
+    // Add the last segment
+    if (currentSegment.isNotEmpty) {
+      segments.add(currentSegment);
+    }
+
+    return segments;
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -1827,6 +2059,10 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
       final theoreticalMaxX = now.millisecondsSinceEpoch.toDouble();
       return spotTime >= theoreticalMinX && spotTime <= theoreticalMaxX;
     }).toList();
+
+    // Gap detection: Split data into segments when there are large time gaps
+    // This prevents connecting lines across disconnected periods
+    final List<List<FlSpot>> lineSegments = _splitIntoSegments(filteredSpots);
 
     // X-axis range: Use actual data range if available, otherwise use theoretical range
     double minX;
@@ -1848,30 +2084,34 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
       maxX = now.millisecondsSinceEpoch.toDouble();
     }
 
-    List<FlSpot> chartSpots = filteredSpots.map((spot) {
-      final xValue = spot.timestamp.millisecondsSinceEpoch.toDouble();
-      // Clamp X values to ensure they stay within chart boundaries
-      final clampedX = xValue.clamp(minX, maxX);
-      return FlSpot(
-        clampedX,
-        widget.getMetricValue(spot, widget.selectedMetric),
-      );
-    }).toList();
-
     final chartColor = widget.getMetricColor(widget.selectedMetric);
 
-    // Calculate maxY based on data or use default
+    // Show dots on all time ranges to mark aggregated data points
+    final bool showDots = true;
+
+    // Calculate maxY based on all segments or use default
     double maxY = 100;
-    if (chartSpots.isNotEmpty) {
-      final maxValue = chartSpots.map((spot) => spot.y).reduce((a, b) => a > b ? a : b);
-      maxY = (maxValue * 1.2).clamp(10.0, double.infinity);
+    double minY = 0;
+    if (lineSegments.isNotEmpty) {
+      final allYValues = lineSegments.expand((segment) => segment.map((spot) => spot.y)).toList();
+      if (allYValues.isNotEmpty) {
+        final maxValue = allYValues.reduce((a, b) => a > b ? a : b);
+        final minValue = allYValues.reduce((a, b) => a < b ? a : b);
+
+        // Add more padding for better visualization - 25% above and below
+        final range = maxValue - minValue;
+        final padding = range * 0.25;
+
+        minY = (minValue - padding).clamp(0.0, double.infinity);
+        maxY = (maxValue + padding).clamp(10.0, double.infinity);
+      }
     }
 
     return LineChart(
       LineChartData(
         minX: minX,
         maxX: maxX,
-        minY: 0,
+        minY: minY,
         maxY: maxY,
         titlesData: FlTitlesData(
           bottomTitles: AxisTitles(
@@ -1899,7 +2139,7 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
                   style: Theme.of(context).textTheme.bodySmall,
                 );
               },
-              interval: maxY / 5 > 0 ? maxY / 5 : 1,
+              interval: (maxY - minY) / 5 > 0 ? (maxY - minY) / 5 : 1,
               reservedSize: 60,
             ),
           ),
@@ -1936,9 +2176,9 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
           ),
         ),
         clipData: FlClipData.all(), // Clip lines to stay within chart boundaries
-        lineBarsData: [
-          LineChartBarData(
-            spots: chartSpots,
+        lineBarsData: lineSegments.map((segment) {
+          return LineChartBarData(
+            spots: segment,
             isCurved: true, // Use smooth curves
             curveSmoothness: 0.2, // Low smoothness to prevent extreme curves
             color: chartColor,
@@ -1948,7 +2188,7 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
               color: chartColor.withAlpha((255 * 0.2).round()),
             ),
             dotData: FlDotData(
-              show: true, // Always show dots to mark specific data points
+              show: showDots, // Smart dot display: show for H/D, hide for W/M
               getDotPainter: (spot, percent, barData, index) {
                 return FlDotCirclePainter(
                   radius: 4,
@@ -1960,8 +2200,8 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
             ),
             preventCurveOverShooting: true, // Prevent curve from going beyond data points
             preventCurveOvershootingThreshold: 10.0, // Strict threshold to prevent sideways curves
-          ),
-        ],
+          );
+        }).toList(),
         lineTouchData: LineTouchData(
           handleBuiltInTouches: true,
           touchTooltipData: LineTouchTooltipData(

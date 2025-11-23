@@ -9,7 +9,7 @@ import 'custom_header.dart';
 import 'energy_overview_screen.dart'; // New: Import the extracted EnergyOverviewScreen
 import 'explore.dart'; // Import DevicesTab
 import 'analytics.dart'; // Import AnalyticsScreen
-import 'schedule.dart'; // Import EnergySchedulingScreen
+import 'history.dart'; // Import EnergyHistoryScreen
 import 'settings.dart'; // Import EnergySettingScreen
 
 class HomeScreen extends StatefulWidget {
@@ -44,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               _realtimeDbService), // The new 'Energy' dashboard page
       DevicesTab(realtimeDbService: _realtimeDbService),
       AnalyticsScreen(realtimeDbService: _realtimeDbService),
-      EnergySchedulingScreen(realtimeDbService: _realtimeDbService),
+      EnergyHistoryScreen(realtimeDbService: _realtimeDbService),
       EnergySettingScreen(realtimeDbService: _realtimeDbService),
     ];
   }

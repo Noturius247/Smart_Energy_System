@@ -645,10 +645,14 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
               await notificationProvider.trackDeviceAdded('Central Hub ($serialNumber)');
             }
 
+            // Notify the service about hub addition (broadcasts to all pages)
+            _realtimeDbService.notifyHubAdded(serialNumber);
+            print('[_searchSerialNumber] Notified hub addition for: $serialNumber');
+
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Device successfully linked.'),
+                content: Text('Device successfully linked to all pages.'),
                 backgroundColor: Colors.green,
               ),
             );
@@ -977,7 +981,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPlugDeviceRow(ConnectedDevice plug, bool isSmallScreen) {
+  Widget _buildPlugDeviceRow(ConnectedDevice plug, bool isSmallScreen, bool isHubActive) {
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: isSmallScreen ? 14.0 : 20.0,
@@ -993,16 +997,15 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                 Container(
                   padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Theme.of(context).colorScheme.secondary,
-                        Theme.of(context).colorScheme.secondary.withOpacity(0.7),
-                      ],
-                    ),
+                    color: isHubActive
+                        ? Theme.of(context).colorScheme.secondary
+                        : Colors.grey,
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+                        color: isHubActive
+                            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3)
+                            : Colors.grey.withValues(alpha: 0.3),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -1025,6 +1028,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           fontSize: isSmallScreen ? 15 : 17,
                           fontWeight: FontWeight.w600,
+                          color: isHubActive ? null : Colors.grey,
                         ),
                       ),
                       SizedBox(height: isSmallScreen ? 4 : 6),
@@ -1036,9 +1040,11 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                         ),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: plug.status == "on"
-                                ? [Colors.green.shade400, Colors.green.shade600]
-                                : [Colors.red.shade400, Colors.red.shade600],
+                            colors: !isHubActive
+                                ? [Colors.grey.shade400, Colors.grey.shade600]
+                                : plug.status == "on"
+                                    ? [Colors.green.shade400, Colors.green.shade600]
+                                    : [Colors.red.shade400, Colors.red.shade600],
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1055,7 +1061,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                             ),
                             SizedBox(width: 6),
                             Text(
-                              plug.status == "on" ? "ONLINE" : "OFFLINE",
+                              !isHubActive ? "INACTIVE" : (plug.status == "on" ? "ONLINE" : "OFFLINE"),
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: isSmallScreen ? 10 : 12,
@@ -1066,42 +1072,78 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                         ),
                       ),
                       SizedBox(height: isSmallScreen ? 6 : 8),
-                      // Metrics with modern layout
-                      Wrap(
-                        spacing: isSmallScreen ? 12 : 16,
-                        runSpacing: isSmallScreen ? 4 : 6,
-                        children: [
-                          if (plug.current != null)
-                            _buildMetricChip(
-                              Icons.flash_on_rounded,
-                              '${plug.current?.toStringAsFixed(2)} A',
-                              Colors.amber,
-                              isSmallScreen,
+                      // Metrics with modern layout - Hide when hub is inactive
+                      if (isHubActive)
+                        Wrap(
+                          spacing: isSmallScreen ? 12 : 16,
+                          runSpacing: isSmallScreen ? 4 : 6,
+                          children: [
+                            if (plug.current != null)
+                              _buildMetricChip(
+                                Icons.flash_on_rounded,
+                                '${plug.current?.toStringAsFixed(2)} A',
+                                Colors.blue, // Matching analytics
+                                isSmallScreen,
+                              ),
+                            if (plug.power != null)
+                              _buildMetricChip(
+                                Icons.power_rounded,
+                                '${plug.power?.toStringAsFixed(2)} W',
+                                Colors.purple, // Matching analytics
+                                isSmallScreen,
+                              ),
+                            if (plug.voltage != null)
+                              _buildMetricChip(
+                                Icons.electrical_services_rounded,
+                                '${plug.voltage?.toStringAsFixed(2)} V',
+                                Colors.orange, // Matching analytics
+                                isSmallScreen,
+                              ),
+                            if (plug.energy != null)
+                              _buildMetricChip(
+                                Icons.battery_charging_full_rounded,
+                                '${plug.energy?.toStringAsFixed(2)} kWh',
+                                Colors.green, // Matching analytics
+                                isSmallScreen,
+                              ),
+                          ],
+                        )
+                      else
+                        // Show "No Data" when hub is inactive
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isSmallScreen ? 8 : 10,
+                            vertical: isSmallScreen ? 4 : 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Colors.grey.withValues(alpha: 0.3),
+                              width: 1,
                             ),
-                          if (plug.power != null)
-                            _buildMetricChip(
-                              Icons.power_rounded,
-                              '${plug.power?.toStringAsFixed(2)} W',
-                              Colors.orange,
-                              isSmallScreen,
-                            ),
-                          if (plug.voltage != null)
-                            _buildMetricChip(
-                              Icons.electrical_services_rounded,
-                              '${plug.voltage?.toStringAsFixed(2)} V',
-                              Colors.blue,
-                              isSmallScreen,
-                            ),
-                          if (plug.energy != null)
-                            _buildMetricChip(
-                              Icons.battery_charging_full_rounded,
-                              '${plug.energy?.toStringAsFixed(2)} kWh',
-                              Colors.green,
-                              isSmallScreen,
-                            ),
-                        ],
-                      ),
-                      if (plug.energy != null) ...[
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.sync_disabled_rounded,
+                                size: isSmallScreen ? 12 : 14,
+                                color: Colors.grey.shade700,
+                              ),
+                              SizedBox(width: isSmallScreen ? 4 : 6),
+                              Text(
+                                'No Data - Hub Inactive',
+                                style: TextStyle(
+                                  fontSize: isSmallScreen ? 10 : 12,
+                                  color: Colors.grey.shade700,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (plug.energy != null && isHubActive) ...[
                         SizedBox(height: isSmallScreen ? 4 : 6),
                         Container(
                           padding: EdgeInsets.symmetric(
@@ -1612,22 +1654,22 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       }
 
       if (hub.serialNumber != null) {
-        // 1. Stop the realtime data stream for this hub
-        _realtimeDbService.stopRealtimeDataStream(hub.serialNumber!);
-        print('[_deleteHubDialog] Stopped realtime stream for hub: ${hub.serialNumber}');
-
-        // 2. Unassign hub in Realtime Database by setting fields to null/false
+        // 1. Unassign hub in Realtime Database by setting fields to null/false
         await FirebaseDatabase.instance
             .ref('$rtdbUserPath/hubs/${hub.serialNumber}')
             .update({'assigned': false, 'ownerId': null, 'user_email': null});
 
-        // 3. Delete hub metadata from Firestore
+        // 2. Delete hub metadata from Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('devices')
             .doc(hub.serialNumber)
             .delete();
+
+        // 3. Notify the service about hub removal (broadcasts to all pages)
+        _realtimeDbService.notifyHubRemoved(hub.serialNumber!);
+        print('[_deleteHubDialog] Notified hub removal for: ${hub.serialNumber}');
 
         // Track device removed notification
         if (mounted) {
@@ -1638,7 +1680,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("${hub.name} has been unlinked."),
+            content: Text("${hub.name} has been unlinked from all pages."),
             backgroundColor: Colors.redAccent,
             duration: const Duration(seconds: 2),
           ),
@@ -1663,6 +1705,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   StreamSubscription<List<String>>? _activeHubSubscription;
 
   void _setActiveHub(String serialNumber) {
+    // Set this hub as the primary one for analytics across the app
+    _realtimeDbService.setPrimaryHub(serialNumber);
+
     // First, stop all currently active streams
     _realtimeDbService.stopAllRealtimeDataStreams();
     // Then, start the stream for the newly selected hub.
@@ -1710,48 +1755,86 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                               ),
                               children: [
                                 // Removed redundant 'Devices' title
-                                SizedBox(height: isSmallScreen ? 12 : 20),
-                                // Modern Header with Icon
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Theme.of(context).colorScheme.primary,
-                                            Theme.of(context).colorScheme.secondary,
+                                SizedBox(height: isSmallScreen ? 8 : 12),
+                                // Modern Header with Icon - Matching Analytics Style
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isSmallScreen ? 12 : 16,
+                                    vertical: isSmallScreen ? 10 : 12,
+                                  ),
+                                  margin: EdgeInsets.only(bottom: isSmallScreen ? 12 : 16),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Theme.of(context).colorScheme.surface,
+                                        Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(isSmallScreen ? 14 : 16),
+                                    border: Border.all(
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Theme.of(context).colorScheme.primary,
+                                              Theme.of(context).colorScheme.secondary,
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(12),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
                                           ],
                                         ),
-                                        borderRadius: BorderRadius.circular(12),
+                                        child: Icon(
+                                          Icons.add_circle_outline_rounded,
+                                          color: Colors.white,
+                                          size: isSmallScreen ? 18 : 22,
+                                        ),
                                       ),
-                                      child: Icon(
-                                        Icons.add_circle_outline_rounded,
-                                        color: Colors.white,
-                                        size: isSmallScreen ? 20 : 24,
+                                      SizedBox(width: isSmallScreen ? 10 : 12),
+                                      Text(
+                                        'Add Central Hub',
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          fontSize: isSmallScreen ? 16 : 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      'Add Central Hub',
-                                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                        fontSize: isSmallScreen ? 18 : 22,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                                SizedBox(height: isSmallScreen ? 12 : 16),
                                 // Modern Search Container
                                 Container(
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).cardColor,
                                     borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
+                                    border: Border.all(
+                                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                                      width: 1.5,
+                                    ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                                         blurRadius: 20,
                                         offset: const Offset(0, 4),
+                                        spreadRadius: -2,
+                                      ),
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.05),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
                                       ),
                                     ],
                                   ),
@@ -1829,17 +1912,67 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                     ],
                                   ),
                                 ),
-                                SizedBox(height: isSmallScreen ? 12 : 16),
+                                SizedBox(height: isSmallScreen ? 16 : 20),
 
-                                // Connected Devices Header - Responsive Layout
-                                Text(
-                                  'Connected Devices',
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    fontSize: isSmallScreen ? 18 : 20,
-                                    fontWeight: FontWeight.bold,
+                                // Connected Devices Header - Matching Analytics Style
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: isSmallScreen ? 12 : 16,
+                                    vertical: isSmallScreen ? 10 : 12,
+                                  ),
+                                  margin: EdgeInsets.only(bottom: isSmallScreen ? 12 : 16),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        Theme.of(context).colorScheme.surface,
+                                        Theme.of(context).colorScheme.secondary.withValues(alpha: 0.05),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(isSmallScreen ? 14 : 16),
+                                    border: Border.all(
+                                      color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.2),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Theme.of(context).colorScheme.secondary,
+                                              Theme.of(context).colorScheme.primary,
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(12),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Icon(
+                                          Icons.devices_rounded,
+                                          color: Colors.white,
+                                          size: isSmallScreen ? 18 : 22,
+                                        ),
+                                      ),
+                                      SizedBox(width: isSmallScreen ? 10 : 12),
+                                      Text(
+                                        'Connected Devices',
+                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          fontSize: isSmallScreen ? 16 : 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                SizedBox(height: isSmallScreen ? 8 : 12),
             
                                 // Separate sections per hub
                                 if (_groupedDevices.containsKey('generic'))
@@ -1896,7 +2029,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                   return Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      // Hub Section Header - Modern Design
+                                      // Hub Section Header - Modern Design with Status-Based Colors
                                       AnimatedContainer(
                                         duration: const Duration(milliseconds: 300),
                                         curve: Curves.easeInOut,
@@ -1910,24 +2043,33 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                             end: Alignment.bottomRight,
                                             colors: [
                                               Theme.of(context).colorScheme.surface,
-                                              Theme.of(context).colorScheme.primary.withOpacity(0.05),
-                                              Theme.of(context).colorScheme.secondary.withOpacity(0.08),
+                                              // Status-based transparent green or red
+                                              (hub.ssr_state ?? false)
+                                                  ? Colors.green.withValues(alpha: 0.15)
+                                                  : Colors.red.withValues(alpha: 0.15),
+                                              (hub.ssr_state ?? false)
+                                                  ? Colors.green.withValues(alpha: 0.08)
+                                                  : Colors.red.withValues(alpha: 0.08),
                                             ],
                                           ),
                                           borderRadius: BorderRadius.circular(20),
                                           border: Border.all(
-                                            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                                            width: 1,
+                                            color: (hub.ssr_state ?? false)
+                                                ? Colors.green.withValues(alpha: 0.3)
+                                                : Colors.red.withValues(alpha: 0.3),
+                                            width: 1.5,
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                              color: (hub.ssr_state ?? false)
+                                                  ? Colors.green.withValues(alpha: 0.15)
+                                                  : Colors.red.withValues(alpha: 0.15),
                                               blurRadius: 20,
                                               offset: const Offset(0, 8),
                                               spreadRadius: -5,
                                             ),
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(0.05),
+                                              color: Colors.black.withValues(alpha: 0.05),
                                               blurRadius: 10,
                                               offset: const Offset(0, 4),
                                             ),
@@ -2061,8 +2203,43 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                           fontWeight: FontWeight.w600,
                                                         ),
                                                       ),
-                                                      if (activePlugs > 0) ...[
-                                                        const SizedBox(height: 4),
+                                                      const SizedBox(height: 4),
+                                                      // Show inactive message when hub is off
+                                                      if (!(hub.ssr_state ?? false)) ...[
+                                                        Container(
+                                                          padding: EdgeInsets.symmetric(
+                                                            horizontal: isSmallScreen ? 8 : 10,
+                                                            vertical: isSmallScreen ? 4 : 6,
+                                                          ),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.red.withValues(alpha: 0.1),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            border: Border.all(
+                                                              color: Colors.red.withValues(alpha: 0.3),
+                                                              width: 1,
+                                                            ),
+                                                          ),
+                                                          child: Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              Icon(
+                                                                Icons.power_off_rounded,
+                                                                size: isSmallScreen ? 12 : 14,
+                                                                color: Colors.red.shade700,
+                                                              ),
+                                                              SizedBox(width: isSmallScreen ? 4 : 6),
+                                                              Text(
+                                                                'Hub Inactive - No Data',
+                                                                style: TextStyle(
+                                                                  fontSize: isSmallScreen ? 10 : 12,
+                                                                  color: Colors.red.shade700,
+                                                                  fontWeight: FontWeight.w600,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ] else if (activePlugs > 0) ...[
                                                         Text(
                                                           'Total Power: ${totalPower.toStringAsFixed(2)} W',
                                                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -2208,24 +2385,35 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                 end: Alignment.bottomRight,
                                                 colors: [
                                                   Theme.of(context).colorScheme.surface,
-                                                  Theme.of(context).colorScheme.primary.withOpacity(0.03),
+                                                  // Status-based transparent green or red for plugs
+                                                  (plug.ssr_state ?? false)
+                                                      ? Colors.green.withValues(alpha: 0.1)
+                                                      : Colors.red.withValues(alpha: 0.1),
                                                 ],
                                               ),
                                               borderRadius: BorderRadius.circular(16),
+                                              border: Border.all(
+                                                color: (plug.ssr_state ?? false)
+                                                    ? Colors.green.withValues(alpha: 0.2)
+                                                    : Colors.red.withValues(alpha: 0.2),
+                                                width: 1,
+                                              ),
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: Colors.black.withOpacity(0.05),
+                                                  color: Colors.black.withValues(alpha: 0.05),
                                                   blurRadius: 10,
                                                   offset: const Offset(0, 4),
                                                 ),
                                                 BoxShadow(
-                                                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                                  color: (plug.ssr_state ?? false)
+                                                      ? Colors.green.withValues(alpha: 0.1)
+                                                      : Colors.red.withValues(alpha: 0.1),
                                                   blurRadius: 20,
                                                   offset: const Offset(0, 8),
                                                 ),
                                               ],
                                             ),
-                                            child: _buildPlugDeviceRow(plug, isSmallScreen),
+                                            child: _buildPlugDeviceRow(plug, isSmallScreen, hub.ssr_state ?? false),
                                           );
                                         })
                                       else
