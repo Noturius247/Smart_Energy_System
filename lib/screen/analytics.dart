@@ -67,6 +67,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   // Stream key to force rebuild when time range or hub changes
   int _streamKey = 0;
 
+  // Cached stream to prevent recreation on every build
+  Stream<List<TimestampedFlSpot>>? _cachedHistoricalStream;
+
   // Color mapping for each metric type
   Color _getMetricColor(_MetricType metricType) {
     switch (metricType) {
@@ -458,22 +461,30 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   /// Get the appropriate data stream based on selected time range and hub
   /// This combines historical aggregated data with live real-time data
+  /// CACHED: Only recreates stream when _streamKey changes (hub or time range change)
   Stream<List<TimestampedFlSpot>> _getHistoricalDataStream() {
+    // Return cached stream if it exists
+    if (_cachedHistoricalStream != null) {
+      return _cachedHistoricalStream!;
+    }
+
     final now = DateTime.now();
     final startTime = now.subtract(_getTimeRangeDuration(_selectedTimeRange));
 
     if (_selectedHubSerial != null) {
       // Single hub selected - get combined historical and live data for that hub
-      return widget.realtimeDbService.getCombinedHistoricalAndLiveDataStream(
+      _cachedHistoricalStream = widget.realtimeDbService.getCombinedHistoricalAndLiveDataStream(
         _selectedHubSerial!,
         startTime,
       );
     } else {
       // All hubs - get combined data for all active hubs
-      return widget.realtimeDbService.getCombinedHistoricalAndLiveDataForAllHubs(
+      _cachedHistoricalStream = widget.realtimeDbService.getCombinedHistoricalAndLiveDataForAllHubs(
         startTime,
       );
     }
+
+    return _cachedHistoricalStream!;
   }
 
   @override
@@ -539,10 +550,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 final List<TimestampedFlSpot> allData = snapshot.data ?? [];
                 final List<TimestampedFlSpot> filteredData = _filterDataByTimeRange(allData);
 
-                // Update connection status and last update time
+                // Update connection status and last update time (scheduled after build)
                 if (allData.isNotEmpty) {
-                  _lastDataUpdate = allData.last.timestamp;
-                  _isDeviceConnected = DateTime.now().difference(allData.last.timestamp).inMinutes < _connectionAlertMinutes;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      final newLastUpdate = allData.last.timestamp;
+                      final newConnectedStatus = DateTime.now().difference(newLastUpdate).inMinutes < _connectionAlertMinutes;
+
+                      // Only setState if values changed
+                      if (_lastDataUpdate != newLastUpdate || _isDeviceConnected != newConnectedStatus) {
+                        setState(() {
+                          _lastDataUpdate = newLastUpdate;
+                          _isDeviceConnected = newConnectedStatus;
+                        });
+                      }
+                    }
+                  });
                 }
 
                 debugPrint('AnalyticsScreen: StreamBuilder hasData: ${snapshot.hasData}, isEmpty: ${filteredData.isEmpty}, count: ${filteredData.length}');
@@ -618,6 +641,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                         setState(() {
                                           _selectedHubSerial = value;
                                           _streamKey++; // Force stream rebuild
+                                          _cachedHistoricalStream = null; // Invalidate cache
                                         });
                                         // Restart SSR state listener for the new hub selection
                                         _startSsrStateListener();
@@ -1135,6 +1159,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                               setState(() {
                                                 _selectedTimeRange = timeRange;
                                                 _streamKey++; // Force stream rebuild
+                                                _cachedHistoricalStream = null; // Invalidate cache
                                               });
                                             }
                                           },
@@ -1230,6 +1255,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                               setState(() {
                                                 _selectedTimeRange = timeRange;
                                                 _streamKey++; // Force stream rebuild
+                                                _cachedHistoricalStream = null; // Invalidate cache
                                               });
                                             }
                                           },
@@ -1978,10 +2004,11 @@ class _AnimatedHistoricalChartState extends State<_AnimatedHistoricalChart> {
   @override
   void initState() {
     super.initState();
-    // Timer updates the chart every second so X-axis moves smoothly
+    // Timer updates the chart every second for smooth X-axis movement
+    // OPTIMIZED: Only rebuilds THIS chart widget, not the parent
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
-        setState(() {});
+        setState(() {}); // Only rebuilds _AnimatedHistoricalChart
       }
     });
   }
