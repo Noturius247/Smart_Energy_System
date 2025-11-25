@@ -33,6 +33,10 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        Provider<RealtimeDbService>(
+          create: (_) => RealtimeDbService(),
+          dispose: (_, service) => service.dispose(),
+        ),
         ChangeNotifierProvider.value(value: themeNotifier),
         ChangeNotifierProvider(create: (_) => DueDateProvider()),
         ChangeNotifierProvider(create: (_) => PriceProvider()),
@@ -80,7 +84,6 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
-  final RealtimeDbService _realtimeDbService = RealtimeDbService();
   final DataCleanupService _cleanupService = DataCleanupService();
 
   @override
@@ -98,13 +101,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   @override
   void dispose() {
-    _realtimeDbService.stopAllRealtimeDataStreams();
     _cleanupService.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final realtimeDbService =
+        Provider.of<RealtimeDbService>(context, listen: false);
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
@@ -128,22 +132,22 @@ class _AuthWrapperState extends State<AuthWrapper> {
                 final bool isAdmin =
                     tokenSnapshot.data?.claims?['admin'] == true;
                 if (isAdmin) {
-                  return MyAdminScreen(realtimeDbService: _realtimeDbService);
+                  return MyAdminScreen(realtimeDbService: realtimeDbService);
                 } else {
                   return HomeScreen(
-                    realtimeDbService: _realtimeDbService,
+                    realtimeDbService: realtimeDbService,
                   ); // Redirect to user home screen
                 }
               }
               // Fallback if token claims can't be fetched
-              return AuthPage(realtimeDbService: _realtimeDbService);
+              return AuthPage(realtimeDbService: realtimeDbService);
             },
           );
         } else {
           // User is logged out
         }
 
-        return AuthPage(realtimeDbService: _realtimeDbService);
+        return AuthPage(realtimeDbService: realtimeDbService);
       },
     );
   }

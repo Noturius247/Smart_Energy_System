@@ -34,6 +34,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _serialNumberController = TextEditingController();
   Map<String, List<ConnectedDevice>> _groupedDevices = {};
+  bool _isInitializing = true; // Track initial load state
 
 
   // Timer? _refreshTimer; // Removed: No longer needed for periodic refresh
@@ -64,20 +65,14 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       print(
         '[_loadAllDevices] Total devices loaded and grouped: ${grouped.length}',
       );
+      // Debug: Log hub states after loading
+      for (final entry in grouped.entries) {
+        final hubs = entry.value.where((d) => d.plug == null);
+        for (final hub in hubs) {
+          print('[_loadAllDevices] Hub ${hub.serialNumber} loaded with ssr_state: ${hub.ssr_state}, status: ${hub.status}');
+        }
+      }
     });
-
-    // Start data streams for all linked central hubs
-    final centralHubSerialNumbers = allDevices
-        .where((device) => device.plug == null && device.serialNumber != null)
-        .map((device) => device.serialNumber!)
-        .toSet(); // Use a Set to get unique serial numbers
-
-    for (final serialNumber in centralHubSerialNumbers) {
-      _realtimeDbService.startRealtimeDataStream(serialNumber);
-      print(
-        '[_loadAllDevices] Started RealtimeDataStream for hub: $serialNumber',
-      );
-    }
 
     if (allDevices.isEmpty) {
       Alert(
@@ -160,7 +155,17 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           '[_fetchLinkedCentralHubs] Found owned hub with serial number: $serialNumber.',
         );
 
-        final bool hubSsrState = hubData['ssr_state'] as bool? ?? false;
+        // FIX: Fetch the current ssr_state directly from Firebase to ensure accuracy
+        final ssrStateSnapshot = await FirebaseDatabase.instance
+            .ref('$rtdbUserPath/hubs/$serialNumber/ssr_state')
+            .get();
+
+        final bool hubSsrState = ssrStateSnapshot.exists
+            ? (ssrStateSnapshot.value as bool? ?? false)
+            : (hubData['ssr_state'] as bool? ?? false);
+
+        print('[_fetchLinkedCentralHubs] Hub $serialNumber actual ssr_state from Firebase: $hubSsrState');
+
         final String? hubNickname = hubData['nickname'] as String?;
 
         // Add the central hub itself as a ConnectedDevice
@@ -258,12 +263,15 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
     _controller.forward();
+
+    // CRITICAL FIX: Initialize devices FIRST, then start listeners
+    // This ensures we have the correct state before listeners can overwrite it
     _initializeDevicesAndHubs(); // Call a new async method to handle setup
 
     _loadPricePerKWH(); // Load price per KWH on init
     _loadCurrencySymbol(); // Load currency symbol from settings
     _loadDueDate();
-    _listenToHubDataStream(); // Start listening to the real-time stream
+    // NOTE: _listenToHubDataStream() is now called AFTER devices are loaded in _initializeDevicesAndHubs()
     _activeHubSubscription = _realtimeDbService.activeHubStream.listen((_) {
       if (mounted) {
         setState(() {}); // Rebuild to update 'Active' indicator
@@ -272,20 +280,51 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   }
 
   Future<void> _initializeDevicesAndHubs() async {
+    // CRITICAL FIX: Start listening to hub data stream BEFORE loading devices
+    // This ensures we capture the initial ssr_state from the real-time stream
+    _listenToHubDataStream();
+    debugPrint('[_initializeDevicesAndHubs] Started listening to hub data stream');
+
     await _loadAllDevices(); // Await to ensure _groupedDevices is populated
 
-    // Auto-activate the first hub if no hub is currently active for analytics
-    if (_realtimeDbService.currentActiveHubs.isEmpty) {
-      final firstHubSerialNumber = _groupedDevices.entries
-          .where((entry) => entry.key != 'generic')
-          .expand((entry) => entry.value)
-          .firstWhereOrNull((device) => device.plug == null && device.serialNumber != null)
-          ?.serialNumber;
+    // FIX: Ensure real-time listeners are active and wait for initial state sync
+    // This prevents the hub from appearing "off" during page refresh
+    final hubSerialNumbers = _groupedDevices.entries
+        .where((entry) => entry.key != 'generic')
+        .expand((entry) => entry.value)
+        .where((device) => device.plug == null && device.serialNumber != null)
+        .map((device) => device.serialNumber!)
+        .toSet();
 
-      if (firstHubSerialNumber != null) {
+    if (hubSerialNumbers.isNotEmpty) {
+      // Restart streams to ensure fresh connections
+      for (final serialNumber in hubSerialNumbers) {
+        if (!_realtimeDbService.currentActiveHubs.contains(serialNumber)) {
+          _realtimeDbService.startRealtimeDataStream(serialNumber);
+          debugPrint('[_initializeDevicesAndHubs] Started stream for hub: $serialNumber');
+        }
+      }
+
+      // Auto-activate the first hub if no hub is currently active for analytics
+      if (_realtimeDbService.currentActiveHubs.isEmpty) {
+        final firstHubSerialNumber = hubSerialNumbers.first;
         _setActiveHub(firstHubSerialNumber);
         debugPrint('ExploreScreen: Automatically activated hub: $firstHubSerialNumber for analytics.');
       }
+
+      // CRITICAL FIX: Wait for real-time stream to deliver initial ssr_state
+      // This ensures the UI displays the correct state on refresh
+      await Future.delayed(const Duration(milliseconds: 500));
+      debugPrint('[_initializeDevicesAndHubs] Waited for initial ssr_state sync');
+    }
+
+    // CRITICAL FIX: Mark initialization complete and force UI rebuild
+    // This ensures the UI renders with the correct hub state we just loaded
+    if (mounted) {
+      setState(() {
+        _isInitializing = false;
+        debugPrint('[_initializeDevicesAndHubs] Initialization complete, forcing final UI update');
+      });
     }
   }
 
@@ -323,7 +362,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           // Handle hub state updates
           if (type == 'hub_state') {
             final bool? ssrState = data['ssr_state'] as bool?;
-            print('[_listenToHubDataStream] Hub state update - Serial: $serialNumber, SSR: $ssrState');
+            print('[_listenToHubDataStream] Hub state update - Serial: $serialNumber, SSR: $ssrState, Type: $type');
 
             // Only skip update if we're actively toggling AND the state matches what we just set
             // This prevents conflicts but still allows database to override if values differ
@@ -509,8 +548,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     _hubDataSubscription?.cancel(); // Cancel the old stream subscription
     _hubDataStreamSubscription?.cancel(); // Cancel the new stream subscription
     _activeHubSubscription?.cancel(); // Cancel the active hub subscription
-    _realtimeDbService.stopAllRealtimeDataStreams(); // Stop the data stream
-    _realtimeDbService.dispose(); // Dispose the service's stream controller
+    // DO NOT call stopAllRealtimeDataStreams() or dispose() on the service
+    // RealtimeDbService is a singleton shared across the app
+    // Other screens (like Analytics) are still using it
     super.dispose();
   }
 
@@ -1730,6 +1770,25 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
   Widget _buildMainContent() {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
+
+    // Show loading indicator during initial load to prevent showing stale state
+    if (_isInitializing) {
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).primaryColor,
+            ],
+          ),
+        ),
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Container(
       decoration: BoxDecoration(
