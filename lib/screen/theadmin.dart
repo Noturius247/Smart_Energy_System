@@ -20,6 +20,8 @@ class DeviceModel {
   double voltage;
   double current;
   double energy;
+  String? createdAt;
+  String? userEmail;
 
   DeviceModel({
     required this.id,
@@ -29,6 +31,8 @@ class DeviceModel {
     this.voltage = 0.0,
     this.current = 0.0,
     this.energy = 0.0,
+    this.createdAt,
+    this.userEmail,
   });
 
   factory DeviceModel.fromMap(String id, Map<dynamic, dynamic> map) {
@@ -78,15 +82,26 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   List<UserModel> users = [];
   List<UserModel> allUsers = [];
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _serialNumberController = TextEditingController();
+  final TextEditingController _centralHubSearchController = TextEditingController(); // New search controller for central hub devices
   bool _isCentralHubPaused = false; // New state variable
   final DatabaseReference _centralHubStatusRef = FirebaseDatabase.instance
       .ref()
       .child('central_hub/data_reception_paused'); // New database reference
   StreamSubscription? _centralHubStatusSubscription; // New stream subscription
+  StreamSubscription? _deviceDataSubscription; // For device data by serial number
+  StreamSubscription? _centralHubsSubscription; // For all central hub devices
 
   String _currentHubSerialNumber =
       "default_hub_serial"; // Placeholder, needs to be dynamic
   late RealtimeDbService _realtimeDbService;
+
+  // Selected device info
+  Map<String, dynamic>? _selectedDeviceData;
+  UserModel? _selectedDeviceOwner;
+
+  // Central hub devices data
+  Map<String, Map<String, dynamic>> _centralHubDevices = {};
 
   @override
   void initState() {
@@ -94,12 +109,17 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
     _realtimeDbService = widget.realtimeDbService;
     _fetchUsers();
     _listenToCentralHubStatus(); // Listen to central hub status on init
+    _listenToCentralHubDevices(); // Listen to all central hub devices
   }
 
   @override
   void dispose() {
     _centralHubStatusSubscription?.cancel(); // Cancel subscription
+    _deviceDataSubscription?.cancel(); // Cancel device data subscription
+    _centralHubsSubscription?.cancel(); // Cancel central hubs subscription
     _searchController.dispose();
+    _serialNumberController.dispose();
+    _centralHubSearchController.dispose(); // Dispose central hub search controller
     super.dispose();
   }
 
@@ -128,6 +148,46 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   }
 
   // --------------------------------------------------
+  // LISTEN TO ALL CENTRAL HUB DEVICES
+  // --------------------------------------------------
+  void _listenToCentralHubDevices() {
+    // Listen to users/espthesisbmn/hubs for all central hub devices
+    final centralHubsRef = FirebaseDatabase.instance
+        .ref()
+        .child('users')
+        .child('espthesisbmn')
+        .child('hubs');
+
+    _centralHubsSubscription = centralHubsRef.onValue.listen(
+      (event) {
+        if (event.snapshot.exists && event.snapshot.value is Map) {
+          final hubs = event.snapshot.value as Map<dynamic, dynamic>;
+
+          setState(() {
+            _centralHubDevices.clear();
+            hubs.forEach((serialNumber, hubData) {
+              if (hubData is Map) {
+                _centralHubDevices[serialNumber.toString()] =
+                    Map<String, dynamic>.from(hubData as Map);
+              }
+            });
+          });
+
+          print("Central hub devices updated: ${_centralHubDevices.length} hubs found");
+        } else {
+          setState(() {
+            _centralHubDevices.clear();
+          });
+          print("No central hub devices found");
+        }
+      },
+      onError: (error) {
+        print("Error listening to central hub devices: $error");
+      },
+    );
+  }
+
+  // --------------------------------------------------
   // FETCH USERS
   // --------------------------------------------------
   Future<void> _fetchUsers() async {
@@ -144,38 +204,39 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
       snapshot.docs.map((doc) async {
         final data = doc.data();
         final userEmail = data['email'] ?? 'N/A';
-        final String safeUserEmail = userEmail.replaceAll(
-          '.',
-          ',',
-        ); // Firebase RTDB key cannot contain '.'
 
         List<DeviceModel> userDevices = [];
-        if (userEmail != 'N/A') {
-          final hubRef = FirebaseDatabase.instance
-              .ref()
-              .child('users')
-              .child(safeUserEmail)
-              .child('hubs');
-          final hubSnapshot = await hubRef.get();
 
-          if (hubSnapshot.exists &&
-              hubSnapshot.value is Map<dynamic, dynamic>) {
-            final hubs = hubSnapshot.value as Map<dynamic, dynamic>;
-            for (var hubEntry in hubs.entries) {
-              if (hubEntry.value is Map<dynamic, dynamic>) {
-                final hubData = hubEntry.value as Map<dynamic, dynamic>;
-                if (hubData.containsKey('plugs') &&
-                    hubData['plugs'] is Map<dynamic, dynamic>) {
-                  final plugs = hubData['plugs'] as Map<dynamic, dynamic>;
-                  plugs.forEach((plugId, plugData) {
-                    if (plugData is Map<dynamic, dynamic>) {
-                      userDevices.add(DeviceModel.fromMap(plugId, plugData));
-                    }
-                  });
-                }
+        // Fetch devices from Firestore subcollection: users/{userId}/devices
+        try {
+          final devicesSnapshot = await doc.reference
+              .collection('devices')
+              .get();
+
+          for (var deviceDoc in devicesSnapshot.docs) {
+            final deviceData = deviceDoc.data();
+
+            // Extract createdAt timestamp
+            String createdAtStr = 'N/A';
+            if (deviceData.containsKey('createdAt')) {
+              final createdAt = deviceData['createdAt'];
+              if (createdAt is Timestamp) {
+                createdAtStr = DateFormat('MMM dd, yyyy HH:mm').format(createdAt.toDate());
+              } else if (createdAt != null) {
+                createdAtStr = createdAt.toString();
               }
             }
+
+            userDevices.add(DeviceModel(
+              id: deviceData['serialNumber']?.toString() ?? deviceDoc.id,
+              name: deviceData['name']?.toString() ?? 'Unknown Device',
+              status: 'Active', // Default status
+              createdAt: createdAtStr,
+              userEmail: deviceData['user_email']?.toString() ?? userEmail,
+            ));
           }
+        } catch (e) {
+          print('Error fetching devices for user ${doc.id}: $e');
         }
 
         return UserModel(
@@ -550,6 +611,142 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   }
 
   // --------------------------------------------------
+  // SEARCH BY SERIAL NUMBER
+  // --------------------------------------------------
+  Future<void> _searchBySerialNumber(String serialNumber) async {
+    if (serialNumber.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a serial number'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _selectedDeviceData = null;
+      _selectedDeviceOwner = null;
+    });
+
+    // Cancel existing subscription
+    _deviceDataSubscription?.cancel();
+
+    try {
+      // Search across all users' device subcollections
+      // Since devices are stored as subcollections under users/{userId}/devices/{serialNumber}
+      // We need to iterate through all users and check their devices subcollection
+
+      Map<String, dynamic>? deviceMetadata;
+      String? deviceUserId;
+
+      // Get all users
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .get();
+
+      // Search through each user's devices subcollection
+      for (var userDoc in usersSnapshot.docs) {
+        final devicesSnapshot = await userDoc.reference
+            .collection('devices')
+            .where('serialNumber', isEqualTo: serialNumber)
+            .limit(1)
+            .get();
+
+        if (devicesSnapshot.docs.isNotEmpty) {
+          deviceMetadata = devicesSnapshot.docs.first.data();
+          deviceUserId = userDoc.id;
+          break;
+        }
+      }
+
+      if (deviceMetadata == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Device not found in the system'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Get user email from device metadata
+      final userEmail = deviceMetadata['user_email'] as String?;
+
+      if (userEmail == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Device not assigned to any user'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Find the user in our allUsers list
+      UserModel? owner = allUsers.firstWhere(
+        (user) => user.email == userEmail,
+        orElse: () => UserModel(
+          uid: 'unknown',
+          name: 'Unknown User',
+          email: userEmail,
+          status: 'Unknown',
+          dateRegistered: 'N/A',
+          address: 'N/A',
+        ),
+      );
+
+      // Set up realtime listener for the centralized hub data
+      // Path: hubs/{serialNumber}
+      final hubRef = FirebaseDatabase.instance
+          .ref()
+          .child('hubs')
+          .child(serialNumber);
+
+      _deviceDataSubscription = hubRef.onValue.listen((event) {
+        if (event.snapshot.exists && event.snapshot.value is Map) {
+          final hubData = Map<String, dynamic>.from(
+            event.snapshot.value as Map,
+          );
+
+          // Merge Firestore metadata with Realtime Database data
+          setState(() {
+            _selectedDeviceData = {
+              ...?deviceMetadata, // Use null-aware spread
+              ...hubData,
+            };
+            _selectedDeviceOwner = owner;
+          });
+        } else {
+          // If no real-time data exists yet, just use Firestore metadata
+          setState(() {
+            _selectedDeviceData = deviceMetadata;
+            _selectedDeviceOwner = owner;
+          });
+        }
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Device found! Owner: ${owner.name}'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error searching device: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // --------------------------------------------------
   // UI
   // --------------------------------------------------
   @override
@@ -568,9 +765,24 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
           children: [
             _buildHeader(themeNotifier),
             const SizedBox(height: 16),
-            Expanded(child: _buildTableContainer()),
-            const SizedBox(height: 16), // Add some spacing
-            Flexible(child: _buildPlugsSection()), // Add the plugs section here
+            _buildSerialNumberSearch(), // Add serial number search
+            const SizedBox(height: 16),
+            if (_selectedDeviceData != null && _selectedDeviceOwner != null)
+              _buildDeviceInfoCard(), // Display device info if found
+            const SizedBox(height: 16),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _buildCentralHubDevicesTable(), // Add central hub devices table
+                    const SizedBox(height: 16),
+                    _buildTableContainer(), // Users table
+                    const SizedBox(height: 16),
+                    _buildPlugsSection(), // Add the plugs section here
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -578,6 +790,351 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   }
 
   // ---------------- UI HELPERS ----------------
+
+  Widget _buildSerialNumberSearch() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).primaryColor.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.search, color: Colors.white),
+            const SizedBox(width: 16),
+            Expanded(
+              child: TextField(
+                controller: _serialNumberController,
+                style: Theme.of(context).textTheme.bodyMedium,
+                decoration: InputDecoration(
+                  hintText: "Enter device serial number...",
+                  hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                  ),
+                  filled: true,
+                  fillColor: Theme.of(context).primaryColor.withOpacity(0.8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onSubmitted: (value) => _searchBySerialNumber(value),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: () => _searchBySerialNumber(_serialNumberController.text),
+              child: Text(
+                "Search",
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeviceInfoCard() {
+    final owner = _selectedDeviceOwner!;
+    final deviceData = _selectedDeviceData!;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).primaryColor.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Device Information',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () {
+                    setState(() {
+                      _selectedDeviceData = null;
+                      _selectedDeviceOwner = null;
+                      _serialNumberController.clear();
+                    });
+                    _deviceDataSubscription?.cancel();
+                  },
+                ),
+              ],
+            ),
+            const Divider(color: Colors.white54),
+            const SizedBox(height: 8),
+            Text(
+              'Owner Information',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.amber,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildInfoRow('Name', owner.name),
+            _buildInfoRow('Email', owner.email),
+            _buildInfoRow('Address', owner.address),
+            _buildInfoRow('Status', owner.status),
+            _buildInfoRow('Date Registered', owner.dateRegistered),
+            const SizedBox(height: 16),
+            Text(
+              'Device Details (Firestore Metadata)',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.amber,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _buildInfoRow(
+              'Serial Number',
+              deviceData['serialNumber']?.toString() ?? _serialNumberController.text,
+            ),
+            _buildInfoRow(
+              'Device Name',
+              deviceData['name']?.toString() ?? 'N/A',
+            ),
+            if (deviceData.containsKey('createdAt'))
+              _buildInfoRow(
+                'Created At',
+                deviceData['createdAt']?.toString() ?? 'N/A',
+              ),
+            const SizedBox(height: 16),
+            Text(
+              'Real-time Hub Data',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.amber,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (deviceData.containsKey('aggregations'))
+              _buildInfoRow(
+                'Has Aggregations',
+                'Yes',
+              )
+            else
+              _buildInfoRow(
+                'Has Aggregations',
+                'No data yet',
+              ),
+            const SizedBox(height: 16),
+            if (deviceData.containsKey('plugs'))
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Connected Plugs (Real-time)',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.amber,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildPlugsList(deviceData['plugs'] as Map<dynamic, dynamic>),
+                ],
+              )
+            else
+              Text(
+                'No plugs data available yet',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.white70,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            const SizedBox(height: 16),
+            // Display aggregations summary if available
+            if (deviceData.containsKey('aggregations'))
+              _buildAggregationsSummary(deviceData['aggregations'] as Map<dynamic, dynamic>),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 150,
+            child: Text(
+              '$label:',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.white70,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlugsList(Map<dynamic, dynamic> plugs) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: plugs.length,
+      itemBuilder: (context, index) {
+        final plugId = plugs.keys.elementAt(index);
+        final plugData = plugs[plugId] as Map<dynamic, dynamic>;
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          color: Theme.of(context).primaryColor.withOpacity(0.6),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  plugData['name']?.toString() ?? 'Unnamed Plug',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Status: ${plugData['status'] ?? 'N/A'}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Text(
+                  'Power: ${plugData['power'] ?? 0} W',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Text(
+                  'Voltage: ${plugData['voltage'] ?? 0} V',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Text(
+                  'Current: ${plugData['current'] ?? 0} A',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Text(
+                  'Energy: ${plugData['energy'] ?? 0} kWh',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAggregationsSummary(Map<dynamic, dynamic> aggregations) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Aggregations Summary',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Colors.amber,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (aggregations.containsKey('daily'))
+          _buildAggregationTypeCard('Daily', aggregations['daily'] as Map<dynamic, dynamic>),
+        if (aggregations.containsKey('weekly'))
+          _buildAggregationTypeCard('Weekly', aggregations['weekly'] as Map<dynamic, dynamic>),
+        if (aggregations.containsKey('monthly'))
+          _buildAggregationTypeCard('Monthly', aggregations['monthly'] as Map<dynamic, dynamic>),
+      ],
+    );
+  }
+
+  Widget _buildAggregationTypeCard(String type, Map<dynamic, dynamic> data) {
+    final recordCount = data.length;
+    final latestKey = data.keys.isNotEmpty ? data.keys.last.toString() : 'N/A';
+
+    // Get latest record if available
+    dynamic latestData = data.isNotEmpty ? data[data.keys.last] : null;
+    String? avgPower;
+    String? totalEnergy;
+
+    if (latestData is Map) {
+      avgPower = latestData['average_power']?.toString() ??
+                 latestData['average_power_w']?.toString();
+      totalEnergy = latestData['total_energy']?.toString();
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      color: Theme.of(context).primaryColor.withOpacity(0.6),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$type Aggregation',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Total Records: $recordCount',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            Text(
+              'Latest Period: $latestKey',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            if (avgPower != null)
+              Text(
+                'Latest Avg Power: ${double.parse(avgPower).toStringAsFixed(2)} W',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            if (totalEnergy != null)
+              Text(
+                'Latest Total Energy: ${double.parse(totalEnergy).toStringAsFixed(3)} kWh',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildHeader(ThemeNotifier themeNotifier) {
     return Container(
@@ -646,22 +1203,552 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
     );
   }
 
+  // Get filtered central hub devices based on search
+  Map<String, Map<String, dynamic>> _getFilteredCentralHubDevices() {
+    final searchQuery = _centralHubSearchController.text.toLowerCase().trim();
+
+    if (searchQuery.isEmpty) {
+      return _centralHubDevices;
+    }
+
+    return Map.fromEntries(
+      _centralHubDevices.entries.where((entry) {
+        final serialNumber = entry.key.toLowerCase();
+        final hubData = entry.value;
+        final ownerId = (hubData['ownerId']?.toString() ?? '').toLowerCase();
+        final nickname = (hubData['nickname']?.toString() ?? '').toLowerCase();
+
+        return serialNumber.contains(searchQuery) ||
+               ownerId.contains(searchQuery) ||
+               nickname.contains(searchQuery);
+      }),
+    );
+  }
+
+  // Build search bar for central hub devices
+  Widget _buildCentralHubSearchBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: TextField(
+        controller: _centralHubSearchController,
+        onChanged: (value) {
+          setState(() {}); // Trigger rebuild to filter devices
+        },
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          hintText: 'Search by serial number, owner ID, or nickname...',
+          hintStyle: TextStyle(
+            color: Colors.white.withValues(alpha: 0.5),
+            fontSize: 14,
+          ),
+          prefixIcon: Icon(
+            Icons.search,
+            color: Colors.white.withValues(alpha: 0.7),
+          ),
+          suffixIcon: _centralHubSearchController.text.isNotEmpty
+              ? IconButton(
+                  icon: Icon(
+                    Icons.clear,
+                    color: Colors.white.withValues(alpha: 0.7),
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _centralHubSearchController.clear();
+                    });
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCentralHubDevicesTable() {
+    final filteredDevices = _getFilteredCentralHubDevices();
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? Theme.of(context).primaryColor.withValues(alpha: 0.8)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.hub,
+                color: isDarkMode ? Colors.white : Theme.of(context).primaryColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Central Hub Devices',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${filteredDevices.length}${_centralHubSearchController.text.isNotEmpty ? ' / ${_centralHubDevices.length}' : ''} Devices',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.amber.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildCentralHubSearchBar(),
+          const SizedBox(height: 16),
+          if (filteredDevices.isEmpty && _centralHubSearchController.text.isNotEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Text(
+                  'No devices found matching "${_centralHubSearchController.text}"',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: isDarkMode ? Colors.white70 : Colors.black54,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            )
+          else if (_centralHubDevices.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Text(
+                  'No central hub devices found',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: isDarkMode ? Colors.white70 : Colors.black54,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            )
+          else
+            Container(
+              width: double.infinity,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width - 72,
+                  ),
+                  child: DataTable(
+                    headingRowHeight: 56,
+                    dataRowMinHeight: 70,
+                    dataRowMaxHeight: 90,
+                    columnSpacing: 24,
+                    horizontalMargin: 16,
+                    headingRowColor: WidgetStateProperty.all(
+                      isDarkMode
+                          ? Colors.black.withValues(alpha: 0.2)
+                          : Colors.grey.shade100,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    dividerThickness: 0.5,
+                    columns: [
+                      DataColumn(
+                        label: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            "Serial Number",
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            "Assigned",
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            "Owner ID",
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            "SSR State",
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            "Plugs",
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Text(
+                            "Aggregations",
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    rows: filteredDevices.entries.map((entry) {
+                      final serialNumber = entry.key;
+                      final hubData = entry.value;
+                      final textColor = isDarkMode ? Colors.white70 : Colors.black87;
+                      final subtleHoverColor = isDarkMode
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.grey.shade200;
+
+                      final assigned = hubData['assigned']?.toString() ?? 'false';
+                      final ownerId = hubData['ownerId']?.toString() ?? 'N/A';
+                      final nickname = hubData['nickname']?.toString() ?? '';
+                      final ssrState = hubData['ssr_state']?.toString() ?? 'false';
+
+                      // Count plugs and collect plug info (nickname, ID, and real-time data)
+                      int plugCount = 0;
+                      List<Map<String, dynamic>> plugInfo = [];
+                      if (hubData.containsKey('plugs') && hubData['plugs'] is Map) {
+                        final plugs = hubData['plugs'] as Map;
+                        plugCount = plugs.length;
+                        plugs.forEach((key, value) {
+                          String plugId = key.toString();
+                          String plugNickname = 'Unknown Plug';
+                          double power = 0.0;
+                          double voltage = 0.0;
+                          double current = 0.0;
+                          double energy = 0.0;
+
+                          if (value is Map) {
+                            // Get nickname from the plug's data
+                            if (value.containsKey('nickname')) {
+                              plugNickname = value['nickname'].toString();
+                            }
+
+                            // Extract real-time sensor data from 'data' field
+                            if (value.containsKey('data')) {
+                              final data = value['data'];
+                              if (data is Map) {
+                                // Also check nickname in data field as fallback
+                                if (plugNickname == 'Unknown Plug' && data.containsKey('nickname')) {
+                                  plugNickname = data['nickname'].toString();
+                                }
+
+                                // Extract sensor readings
+                                power = (data['power'] as num?)?.toDouble() ?? 0.0;
+                                voltage = (data['voltage'] as num?)?.toDouble() ?? 0.0;
+                                current = (data['current'] as num?)?.toDouble() ?? 0.0;
+                                energy = (data['energy'] as num?)?.toDouble() ?? 0.0;
+                              }
+                            }
+                          }
+
+                          plugInfo.add({
+                            'id': plugId,
+                            'nickname': plugNickname,
+                            'power': power,
+                            'voltage': voltage,
+                            'current': current,
+                            'energy': energy,
+                          });
+                        });
+                      }
+
+                      // Check aggregations
+                      String aggregationsInfo = 'None';
+                      if (hubData.containsKey('aggregations') && hubData['aggregations'] is Map) {
+                        final agg = hubData['aggregations'] as Map;
+                        List<String> aggTypes = [];
+                        if (agg.containsKey('daily')) aggTypes.add('D');
+                        if (agg.containsKey('weekly')) aggTypes.add('W');
+                        if (agg.containsKey('monthly')) aggTypes.add('M');
+                        aggregationsInfo = aggTypes.isNotEmpty ? aggTypes.join(', ') : 'None';
+                      }
+
+                      return DataRow(
+                        color: WidgetStateProperty.resolveWith<Color?>(
+                          (Set<WidgetState> states) {
+                            if (states.contains(WidgetState.hovered)) {
+                              return subtleHoverColor;
+                            }
+                            return null;
+                          },
+                        ),
+                        cells: [
+                          DataCell(
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    serialNumber,
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.lightBlueAccent,
+                                    ),
+                                  ),
+                                  if (nickname.isNotEmpty)
+                                    Text(
+                                      nickname,
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: textColor,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: assigned == 'true'
+                                      ? Colors.green.withValues(alpha: 0.2)
+                                      : Colors.orange.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: assigned == 'true'
+                                        ? Colors.greenAccent
+                                        : Colors.orangeAccent,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  assigned,
+                                  style: TextStyle(
+                                    color: assigned == 'true'
+                                        ? Colors.greenAccent
+                                        : Colors.orangeAccent,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                ownerId.length > 20
+                                    ? '${ownerId.substring(0, 20)}...'
+                                    : ownerId,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: textColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: ssrState == 'true'
+                                      ? Colors.green.withValues(alpha: 0.2)
+                                      : Colors.red.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: ssrState == 'true'
+                                        ? Colors.greenAccent
+                                        : Colors.redAccent,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  ssrState == 'true' ? 'Active' : 'Inactive',
+                                  style: TextStyle(
+                                    color: ssrState == 'true'
+                                        ? Colors.greenAccent
+                                        : Colors.redAccent,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+                              child: plugCount == 0
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        'No plugs',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: Colors.grey,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    )
+                                  : Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: plugInfo.map((plug) {
+                                        return _PlugCard(
+                                          plug: plug,
+                                          isDarkMode: isDarkMode,
+                                        );
+                                      }).toList(),
+                                    ),
+                            ),
+                          ),
+                          DataCell(
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.analytics_outlined,
+                                    size: 16,
+                                    color: aggregationsInfo != 'None'
+                                        ? Colors.amber.shade700
+                                        : Colors.grey,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    aggregationsInfo,
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: textColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTableContainer() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).primaryColor.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            _buildSearchBar(),
-            const SizedBox(height: 16),
-            Expanded(child: _buildDataTable()),
-          ],
-        ),
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDarkMode
+            ? Theme.of(context).primaryColor.withOpacity(0.8)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.people,
+                color: isDarkMode ? Colors.white : Theme.of(context).primaryColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Users',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${users.length} Users',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Colors.amber.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildSearchBar(),
+          const SizedBox(height: 16),
+          _buildDataTable(),
+        ],
       ),
     );
   }
@@ -714,93 +1801,112 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
   }
 
   Widget _buildDataTable() {
-    return SizedBox(
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
       width: double.infinity,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowHeight: 50,
-          dataRowMinHeight: 60,
-          dataRowMaxHeight: 60,
-          columnSpacing: 20, // Add some spacing
-          horizontalMargin: 10, // Add some margin
-          headingRowColor: WidgetStateProperty.all(
-            Theme.of(context).primaryColor.withOpacity(0.8),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: MediaQuery.of(context).size.width - 72, // Full width minus margins
           ),
+          child: DataTable(
+            headingRowHeight: 56,
+            dataRowMinHeight: 70,
+            dataRowMaxHeight: 90,
+            columnSpacing: 24,
+            horizontalMargin: 16,
+            headingRowColor: WidgetStateProperty.all(
+              isDarkMode
+                  ? Colors.black.withOpacity(0.2)
+                  : Colors.grey.shade100,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            dividerThickness: 0.5,
           columns: [
             DataColumn(
               label: Padding(
-                padding: EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(8.0),
                 child: Text(
                   "Name",
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimary,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
             DataColumn(
               label: Padding(
-                padding: EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(8.0),
                 child: Text(
                   "Email",
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimary,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
             DataColumn(
               label: Padding(
-                padding: EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(8.0),
                 child: Text(
                   "Address",
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimary,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
             DataColumn(
               label: Padding(
-                padding: EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(8.0),
                 child: Text(
                   "Status",
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimary,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
             DataColumn(
               label: Padding(
-                padding: EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(8.0),
                 child: Text(
                   "Date Registered",
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimary,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
             DataColumn(
               label: Padding(
-                padding: EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(8.0),
                 child: Text(
                   "Devices",
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimary,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ),
             DataColumn(
               label: Padding(
-                padding: EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(8.0),
                 child: Text(
                   "Actions",
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onPrimary,
+                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -808,14 +1914,54 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
           ],
           rows: List.generate(users.length, (index) {
             final user = users[index];
+            final textColor = isDarkMode ? Colors.white70 : Colors.black87;
+            final subtleHoverColor = isDarkMode
+                ? Colors.white.withOpacity(0.05)
+                : Colors.grey.shade200;
+
             return DataRow(
+              color: WidgetStateProperty.resolveWith<Color?>(
+                (Set<WidgetState> states) {
+                  if (states.contains(WidgetState.hovered)) {
+                    return subtleHoverColor;
+                  }
+                  return null;
+                },
+              ),
               cells: [
                 DataCell(
                   Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      user.name,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Center(
+                            child: Text(
+                              user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Colors.blue.shade700,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            user.name,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: isDarkMode ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -824,28 +1970,8 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       user.email,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
-                ),
-                DataCell(
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      user.address,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
-                ),
-                DataCell(
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      user.status,
-                      style: TextStyle(
-                        color: user.status == "Active"
-                            ? Colors.greenAccent
-                            : Colors.redAccent,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: textColor,
                       ),
                     ),
                   ),
@@ -854,19 +1980,40 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
-                      user.dateRegistered,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.amber),
+                      user.address,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: textColor,
+                      ),
                     ),
                   ),
                 ),
                 DataCell(
                   Padding(
                     padding: const EdgeInsets.all(8.0),
-                    child: Text(
-                      '${user.devices.length} Devices: ${user.devices.map((e) => e.name).join(', ')}',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: user.status == "Active"
+                            ? Colors.green.withOpacity(0.2)
+                            : Colors.red.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: user.status == "Active"
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        user.status,
+                        style: TextStyle(
+                          color: user.status == "Active"
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -875,19 +2022,120 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                     padding: const EdgeInsets.all(8.0),
                     child: Row(
                       children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.edit,
-                            color: Colors.blueAccent,
-                          ),
-                          onPressed: () => _editUser(index),
+                        Icon(
+                          Icons.calendar_today,
+                          size: 16,
+                          color: Colors.amber.shade700,
                         ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.delete,
-                            color: Colors.redAccent,
+                        const SizedBox(width: 8),
+                        Text(
+                          user.dateRegistered,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: textColor,
                           ),
-                          onPressed: () => _deleteUser(index),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                DataCell(
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
+                    child: user.devices.isEmpty
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'No devices',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.grey,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          )
+                        : Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: user.devices.map((device) {
+                              String deviceText = '${device.name} (${device.id})';
+                              if (device.createdAt != null && device.createdAt != 'N/A') {
+                                deviceText += ' - ${device.createdAt}';
+                              }
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.purple.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.purpleAccent.withOpacity(0.5),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.devices,
+                                      size: 14,
+                                      color: Colors.purpleAccent,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        deviceText,
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                          color: isDarkMode ? Colors.white : Colors.black87,
+                                          fontSize: 11,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                  ),
+                ),
+                DataCell(
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.edit_outlined,
+                              color: Colors.blueAccent,
+                              size: 20,
+                            ),
+                            tooltip: 'Edit User',
+                            onPressed: () => _editUser(index),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.redAccent,
+                              size: 20,
+                            ),
+                            tooltip: 'Delete User',
+                            onPressed: () => _deleteUser(index),
+                          ),
                         ),
                       ],
                     ),
@@ -896,6 +2144,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
               ],
             );
           }),
+          ),
         ),
       ),
     );
@@ -967,7 +2216,8 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
 
             const SizedBox(height: 16),
 
-            Expanded(
+            SizedBox(
+              height: 400, // Fixed height for the plugs list
               child: StreamBuilder(
                 stream: dbRef.onValue,
                 builder: (context, AsyncSnapshot<DatabaseEvent> snapshot) {
@@ -1059,6 +2309,169 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                   }
                 },
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Stateful widget for plug card with hover effect
+class _PlugCard extends StatefulWidget {
+  final Map<String, dynamic> plug;
+  final bool isDarkMode;
+
+  const _PlugCard({
+    required this.plug,
+    required this.isDarkMode,
+  });
+
+  @override
+  State<_PlugCard> createState() => _PlugCardState();
+}
+
+class _PlugCardState extends State<_PlugCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _isHovered
+              ? Colors.purple.withValues(alpha: 0.25)
+              : Colors.purple.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _isHovered
+                ? Colors.purpleAccent.withValues(alpha: 0.8)
+                : Colors.purpleAccent.withValues(alpha: 0.5),
+            width: _isHovered ? 2.0 : 1.5,
+          ),
+          boxShadow: _isHovered
+              ? [
+                  BoxShadow(
+                    color: Colors.purpleAccent.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header with icon and nickname
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.power,
+                  size: 16,
+                  color: _isHovered ? Colors.purpleAccent.shade100 : Colors.purpleAccent,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  widget.plug['nickname'] as String,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: widget.isDarkMode ? Colors.white : Colors.black87,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            // Plug ID
+            Text(
+              widget.plug['id'] as String,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: (widget.isDarkMode ? Colors.white : Colors.black87)
+                    .withValues(alpha: 0.6),
+                fontSize: 9,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            // Real-time data (only shown on hover)
+            AnimatedSize(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              child: _isHovered
+                  ? Column(
+                      children: [
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.bolt, size: 10, color: Colors.amber.shade700),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${(widget.plug['power'] as double).toStringAsFixed(2)} W',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: widget.isDarkMode ? Colors.white : Colors.black87,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(Icons.electric_bolt, size: 10, color: Colors.blue.shade400),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${(widget.plug['voltage'] as double).toStringAsFixed(1)} V',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: widget.isDarkMode ? Colors.white : Colors.black87,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.trending_up, size: 10, color: Colors.orange.shade400),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${(widget.plug['current'] as double).toStringAsFixed(3)} A',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: widget.isDarkMode ? Colors.white : Colors.black87,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(Icons.power_settings_new, size: 10, color: Colors.green.shade400),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${(widget.plug['energy'] as double).toStringAsFixed(3)} kWh',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: widget.isDarkMode ? Colors.white : Colors.black87,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
             ),
           ],
         ),

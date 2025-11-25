@@ -68,7 +68,13 @@ class UsageHistoryService {
     return entries;
   }
 
-  /// Calculate hourly usage history
+  /// Calculate hourly usage history from aggregated readings
+  ///
+  /// This calculates usage for each hour by taking the difference between
+  /// consecutive hourly readings (current hour - previous hour).
+  ///
+  /// Since meter readings are cumulative, the actual consumption is:
+  /// Hourly Usage = Current Hour Reading - Previous Hour Reading
   Future<List<UsageHistoryEntry>> _calculateHourlyHistory(
     String hubSerial,
     DateTime now,
@@ -77,26 +83,32 @@ class UsageHistoryService {
   ) async {
     final List<UsageHistoryEntry> entries = [];
 
-    // Get hourly aggregation data for the time range
-    // We need minRows + offset hours of data
-    final startTime = now.subtract(Duration(hours: minRows + offset));
+    // Get ALL hourly aggregation data from the database (no time limit)
+    // Start from a very early date to capture all historical data
+    final startTime = DateTime(2020, 1, 1); // Get all data from 2020 onwards
     final data = await _realtimeDbService.getHourlyAggregationData(
       hubSerial,
       startTime,
       now,
     );
 
-    // Sort by timestamp descending (newest first)
-    data.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    debugPrint('[UsageHistoryService] HOURLY: Retrieved ${data.length} total hourly data points from database');
 
-    // Skip the offset entries (for pagination)
-    final paginatedData = data.skip(offset).take(minRows).toList();
+    if (data.isEmpty) {
+      debugPrint('[UsageHistoryService] HOURLY: No hourly data available');
+      return entries;
+    }
 
-    // Calculate usage for each hour
-    for (int i = 0; i < paginatedData.length - 1; i++) {
-      final current = paginatedData[i];
-      final previous = paginatedData[i + 1];
+    // Sort by timestamp ASCENDING (oldest first) for proper calculation
+    data.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
+    // Calculate usage by taking difference between consecutive readings
+    for (int i = 1; i < data.length; i++) {
+      final previous = data[i - 1];
+      final current = data[i];
+
+      // Calculate hourly usage: current reading minus previous reading
+      // This gives us the actual energy consumed in that hour
       final usage = (current.energy - previous.energy).abs();
 
       entries.add(UsageHistoryEntry(
@@ -106,12 +118,31 @@ class UsageHistoryService {
         currentReading: current.energy,
         usage: usage,
       ));
+
+      debugPrint('[UsageHistoryService] HOURLY: ${current.timestamp.toString().substring(0, 16)} - '
+          'Previous: ${previous.energy.toStringAsFixed(3)} kWh, '
+          'Current: ${current.energy.toStringAsFixed(3)} kWh, '
+          'Usage: ${usage.toStringAsFixed(3)} kWh');
     }
 
-    return entries;
+    // Sort by timestamp descending (newest first) for display
+    entries.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    // Show ALL available data (no pagination limit on initial load)
+    final entriesToShow = offset == 0 ? entries : entries.skip(offset).take(minRows).toList();
+
+    debugPrint('[UsageHistoryService] HOURLY: Total entries available: ${entries.length}, showing: ${entriesToShow.length}');
+
+    return entriesToShow;
   }
 
-  /// Calculate daily usage history
+  /// Calculate daily usage history from daily aggregations
+  ///
+  /// HIERARCHICAL CALCULATION - LEVEL 2:
+  /// Daily Usage = Current Day Reading - Previous Day Reading
+  ///
+  /// This calculates usage for each day by taking the difference between
+  /// consecutive daily readings (current day - previous day).
   Future<List<UsageHistoryEntry>> _calculateDailyHistory(
     String hubSerial,
     DateTime now,
@@ -120,25 +151,32 @@ class UsageHistoryService {
   ) async {
     final List<UsageHistoryEntry> entries = [];
 
-    // Get daily aggregation data
-    final startTime = now.subtract(Duration(days: minRows + offset));
-    final data = await _realtimeDbService.getDailyAggregationData(
+    // Get ALL daily aggregation data from the database (no time limit)
+    // Start from a very early date to capture all historical data
+    final startTime = DateTime(2020, 1, 1); // Get all data from 2020 onwards
+    final dailyData = await _realtimeDbService.getDailyAggregationData(
       hubSerial,
       startTime,
       now,
     );
 
-    // Sort by timestamp descending (newest first)
-    data.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    debugPrint('[UsageHistoryService] DAILY: Retrieved ${dailyData.length} total daily aggregations from database');
 
-    // Skip the offset entries (for pagination)
-    final paginatedData = data.skip(offset).take(minRows).toList();
+    if (dailyData.isEmpty) {
+      debugPrint('[UsageHistoryService] DAILY: No daily data available');
+      return entries;
+    }
 
-    // Calculate usage for each day
-    for (int i = 0; i < paginatedData.length - 1; i++) {
-      final current = paginatedData[i];
-      final previous = paginatedData[i + 1];
+    // Sort by timestamp ASCENDING (oldest first) for proper calculation
+    dailyData.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
+    // Calculate usage by taking difference between consecutive daily readings
+    for (int i = 1; i < dailyData.length; i++) {
+      final previous = dailyData[i - 1];
+      final current = dailyData[i];
+
+      // Calculate daily usage: current reading minus previous reading
+      // This gives us the actual energy consumed in that day
       final usage = (current.energy - previous.energy).abs();
 
       entries.add(UsageHistoryEntry(
@@ -148,12 +186,30 @@ class UsageHistoryService {
         currentReading: current.energy,
         usage: usage,
       ));
+
+      debugPrint('[UsageHistoryService] DAILY: ${current.timestamp.toString().substring(0, 10)} - '
+          'Previous: ${previous.energy.toStringAsFixed(3)} kWh, '
+          'Current: ${current.energy.toStringAsFixed(3)} kWh, '
+          'Usage: ${usage.toStringAsFixed(3)} kWh');
     }
 
-    return entries;
+    // Sort by timestamp descending (newest first) for display
+    entries.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    // Show ALL available data (no pagination limit on initial load)
+    final entriesToShow = offset == 0 ? entries : entries.skip(offset).take(minRows).toList();
+
+    debugPrint('[UsageHistoryService] DAILY: Total entries available: ${entries.length}, showing: ${entriesToShow.length}');
+    return entriesToShow;
   }
 
-  /// Calculate weekly usage history
+  /// Calculate weekly usage history from weekly aggregations
+  ///
+  /// HIERARCHICAL CALCULATION - LEVEL 3:
+  /// Weekly Usage = Current Week Reading - Previous Week Reading
+  ///
+  /// This calculates usage for each week by taking the difference between
+  /// consecutive weekly readings (current week - previous week).
   Future<List<UsageHistoryEntry>> _calculateWeeklyHistory(
     String hubSerial,
     DateTime now,
@@ -162,25 +218,32 @@ class UsageHistoryService {
   ) async {
     final List<UsageHistoryEntry> entries = [];
 
-    // Get weekly aggregation data
-    final startTime = now.subtract(Duration(days: (minRows + offset) * 7));
-    final data = await _realtimeDbService.getWeeklyAggregationData(
+    // Get ALL weekly aggregation data from the database (no time limit)
+    // Start from a very early date to capture all historical data
+    final startTime = DateTime(2020, 1, 1); // Get all data from 2020 onwards
+    final weeklyData = await _realtimeDbService.getWeeklyAggregationData(
       hubSerial,
       startTime,
       now,
     );
 
-    // Sort by timestamp descending (newest first)
-    data.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    debugPrint('[UsageHistoryService] WEEKLY: Retrieved ${weeklyData.length} total weekly aggregations from database');
 
-    // Skip the offset entries (for pagination)
-    final paginatedData = data.skip(offset).take(minRows).toList();
+    if (weeklyData.isEmpty) {
+      debugPrint('[UsageHistoryService] WEEKLY: No weekly data available');
+      return entries;
+    }
 
-    // Calculate usage for each week
-    for (int i = 0; i < paginatedData.length - 1; i++) {
-      final current = paginatedData[i];
-      final previous = paginatedData[i + 1];
+    // Sort by timestamp ASCENDING (oldest first) for proper calculation
+    weeklyData.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
+    // Calculate usage by taking difference between consecutive weekly readings
+    for (int i = 1; i < weeklyData.length; i++) {
+      final previous = weeklyData[i - 1];
+      final current = weeklyData[i];
+
+      // Calculate weekly usage: current reading minus previous reading
+      // This gives us the actual energy consumed in that week
       final usage = (current.energy - previous.energy).abs();
 
       entries.add(UsageHistoryEntry(
@@ -190,21 +253,30 @@ class UsageHistoryService {
         currentReading: current.energy,
         usage: usage,
       ));
+
+      debugPrint('[UsageHistoryService] WEEKLY: ${current.timestamp.toString().substring(0, 10)} - '
+          'Previous: ${previous.energy.toStringAsFixed(3)} kWh, '
+          'Current: ${current.energy.toStringAsFixed(3)} kWh, '
+          'Usage: ${usage.toStringAsFixed(3)} kWh');
     }
 
-    return entries;
+    // Sort by timestamp descending (newest first) for display
+    entries.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    // Show ALL available data (no pagination limit on initial load)
+    final entriesToShow = offset == 0 ? entries : entries.skip(offset).take(minRows).toList();
+
+    debugPrint('[UsageHistoryService] WEEKLY: Total entries available: ${entries.length}, showing: ${entriesToShow.length}');
+    return entriesToShow;
   }
 
-  /// Calculate monthly usage history using custom due date
+  /// Calculate monthly usage history from monthly aggregations
   ///
-  /// IMPORTANT: Monthly data is calculated by aggregating DAILY readings,
-  /// not from a separate monthly aggregation table.
+  /// HIERARCHICAL CALCULATION - LEVEL 4:
+  /// Monthly Usage = Current Month Reading - Previous Month Reading
   ///
-  /// Example: If due date is set to 23rd of each month:
-  /// - Nov 23 to Dec 23
-  /// - Oct 23 to Nov 23
-  /// - Sep 23 to Oct 23
-  /// etc.
+  /// This calculates usage for each month by taking the difference between
+  /// consecutive monthly readings (current month - previous month).
   Future<List<UsageHistoryEntry>> _calculateMonthlyHistory(
     String hubSerial,
     DateTime now,
@@ -214,101 +286,56 @@ class UsageHistoryService {
   ) async {
     final List<UsageHistoryEntry> entries = [];
 
-    // If no custom due date is set, use the first day of each month
-    final int dueDayOfMonth = customDueDate?.day ?? 1;
-
-    // Calculate the billing periods based on due date
-    final List<DateTime> billingPeriods = [];
-
-    // Find the most recent due date
-    DateTime currentDueDate = DateTime(now.year, now.month, dueDayOfMonth);
-    if (currentDueDate.isAfter(now)) {
-      // If this month's due date hasn't passed yet, go back one month
-      currentDueDate = DateTime(now.year, now.month - 1, dueDayOfMonth);
-    }
-
-    // Generate billing periods going backwards
-    for (int i = 0; i <= minRows + offset; i++) {
-      final periodEnd = DateTime(
-        currentDueDate.year,
-        currentDueDate.month - i,
-        dueDayOfMonth,
-      );
-      billingPeriods.add(periodEnd);
-    }
-
-    debugPrint('[UsageHistoryService] Monthly billing periods (${billingPeriods.length}): ${billingPeriods.map((d) => d.toString()).join(', ')}');
-
-    // Get DAILY aggregation data for the entire range (not monthly!)
-    // We'll sum up the daily readings to calculate monthly usage
-    final startTime = billingPeriods.last.subtract(const Duration(days: 35)); // Extra buffer
-    final dailyData = await _realtimeDbService.getDailyAggregationData(
+    // Get ALL monthly aggregation data from the database (no time limit)
+    // Start from a very early date to capture all historical data
+    final startTime = DateTime(2020, 1, 1); // Get all data from 2020 onwards
+    final monthlyData = await _realtimeDbService.getMonthlyAggregationData(
       hubSerial,
       startTime,
       now,
     );
 
-    debugPrint('[UsageHistoryService] Retrieved ${dailyData.length} DAILY data points for monthly calculation');
+    debugPrint('[UsageHistoryService] MONTHLY: Retrieved ${monthlyData.length} total monthly aggregations from database');
 
-    // Sort by timestamp
-    dailyData.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-
-    // For each billing period, find the readings at the start and end
-    // and calculate usage
-    final paginatedPeriods = billingPeriods.skip(offset).take(minRows).toList();
-
-    for (int i = 0; i < paginatedPeriods.length - 1; i++) {
-      final periodEnd = paginatedPeriods[i];
-      final periodStart = paginatedPeriods[i + 1];
-
-      // Find the closest readings to these dates from DAILY data
-      final endReading = _findClosestReading(dailyData, periodEnd);
-      final startReading = _findClosestReading(dailyData, periodStart);
-
-      if (endReading != null && startReading != null) {
-        final usage = (endReading.energy - startReading.energy).abs();
-
-        debugPrint('[UsageHistoryService] Monthly period ${periodStart.toString().substring(0, 10)} to ${periodEnd.toString().substring(0, 10)}: '
-            'start=${startReading.energy} kWh, end=${endReading.energy} kWh, usage=$usage kWh');
-
-        entries.add(UsageHistoryEntry(
-          timestamp: periodEnd,
-          interval: UsageInterval.monthly,
-          previousReading: startReading.energy,
-          currentReading: endReading.energy,
-          usage: usage,
-        ));
-      } else {
-        debugPrint('[UsageHistoryService] ⚠️ Missing readings for monthly period ${periodStart.toString().substring(0, 10)} to ${periodEnd.toString().substring(0, 10)}');
-        debugPrint('[UsageHistoryService]    - Start reading found: ${startReading != null}');
-        debugPrint('[UsageHistoryService]    - End reading found: ${endReading != null}');
-      }
+    if (monthlyData.isEmpty) {
+      debugPrint('[UsageHistoryService] MONTHLY: No monthly data available');
+      return entries;
     }
 
-    return entries;
+    // Sort by timestamp ASCENDING (oldest first) for proper calculation
+    monthlyData.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    // Calculate usage by taking difference between consecutive monthly readings
+    for (int i = 1; i < monthlyData.length; i++) {
+      final previous = monthlyData[i - 1];
+      final current = monthlyData[i];
+
+      // Calculate monthly usage: current reading minus previous reading
+      // This gives us the actual energy consumed in that month
+      final usage = (current.energy - previous.energy).abs();
+
+      entries.add(UsageHistoryEntry(
+        timestamp: current.timestamp,
+        interval: UsageInterval.monthly,
+        previousReading: previous.energy,
+        currentReading: current.energy,
+        usage: usage,
+      ));
+
+      debugPrint('[UsageHistoryService] MONTHLY: ${current.timestamp.toString().substring(0, 10)} - '
+          'Previous: ${previous.energy.toStringAsFixed(3)} kWh, '
+          'Current: ${current.energy.toStringAsFixed(3)} kWh, '
+          'Usage: ${usage.toStringAsFixed(3)} kWh');
+    }
+
+    // Sort by timestamp descending (newest first) for display
+    entries.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    // Show ALL available data (no pagination limit on initial load)
+    final entriesToShow = offset == 0 ? entries : entries.skip(offset).take(minRows).toList();
+
+    debugPrint('[UsageHistoryService] MONTHLY: Total entries available: ${entries.length}, showing: ${entriesToShow.length}');
+    return entriesToShow;
   }
 
-  /// Find the reading closest to a specific date
-  TimestampedFlSpot? _findClosestReading(List<TimestampedFlSpot> data, DateTime target) {
-    if (data.isEmpty) return null;
-
-    TimestampedFlSpot? closest;
-    Duration? smallestDiff;
-
-    for (final reading in data) {
-      final diff = (reading.timestamp.difference(target)).abs();
-      if (smallestDiff == null || diff < smallestDiff) {
-        smallestDiff = diff;
-        closest = reading;
-      }
-    }
-
-    // Only return if the closest reading is within a reasonable time window
-    // For monthly data, we accept readings within 3 days of the target
-    if (smallestDiff != null && smallestDiff.inDays <= 3) {
-      return closest;
-    }
-
-    return null;
-  }
 }

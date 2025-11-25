@@ -86,6 +86,9 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   DateTime? _lastDeviceFetch;
   Timer? _deviceRefreshTimer;
 
+  // Yesterday's energy for daily cost calculation
+  double _yesterdayEnergy = 0.0;
+
   /// Returns a stream of LIVE per-second data for the selected hub or all hubs.
   Stream<List<TimestampedFlSpot>> _getLiveDataStream() {
     if (_selectedHubSerial != null) {
@@ -110,6 +113,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     _startDeviceRefreshTimer();
     _startHubRemovedListener();
     _startHubAddedListener();
+    _fetchYesterdayEnergy(); // Fetch yesterday's energy for daily cost calculation
 
     // Listen for changes to the primary hub
     _primaryHubSubscription =
@@ -123,6 +127,8 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
           // Re-initialize listeners for the new hub and force a rebuild to get new data
           _initializeSsrStateListener();
         });
+        // Fetch yesterday's energy for the new hub
+        _fetchYesterdayEnergy();
       }
     });
   }
@@ -144,6 +150,52 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
         _cachedDevices = devices;
         _lastDeviceFetch = DateTime.now();
       });
+    }
+  }
+
+  /// Fetch yesterday's total energy from daily aggregations
+  Future<void> _fetchYesterdayEnergy() async {
+    if (_selectedHubSerial == null) {
+      debugPrint('[EnergyOverview] No hub selected, skipping yesterday energy fetch');
+      return;
+    }
+
+    try {
+      // Get yesterday's date (start and end of yesterday)
+      final now = DateTime.now();
+      final yesterday = DateTime(now.year, now.month, now.day - 1);
+      final todayStart = DateTime(now.year, now.month, now.day);
+
+      debugPrint('[EnergyOverview] Fetching yesterday\'s energy from $yesterday to $todayStart for hub $_selectedHubSerial');
+
+      // Fetch yesterday's daily aggregation data
+      final dailyData = await widget.realtimeDbService.getDailyAggregationData(
+        _selectedHubSerial!,
+        yesterday,
+        todayStart,
+      );
+
+      debugPrint('[EnergyOverview] Fetched ${dailyData.length} daily data points');
+
+      if (dailyData.isNotEmpty && mounted) {
+        // Find yesterday's data specifically
+        final yesterdayData = dailyData.firstWhere(
+          (spot) => spot.timestamp.year == yesterday.year &&
+                    spot.timestamp.month == yesterday.month &&
+                    spot.timestamp.day == yesterday.day,
+          orElse: () => dailyData.first,
+        );
+
+        setState(() {
+          // Get the total energy value from yesterday's data
+          _yesterdayEnergy = yesterdayData.energy;
+          debugPrint('[EnergyOverview] Yesterday\'s total energy set to: $_yesterdayEnergy kWh (from ${yesterdayData.timestamp})');
+        });
+      } else {
+        debugPrint('[EnergyOverview] No daily data found for yesterday, keeping _yesterdayEnergy at $_yesterdayEnergy');
+      }
+    } catch (e) {
+      debugPrint('[EnergyOverview] Error fetching yesterday\'s energy: $e');
     }
   }
 
@@ -487,10 +539,12 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   }
 
   Widget _solarProductionCard(List<TimestampedFlSpot> data) {
-    // Calculate total energy for the day
-    final totalEnergy = data.isNotEmpty
-        ? data.map((d) => d.energy).reduce((a, b) => a + b) / data.length
-        : 0.0;
+    // Get the most recent per-second energy reading (today's cumulative energy)
+    final recentEnergy = data.isNotEmpty ? data.last.energy : 0.0;
+
+    // Calculate daily energy as: recent per-second energy - yesterday's daily energy
+    // This gives us the energy consumed today so far
+    final totalEnergy = (recentEnergy - _yesterdayEnergy).clamp(0.0, double.infinity);
     final totalCost = totalEnergy * _pricePerKWH;
 
     return Container(
@@ -516,7 +570,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                 ),
               ),
               Tooltip(
-                message: 'Estimated daily energy cost based on average consumption and your configured price per kWh.',
+                message: 'Daily energy cost calculated as the difference between current energy reading and yesterday\'s daily total, multiplied by your configured price per kWh.',
                 child: Icon(
                   Icons.info_outline,
                   size: 12,
@@ -1734,9 +1788,12 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
             debugPrint('[EnergyOverview] Switched to hub: $_selectedHubSerial');
             // Restart SSR state listener for the new hub
             _initializeSsrStateListener();
+            // Fetch yesterday's energy for the new hub
+            _fetchYesterdayEnergy();
           } else {
             _selectedHubSerial = null;
             _isHubActive = false;
+            _yesterdayEnergy = 0.0;
             debugPrint('[EnergyOverview] No hubs available after removal');
           }
         }
