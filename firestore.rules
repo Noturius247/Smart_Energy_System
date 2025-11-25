@@ -7,19 +7,32 @@ service cloud.firestore {
     match /users/{userId} {
       // Allow users to manage their own documents and subcollections
       match /{allPaths=**} {
-        allow read, write: if request.auth.uid == userId;
+        allow read, write: if request.auth.uid == userId ||
+                            (request.auth.token.admin == true) ||
+                            request.auth.token.email == 'espthesisbmn@gmail.com' ||
+                            request.auth.token.email == 'smartenergymeter11@gmail.com';
       }
-      allow read, write: if request.auth.uid == userId;
+      allow read, write: if request.auth.uid == userId ||
+                          (request.auth.token.admin == true) ||
+                          request.auth.token.email == 'espthesisbmn@gmail.com' ||
+                          request.auth.token.email == 'smartenergymeter11@gmail.com';
     }
 
     // 2) Devices collection example: owners can create/update/delete their own device docs
     //    Admins (custom claim `admin == true`) can manage any device.
     match /devices/{deviceId} {
       allow read: if request.auth != null; // authenticated users can read devices
-      allow create: if request.auth != null && request.resource.data.ownerId == request.auth.uid;
+      allow create: if request.auth != null && (
+        request.resource.data.ownerId == request.auth.uid ||
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'espthesisbmn@gmail.com' ||
+        request.auth.token.email == 'smartenergymeter11@gmail.com'
+      );
       allow update, delete: if request.auth != null && (
         resource.data.ownerId == request.auth.uid ||
-        (request.auth.token.admin == true)
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'espthesisbmn@gmail.com' ||
+        request.auth.token.email == 'smartenergymeter11@gmail.com'
       );
     }
 

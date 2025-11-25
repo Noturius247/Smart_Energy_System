@@ -105,15 +105,15 @@ class RealtimeDbService {
     final hubStateSub = hubSsrStateRef.onValue.listen((event) {
       if (!_hubDataController.isClosed) {
         final ssrState = event.snapshot.value as bool?;
-        debugPrint('[RealtimeDbService] Hub $hubSerialNumber ssr_state changed to: $ssrState');
-        if (ssrState != null) {
-          _hubDataController.add({
-            'type': 'hub_state',
-            'serialNumber': hubSerialNumber,
-            'ssr_state': ssrState,
-            'ownerId': uid, // Include current user's UID
-          });
-        }
+        debugPrint('[RealtimeDbService] Hub $hubSerialNumber ssr_state event: $ssrState (snapshot.value: ${event.snapshot.value})');
+        // CRITICAL FIX: Always broadcast the state, even if null, so UI can handle it
+        // The UI will default to false if null
+        _hubDataController.add({
+          'type': 'hub_state',
+          'serialNumber': hubSerialNumber,
+          'ssr_state': ssrState ?? false, // Default to false if null
+          'ownerId': uid, // Include current user's UID
+        });
       }
     }, onError: _handleError);
     _hubSubscriptions[hubSerialNumber]!.add(hubStateSub);
@@ -755,6 +755,50 @@ class RealtimeDbService {
     }
   }
 
+  /// Fetches paginated aggregated data for a specific hub and aggregation type.
+  ///
+  /// This method is designed for efficient, reverse chronological pagination.
+  /// It fetches a `limit` number of records ending at `endAtKey`.
+  Future<Map<String, dynamic>> getAggregatedDataPaginated({
+    required String hubSerialNumber,
+    required String aggregationType,
+    required int limit,
+    String? endAtKey,
+  }) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        debugPrint('[getAggregatedDataPaginated] User not authenticated');
+        return {};
+      }
+
+      Query query = _dbRef
+          .child('$rtdbUserPath/hubs/$hubSerialNumber/aggregations/$aggregationType')
+          .orderByKey();
+
+      // If endAtKey is provided, we fetch the page *before* that key.
+      if (endAtKey != null) {
+        query = query.endBefore(endAtKey);
+      }
+
+      // We limit to the last `limit` number of records from that point.
+      query = query.limitToLast(limit);
+
+      final snapshot = await query.get();
+
+      if (snapshot.exists && snapshot.value != null) {
+        // Data is returned as a Map, so we can just cast and return it.
+        // The keys are the aggregation periods (e.g., "2025-11-20").
+        return Map<String, dynamic>.from(snapshot.value as Map);
+      } else {
+        return {};
+      }
+    } catch (e) {
+      debugPrint('[getAggregatedDataPaginated] Error fetching paginated $aggregationType data: $e');
+      return {};
+    }
+  }
+
   /// Returns an efficient, listening stream of the last 24 hours of HOURLY data.
   /// This is specifically for the Energy Overview screen's 24h chart.
   /// The stream re-emits every minute to update the 24-hour rolling window.
@@ -783,6 +827,8 @@ class RealtimeDbService {
         final windowEnd = DateTime.now();
         final windowStart = windowEnd.subtract(const Duration(hours: 24));
 
+        // First pass: collect all hourly data points
+        final List<TimestampedFlSpot> rawSpots = [];
         data.forEach((key, value) {
           try {
             if (value is Map) {
@@ -808,7 +854,7 @@ class RealtimeDbService {
                   final totalEnergy =
                       (value['total_energy'] as num? ?? 0.0).toDouble();
 
-                  spots.add(TimestampedFlSpot(
+                  rawSpots.add(TimestampedFlSpot(
                     timestamp: timestamp,
                     power: averagePower,
                     voltage: averageVoltage,
@@ -823,6 +869,26 @@ class RealtimeDbService {
                 '[getOverviewHourlyStream] Error parsing hourly data key $key: $e');
           }
         });
+
+        // Sort by timestamp ascending for proper calculation
+        rawSpots.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+        // Second pass: calculate hourly consumption as difference between consecutive readings
+        for (int i = 1; i < rawSpots.length; i++) {
+          final previous = rawSpots[i - 1];
+          final current = rawSpots[i];
+
+          // Calculate hourly consumption: current reading minus previous reading
+          final hourlyConsumption = (current.energy - previous.energy).abs();
+
+          spots.add(TimestampedFlSpot(
+            timestamp: current.timestamp,
+            power: current.power,
+            voltage: current.voltage,
+            current: current.current,
+            energy: hourlyConsumption, // Use the calculated hourly consumption
+          ));
+        }
 
         spots.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         debugPrint(
