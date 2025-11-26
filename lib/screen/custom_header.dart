@@ -4,7 +4,6 @@ import '../theme_provider.dart'; // Import ThemeNotifier
 import '../realtime_db_service.dart';
 import '../notification_provider.dart';
 import '../widgets/notification_panel.dart';
-import 'profile.dart';
 import 'chatbot.dart'; // ✅ Import chatbot
 
 class CustomHeader extends StatelessWidget {
@@ -16,6 +15,7 @@ class CustomHeader extends StatelessWidget {
   final bool showChatIcon;
   final bool showNotificationIcon;
   final bool showProfileIcon;
+  final VoidCallback? onProfileTap; // New: Callback for profile icon tap
   final RealtimeDbService realtimeDbService; // New: Add RealtimeDbService
 
   const CustomHeader({
@@ -27,6 +27,7 @@ class CustomHeader extends StatelessWidget {
     this.showChatIcon = true, // Default to true
     this.showNotificationIcon = true, // Default to true
     this.showProfileIcon = true, // Default to true
+    this.onProfileTap, // Optional callback for profile icon
     required this.realtimeDbService,
   });
 
@@ -184,17 +185,7 @@ class CustomHeader extends StatelessWidget {
             ),
             if (showProfileIcon)
               GestureDetector(
-                onTap: () {
-                  // Navigate to profile screen
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EnergyProfileScreen(
-                        realtimeDbService: realtimeDbService,
-                      ),
-                    ),
-                  );
-                },
+                onTap: onProfileTap,
                 child: CircleAvatar(
                   radius: 22,
                   backgroundColor: Theme.of(

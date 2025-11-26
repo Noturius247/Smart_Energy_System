@@ -6,16 +6,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:intl/intl.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:provider/provider.dart';
-import '../theme_provider.dart';
 import '../realtime_db_service.dart';
 import 'login.dart';
-import 'custom_sidebar_nav.dart';
-import 'custom_header.dart';
 
 class EnergyProfileScreen extends StatefulWidget {
   final RealtimeDbService realtimeDbService; // New: Add RealtimeDbService
-  const EnergyProfileScreen({super.key, required this.realtimeDbService});
+  const EnergyProfileScreen({
+    super.key,
+    required this.realtimeDbService,
+  });
 
   @override
   State<EnergyProfileScreen> createState() => _EnergyProfileScreenState();
@@ -23,9 +22,7 @@ class EnergyProfileScreen extends StatefulWidget {
 
 class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     with SingleTickerProviderStateMixin {
-  int _currentIndex = 5;
   late AnimationController _animationController;
-  final bool _isSidebarOpen = false;
 
   User? _currentUser;
   Map<String, dynamic>? _userData;
@@ -167,128 +164,53 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     }
   }
 
-
-
-  void _onTabTapped(int index, Widget page) {
-    if (index == _currentIndex) return;
-    setState(() => _currentIndex = index);
-
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => page));
-  }
-
-  bool _isSmallScreen(BuildContext context) {
-    return MediaQuery.of(context).size.width <
-        600; // Define your small screen breakpoint
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Check screen width to determine layout
-    final isSmallScreen = _isSmallScreen(context);
-
+    // Profile screen only shows content, no navigation (accessed via main nav)
     return Scaffold(
-      body: isSmallScreen ? _buildMobileLayout() : _buildDesktopLayout(),
-    );
-  }
-
-  // Desktop Layout (Sidebar on Left)
-  Widget _buildDesktopLayout() {
-    return Row(
-      children: [
-        CustomSidebarNav(
-          currentIndex: _currentIndex,
-          isBottomNav: false,
-          realtimeDbService: _realtimeDbService, // Pass the service
-          onTap: _onTabTapped,
-        ),
-        Expanded(child: _buildMainContent()),
-      ],
-    );
-  }
-
-  // Mobile Layout (Bottom Navigation)
-  Widget _buildMobileLayout() {
-    return Column(
-      children: [
-        Expanded(child: _buildMainContent()),
-        CustomSidebarNav(
-          currentIndex: _currentIndex,
-          isBottomNav: true,
-          realtimeDbService: _realtimeDbService, // Pass the service
-          onTap: _onTabTapped,
-        ),
-      ],
+      body: _buildMainContent(),
     );
   }
 
   Widget _buildMainContent() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Theme.of(context).colorScheme.surface,
-            Theme.of(context).primaryColor,
-          ],
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            CustomHeader(
-              isSidebarOpen: _isSidebarOpen,
-              isDarkMode: Provider.of<ThemeNotifier>(context).darkTheme,
-              onToggleDarkMode: () {
-                Provider.of<ThemeNotifier>(
-                  context,
-                  listen: false,
-                ).toggleTheme();
-              },
-              realtimeDbService: _realtimeDbService, // Pass the service
-            ),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _errorMessage != null
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Text(
-                          _errorMessage!,
-                          style: const TextStyle(color: Colors.red),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    )
-                  : _currentUser == null
+    return SafeArea(
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                )
+              : _currentUser == null
                   ? const Center(
                       child: Text('Please log in to view your profile.'),
                     )
                   : _userData == null
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('User data not found in Firestore.'),
-                          Text('UID: ${_currentUser!.uid}'),
-                          // Optionally, add a button to create user data or re-fetch
-                        ],
-                      ),
-                    )
-                  : SingleChildScrollView(
-                      child: Column(
-                        children: [
-                          _buildProfileCard(),
-                          const SizedBox(height: 20),
-                          _buildMenuOptions(),
-                        ],
-                      ),
-                    ),
-            ),
-          ],
-        ),
-      ),
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('User data not found in Firestore.'),
+                              Text('UID: ${_currentUser!.uid}'),
+                              // Optionally, add a button to create user data or re-fetch
+                            ],
+                          ),
+                        )
+                      : SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              _buildProfileCard(),
+                              const SizedBox(height: 20),
+                              _buildMenuOptions(),
+                            ],
+                          ),
+                        ),
     );
   }
 

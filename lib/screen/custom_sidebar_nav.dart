@@ -9,6 +9,7 @@ import 'explore.dart';
 import 'analytics.dart';
 import 'history.dart';
 import 'settings.dart';
+import 'profile.dart';
 import 'login.dart';
 
 class CustomSidebarNav extends StatefulWidget {
@@ -90,6 +91,7 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = [
+      EnergyProfileScreen(realtimeDbService: widget.realtimeDbService),
       HomeScreen(realtimeDbService: widget.realtimeDbService),
       DevicesTab(realtimeDbService: widget.realtimeDbService),
       AnalyticsScreen(realtimeDbService: widget.realtimeDbService),
@@ -98,6 +100,10 @@ class _CustomSidebarNavState extends State<CustomSidebarNav> {
     ];
 
     final List<Map<String, dynamic>> navItems = [
+      {
+        'icon': Icons.person,
+        'label': 'Profile',
+      },
       {
         'icon': Icons.flash_on,
         'label': 'Energy',
