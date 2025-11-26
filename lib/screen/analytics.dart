@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +10,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:excel/excel.dart' as excel_pkg;
+import 'package:path_provider/path_provider.dart';
+import 'package:universal_html/html.dart' as html;
 import '../realtime_db_service.dart';
 import 'realtime_line_chart.dart';
 import '../constants.dart';
@@ -69,6 +74,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   // Cached stream to prevent recreation on every build
   Stream<List<TimestampedFlSpot>>? _cachedHistoricalStream;
+
+  // Export state flag to prevent duplicate exports
+  bool _isExporting60SecData = false;
 
   // Color mapping for each metric type
   Color _getMetricColor(_MetricType metricType) {
@@ -440,6 +448,157 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _export60SecondDataToExcel() async {
+    // Prevent duplicate exports
+    if (_isExporting60SecData) {
+      debugPrint('[Analytics] Export already in progress, ignoring duplicate request');
+      return;
+    }
+
+    setState(() => _isExporting60SecData = true);
+
+    try {
+      // Get the live chart data stream
+      final liveDataStream = widget.realtimeDbService.getLiveChartDataStream();
+
+      // Get the current data from the stream
+      final data = await liveDataStream.first;
+
+      if (data.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No data available to export')),
+          );
+        }
+        setState(() => _isExporting60SecData = false);
+        return;
+      }
+
+      // Filter to last 60 seconds
+      final now = DateTime.now();
+      final recentData = data.where((spot) {
+        return spot.timestamp.isAfter(now.subtract(const Duration(seconds: 60)));
+      }).toList();
+
+      if (recentData.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No data available in the last 60 seconds')),
+          );
+        }
+        setState(() => _isExporting60SecData = false);
+        return;
+      }
+
+      // Create Excel workbook
+      final excel = excel_pkg.Excel.createExcel();
+      final sheet = excel['60 Second Live Data'];
+
+      // Add header row with styling
+      sheet.appendRow([
+        excel_pkg.TextCellValue('Timestamp'),
+        excel_pkg.TextCellValue('Power (W)'),
+        excel_pkg.TextCellValue('Voltage (V)'),
+        excel_pkg.TextCellValue('Current (A)'),
+        excel_pkg.TextCellValue('Energy (kWh)'),
+      ]);
+
+      // Add data rows
+      for (final spot in recentData) {
+        sheet.appendRow([
+          excel_pkg.TextCellValue(DateFormat('yyyy-MM-dd HH:mm:ss').format(spot.timestamp)),
+          excel_pkg.DoubleCellValue(spot.power),
+          excel_pkg.DoubleCellValue(spot.voltage),
+          excel_pkg.DoubleCellValue(spot.current),
+          excel_pkg.DoubleCellValue(spot.energy),
+        ]);
+      }
+
+      // Remove default sheet if it exists
+      if (excel.sheets.containsKey('Sheet1')) {
+        excel.delete('Sheet1');
+      }
+
+      // Generate file name with timestamp
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(now);
+      final fileName = 'SmartEnergyMeter_LiveData_60sec_$timestamp.xlsx';
+
+      // Save file based on platform
+      final fileBytes = excel.encode();
+      if (fileBytes == null) {
+        throw Exception('Failed to generate Excel file');
+      }
+
+      if (kIsWeb) {
+        // Web platform - trigger browser download
+        final blob = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        html.AnchorElement(href: url)
+          ..setAttribute('download', fileName)
+          ..click();
+        html.Url.revokeObjectUrl(url);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Downloaded ${recentData.length} records: $fileName'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        // Desktop/Mobile platforms
+        Directory? directory;
+
+        if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+          directory = await getDownloadsDirectory();
+        } else if (Platform.isAndroid || Platform.isIOS) {
+          directory = await getApplicationDocumentsDirectory();
+        }
+
+        if (directory == null) {
+          throw Exception('Could not access storage directory');
+        }
+
+        final filePath = '${directory.path}/$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(fileBytes);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Exported ${recentData.length} records!\n$filePath'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'OK',
+                textColor: Colors.white,
+                onPressed: () {},
+              ),
+            ),
+          );
+        }
+
+        debugPrint('[Analytics] Exported 60-second data to: $filePath');
+      }
+    } catch (e) {
+      debugPrint('[Analytics] Error exporting to Excel: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error exporting data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting60SecData = false);
+      }
+    }
   }
 
   double _getMetricValue(TimestampedFlSpot spot, _MetricType metricType, {bool calculateCost = false}) {
@@ -918,11 +1077,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                       ),
                                     ),
                                     SizedBox(width: isSmallScreen ? 4 : 8),
-                                    // Export Button
+                                    // Export Button - Exports 60-second data to Excel
                                     IconButton(
-                                      icon: Icon(Icons.download, size: isSmallScreen ? 20 : 24),
-                                      onPressed: () => _exportDataToCSV(allData),
-                                      tooltip: 'Export to CSV',
+                                      icon: Icon(Icons.table_chart, size: isSmallScreen ? 20 : 24),
+                                      onPressed: _export60SecondDataToExcel,
+                                      tooltip: 'Export 60s Data to Excel',
                                       padding: EdgeInsets.all(isSmallScreen ? 4 : 8),
                                       constraints: BoxConstraints(
                                         minWidth: isSmallScreen ? 32 : 48,

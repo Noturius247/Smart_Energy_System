@@ -1,6 +1,9 @@
+import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:intl/intl.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
@@ -38,6 +41,9 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
   final TextEditingController _providerController = TextEditingController();
   final TextEditingController _pricePerKWHController = TextEditingController();
   final TextEditingController _displayNameController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+
+  StreamSubscription<DatabaseEvent>? _energyDataSubscription;
 
   @override
   void initState() {
@@ -60,6 +66,8 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     _providerController.dispose();
     _pricePerKWHController.dispose();
     _displayNameController.dispose();
+    _addressController.dispose();
+    _energyDataSubscription?.cancel();
     super.dispose();
   }
 
@@ -79,7 +87,11 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     await FirebaseFirestore.instance
         .collection('users')
         .doc(_currentUser!.uid)
-        .update({'name': _nameController.text, 'role': _roleController.text});
+        .update({
+          'name': _nameController.text,
+          'role': _roleController.text,
+          'address': _addressController.text,
+        });
 
     // Update device document
     await FirebaseFirestore.instance
@@ -143,6 +155,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
         _pricePerKWHController.text =
             _userData!['pricePerKWH']?.toString() ?? '';
         _displayNameController.text = _userData!['displayName'] ?? '';
+        _addressController.text = _userData!['address'] ?? '';
       }
     } catch (e) {
       _errorMessage = 'Failed to load user data: ${e.toString()}';
@@ -153,6 +166,8 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
       });
     }
   }
+
+
 
   void _onTabTapped(int index, Widget page) {
     if (index == _currentIndex) return;
@@ -255,7 +270,7 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('User data not found in Firestore.'),
+                          const Text('User data not found in Firestore.'),
                           Text('UID: ${_currentUser!.uid}'),
                           // Optionally, add a button to create user data or re-fetch
                         ],
@@ -278,228 +293,267 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
   }
 
   Widget _buildProfileCard() {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       margin: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(30),
         gradient: LinearGradient(
-          colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).cardColor,
+            Theme.of(context).primaryColor.withOpacity(0.8),
+          ],
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha((255 * 0.3).round()),
-            blurRadius: 15,
+            color: Theme.of(context).primaryColor.withOpacity(0.3),
+            blurRadius: 20,
             offset: const Offset(0, 10),
+            spreadRadius: 2,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(25),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween, // Added this
-              children: [
-                // Display Name prominently at the top
-                Expanded(
-                  child: Text(
-                    _userData!['name'] ?? _currentUser!.email ?? 'User',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ), // Larger font size
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    _isEditing ? Icons.save : Icons.edit,
-                    color: Theme.of(context).iconTheme.color,
-                  ),
-                  onPressed: _toggleEditing,
-                ),
-              ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1.5,
+              ),
             ),
-            const SizedBox(height: 20), // Spacing after prominent name
-            Row(
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.secondary,
-                      width: 3,
-                    ),
+            child: Padding(
+              padding: const EdgeInsets.all(30),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'User Profile',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        transitionBuilder: (Widget child, Animation<double> animation) {
+                          return RotationTransition(
+                            turns: animation,
+                            child: FadeTransition(opacity: animation, child: child),
+                          );
+                        },
+                        child: IconButton(
+                          key: ValueKey<bool>(_isEditing),
+                          icon: Icon(
+                            _isEditing ? Icons.save_rounded : Icons.edit_rounded,
+                            color: Theme.of(context).colorScheme.secondary,
+                            size: 28,
+                          ),
+                          onPressed: _toggleEditing,
+                          tooltip: _isEditing ? 'Save Changes' : 'Edit Profile',
+                        ),
+                      ),
+                    ],
                   ),
-                  child: ClipOval(
-                    child: _currentUser!.photoURL != null
-                        ? Image.network(
-                            _currentUser!.photoURL!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return CircleAvatar(
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.secondary,
-                                child: Icon(
-                                  Icons.person,
-                                  size: 40,
-                                  color: Colors.white,
-                                ),
-                              );
-                            },
-                          )
-                        : CircleAvatar(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.secondary,
-                            child: Icon(
-                              Icons.person,
-                              size: 40,
-                              color: Colors.white,
+                  const SizedBox(height: 25),
+                  Row(
+                    children: [
+                      Hero(
+                        tag: 'profile_avatar',
+                        child: Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [
+                                Theme.of(context).colorScheme.secondary,
+                                Theme.of(context).colorScheme.secondary.withOpacity(0.7),
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Theme.of(context).colorScheme.secondary.withOpacity(0.4),
+                                blurRadius: 15,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(3),
+                            child: ClipOval(
+                              child: _currentUser!.photoURL != null
+                                  ? Image.network(
+                                      _currentUser!.photoURL!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return CircleAvatar(
+                                          backgroundColor: Theme.of(context).colorScheme.secondary,
+                                          child: const Icon(
+                                            Icons.person_rounded,
+                                            size: 45,
+                                            color: Colors.white,
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : CircleAvatar(
+                                      backgroundColor: Theme.of(context).colorScheme.secondary,
+                                      child: const Icon(
+                                        Icons.person_rounded,
+                                        size: 45,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                           ),
-                  ),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'User ${_userData!['role'] ?? 'No role specified'}',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodyMedium?.copyWith(fontSize: 25),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        _currentUser!.email ?? 'No email available',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontSize: 12,
-                          color: Colors.grey[600],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Device Information',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Display device-specific information
-            Column(
-              children: [
-                _buildEditableStatItem('Display Name', _displayNameController),
-                _buildStatItem(
-                  'Serial Number',
-                  _userData!['serialNumber']?.toString() ?? 'N/A',
-                ),
-                _buildStatItem(
-                  'Provider',
-                  _userData!['provider']?.toString() ?? 'N/A',
-                ),
-                _buildEditableStatItem(
-                  'Price per KWH',
-                  _pricePerKWHController,
-                  keyboardType: TextInputType.number,
-                ),
-                _buildStatItem(
-                  'Created At',
-                  _formatTimestamp(_userData!['createdAt']),
-                ),
-              ],
-            ),
-            const SizedBox(height: 30),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Energy Stats',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildStatItem(
-                        'Current Energy Usage',
-                        '350 kWh',
-                      ), // These could also be dynamic
-                      const SizedBox(height: 5),
-                      _buildStatItem(
-                        'Monthly Savings',
-                        '₱25',
-                      ), // These could also be dynamic
-                      const SizedBox(height: 5),
-                      _buildStatItem(
-                        'Carbon Reduction',
-                        '120 kg',
-                      ), // These could also be dynamic
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 20),
-                // --- Sizing Fix Applied Here ---
-                Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    SizedBox(
-                      // Removed const here
-                      width: 60,
-                      height: 60,
-                      child: CircularProgressIndicator(
-                        value: 0.7,
-                        strokeWidth: 7,
-                        backgroundColor: Theme.of(
-                          context,
-                        ).primaryColor.withAlpha((255 * 0.2).round()),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).colorScheme.secondary,
-                        ),
-                      ),
-                    ),
-
-                    Column(
-                      children: [
-                        Text(
-                          '120',
-                          style: Theme.of(context).textTheme.bodyLarge
-                              ?.copyWith(
-                                fontSize: 15,
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _displayNameController.text.isNotEmpty
+                                  ? _displayNameController.text
+                                  : _userData!['displayName'] ?? 'User Profile',
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.email_rounded,
+                                  size: 16,
+                                  color: Theme.of(context).textTheme.bodySmall?.color,
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    _currentUser!.email ?? 'No email available',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      fontSize: 13,
+                                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.8),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.secondary.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+                                ),
+                              ),
+                              child: Text(
+                                _userData!['role'] ?? 'User',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.secondary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                    ],
+                  ),
+            const SizedBox(height: 35),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.secondary.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.devices_rounded,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.secondary,
+                        ),
+                        const SizedBox(width: 8),
                         Text(
-                          'kg CO₂',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodyMedium?.copyWith(fontSize: 10),
+                          'Device Information',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.secondary,
+                          ),
                         ),
                       ],
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.1),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        _buildEditableStatItem('Display Name', _displayNameController),
+                        const SizedBox(height: 12),
+                        _buildStatItem(
+                          'Serial Number',
+                          _userData!['serialNumber']?.toString() ?? 'N/A',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildStatItem(
+                          'Provider',
+                          _userData!['provider']?.toString() ?? 'N/A',
+                        ),
+                        const SizedBox(height: 12),
+                        _buildEditableStatItem(
+                          'Price per KWH',
+                          _pricePerKWHController,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildEditableStatItem('Address', _addressController),
+                        const SizedBox(height: 12),
+                        _buildStatItem(
+                          'Created At',
+                          _formatTimestamp(_userData!['createdAt']),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -526,133 +580,219 @@ class _EnergyProfileScreenState extends State<EnergyProfileScreen>
     TextEditingController controller, {
     TextInputType keyboardType = TextInputType.text,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
-          _isEditing
-              ? Expanded(
-                  child: TextFormField(
-                    controller: controller,
-                    textAlign: TextAlign.end,
-                    keyboardType: keyboardType,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.8),
+          ),
+        ),
+        _isEditing
+            ? Expanded(
+                child: TextFormField(
+                  controller: controller,
+                  textAlign: TextAlign.end,
+                  keyboardType: keyboardType,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+                      ),
                     ),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                      border: OutlineInputBorder(borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
                     ),
                   ),
-                )
-              : Text(
-                  controller.text.isEmpty ? 'N/A' : controller.text,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
+              )
+            : Text(
+                controller.text.isEmpty ? 'N/A' : controller.text,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+      ],
+    );
+  }
+
+
+  Widget _buildMenuOptions() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).cardColor,
+            Theme.of(context).primaryColor.withOpacity(0.8),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).primaryColor.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+            spreadRadius: 2,
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                _buildMenuItem(Icons.person_rounded, 'Personal Info', () {}, Colors.blue),
+                _buildMenuItem(Icons.security_rounded, 'Security', () {}, Colors.orange),
+                _buildMenuItem(Icons.notifications_rounded, 'Notifications', () {}, Colors.purple),
+                const SizedBox(height: 15),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () {},
+                        icon: Icon(
+                          Icons.help_outline_rounded,
+                          size: 20,
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                        label: Text(
+                          'Help & Support',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _showLogoutDialog,
+                        icon: const Icon(Icons.logout_rounded, size: 18),
+                        label: const Text(
+                          'Logout',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6B6B),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          elevation: 4,
+                          shadowColor: const Color(0xFFFF6B6B).withOpacity(0.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 15),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildMenuOptions() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha((255 * 0.3).round()),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _buildMenuItem(Icons.person_outline, 'Personal Info', () {}),
-          _buildDivider(),
-          _buildMenuItem(Icons.security, 'Security', () {}),
-          _buildDivider(),
-          _buildMenuItem(Icons.notifications_outlined, 'Notifications', () {}),
-          _buildDivider(),
-          _buildMenuItem(Icons.devices, 'Connected Devices', () {}),
-          _buildDivider(),
-          _buildMenuItem(Icons.bar_chart, 'View Energy History', () {}),
-          _buildDivider(),
-          _buildMenuItem(Icons.settings, 'Manage Smart Devices', () {}),
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 25),
+  Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 6),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: Theme.of(context).cardColor.withOpacity(0.3),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1),
+              ),
+            ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                TextButton(
-                  onPressed: () {},
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        color.withOpacity(0.8),
+                        color.withOpacity(0.6),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 15),
+                Expanded(
                   child: Text(
-                    'Help & Support',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    title,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
                   ),
                 ),
-                ElevatedButton(
-                  onPressed: _showLogoutDialog,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6B6B),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 25,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                  ),
-                  child: const Text(
-                    'Logout',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Theme.of(context).iconTheme.color?.withOpacity(0.5),
+                  size: 16,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMenuItem(IconData icon, String title, VoidCallback onTap) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.secondary,
-          borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
       ),
-      title: Text(title, style: Theme.of(context).textTheme.bodyLarge),
-      trailing: Icon(
-        Icons.arrow_forward_ios,
-        color: Theme.of(context).iconTheme.color,
-        size: 16,
-      ),
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 25),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 25),
-      child: Divider(color: Theme.of(context).dividerColor, height: 1),
     );
   }
 

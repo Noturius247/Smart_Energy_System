@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Import Cloud Firestore
 import 'package:firebase_auth/firebase_auth.dart'; // Import Firebase Auth
 import 'package:firebase_database/firebase_database.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'dart:convert';
 import '../theme_provider.dart';
@@ -15,7 +16,6 @@ import '../constants.dart';
 import 'admin_home.dart';
 import 'explore.dart';
 import 'history.dart';
-import 'profile.dart';
 
 
 class EnergySettingScreen extends StatefulWidget {
@@ -28,9 +28,6 @@ class EnergySettingScreen extends StatefulWidget {
 
 class _EnergySettingScreenState extends State<EnergySettingScreen>
     with TickerProviderStateMixin {
-  bool smartScheduling = true;
-  bool peakHourAlerts = true;
-  double powerSavingLevel = 0.6;
   bool _breakerStatus = false;
   double _pricePerKWH = 0.0; // New state variable for price per kWh
   late RealtimeDbService _realtimeDbService;
@@ -375,12 +372,6 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     super.dispose();
   }
 
-  String get powerSavingText {
-    if (powerSavingLevel < 0.33) return 'Low';
-    if (powerSavingLevel > 0.66) return 'High';
-    return 'Medium';
-  }
-
   void _navigateToConnectedDevices() {
     Navigator.push(
       context,
@@ -395,13 +386,6 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     );
   }
 
-  void _navigateToProfileSettings() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => EnergyProfileScreen(realtimeDbService: _realtimeDbService)),
-    );
-  }
-
   void _navigateToSchedule() {
     Navigator.push(
       context,
@@ -409,11 +393,212 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     );
   }
 
-  void _navigateToMain() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => HomeScreen(realtimeDbService: _realtimeDbService)),
+  Future<void> _showChangePasswordDialog() async {
+    final themeNotifier = Provider.of<ThemeNotifier>(context, listen: false);
+    final bool isDarkMode = themeNotifier.darkTheme;
+    final User? user = FirebaseAuth.instance.currentUser;
+
+    if (user == null || user.email == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No user logged in')),
+      );
+      return;
+    }
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1a2332) : Colors.white,
+          title: Text(
+            'Change Password',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'A password reset link will be sent to:',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                user.email!,
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Check your email and follow the instructions to reset your password.',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.secondary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('Send Email'),
+            ),
+          ],
+        );
+      },
     );
+
+    if (confirmed == true) {
+      await _sendPasswordResetEmail(user.email!);
+    }
+  }
+
+  Future<void> _sendPasswordResetEmail(String email) async {
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password reset email sent! Check your inbox.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String errorMessage;
+      switch (e.code) {
+        case 'user-not-found':
+          errorMessage = 'No user found with this email';
+          break;
+        case 'invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Too many requests. Please try again later';
+          break;
+        default:
+          errorMessage = 'Error sending reset email: ${e.message}';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(errorMessage)),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openGoogleAccountSettings() async {
+    final themeNotifier = Provider.of<ThemeNotifier>(context, listen: false);
+    final bool isDarkMode = themeNotifier.darkTheme;
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDarkMode ? const Color(0xFF1a2332) : Colors.white,
+          title: Text(
+            'Manage Google Account',
+            style: TextStyle(
+              color: isDarkMode ? Colors.white : Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You signed in with Google. To change your password or manage your account settings, you need to visit your Google Account page.',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This will open your browser and redirect you to Google Account settings.',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(
+                'Cancel',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text('Open Google Account'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      try {
+        final Uri url = Uri.parse('https://myaccount.google.com/');
+        if (await canLaunchUrl(url)) {
+          await launchUrl(url, mode: LaunchMode.externalApplication);
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not open Google Account settings')),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error opening link: $e')),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -422,39 +607,39 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   }
 
   Widget _buildMainContent() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Theme.of(context).colorScheme.surface, Theme.of(context).scaffoldBackgroundColor],
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Theme.of(context).colorScheme.surface, Theme.of(context).scaffoldBackgroundColor],
+          ),
         ),
-      ),
-      child: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 25),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 12),
-                if (_availableHubs.isNotEmpty) _buildHubSelector(),
-                if (_availableHubs.isNotEmpty) const SizedBox(height: 20),
-                _buildEnergyUsageAndBreaker(),
-                const SizedBox(height: 30),
-                _buildEnergyManagement(),
-                const SizedBox(height: 40),
-                _buildDeviceManagement(),
-                const SizedBox(height: 40),
-                _buildPreferences(),
-                const SizedBox(height: 40),
-                _buildPricingSettings(),
-                const SizedBox(height: 40),
-                _buildDueDateSettings(),
-                const SizedBox(height: 100),
-              ],
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 25),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 12),
+                  if (_availableHubs.isNotEmpty) _buildHubSelector(),
+                  if (_availableHubs.isNotEmpty) const SizedBox(height: 20),
+                  _buildPricingSettings(),
+                  const SizedBox(height: 30),
+                  _buildEnergyUsageAndBreaker(),
+                  const SizedBox(height: 30),
+                  _buildDeviceManagement(),
+                  const SizedBox(height: 40),
+                  _buildPreferences(),
+                  const SizedBox(height: 40),
+                  _buildDueDateSettings(),
+                  const SizedBox(height: 100),
+                ],
+              ),
             ),
           ),
         ),
@@ -569,7 +754,7 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
         children: [
           Expanded(
             flex: 2,
-            child: _buildEnergyUsage(),
+            child: _buildScheduleCard(),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -581,142 +766,112 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
     );
   }
 
-  Widget _buildEnergyUsage() {
-    return Container(
-      padding: const EdgeInsets.all(25),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).shadowColor.withAlpha(80),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
-    Text(
-      "Today's Energy Usage",
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-        fontWeight: FontWeight.w400,
-      ),
-    ),
-    const SizedBox(height: 4), // less spacing
-    Text(
-      '7.4 kWh',
-      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-        fontWeight: FontWeight.w200,
-      ),
-    ),
-    const SizedBox(height: 4), // less spacing
-    GestureDetector(
-      onTap: _navigateToSchedule,
-      child: Text(
-        'Next Task: 10:30 AM',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          decoration: TextDecoration.underline,
-        ),
-      ),
-    ),
-  ],
-)
+  Widget _buildScheduleCard() {
+    return Consumer<DueDateProvider>(
+      builder: (context, dueDateProvider, _) {
+        final hasDueDate = dueDateProvider.dueDate != null;
+        final isOverdue = dueDateProvider.isOverdue;
 
-    );
-  }
-
-  Widget _buildEnergyManagement() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionTitle('ENERGY MANAGEMENT'),
-        const SizedBox(height: 20),
-        _buildSettingItem(
-          icon: Icons.schedule,
-          iconColor: Theme.of(context).colorScheme.secondary,
-          title: 'Smart Scheduling',
-          trailing: Switch(
-            value: smartScheduling,
-            onChanged: (value) {
-              setState(() {
-                smartScheduling = value;
-              });
-              if (value) {
-                _navigateToSchedule();
-              }
-            },
-            activeColor: Theme.of(context).colorScheme.secondary,
-          ),
-        ),
-        _buildSettingItem(
-          icon: Icons.notifications,
-          iconColor: Theme.of(context).colorScheme.primary,
-          title: 'Peak Hour Alerts',
-          trailing: Switch(
-            value: peakHourAlerts,
-            onChanged: (value) {
-              setState(() {
-                peakHourAlerts = value;
-              });
-            },
-            activeColor: Theme.of(context).colorScheme.secondary,
-          ),
-        ),
-        _buildSettingItem(
-          icon: Icons.power_settings_new,
-          iconColor: Theme.of(context).colorScheme.secondary,
-          title: 'Power Saving Mode',
-        ),
-        const SizedBox(height: 15),
-        _buildPowerSlider(),
-      ],
-    );
-  }
-
-  Widget _buildPowerSlider() {
-    return Column(
-      children: [
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            activeTrackColor: Theme.of(context).colorScheme.secondary,
-            inactiveTrackColor: Theme.of(context).cardColor,
-            thumbColor: Theme.of(context).colorScheme.secondary,
-            overlayColor: Theme.of(context).colorScheme.secondary.withAlpha(80),
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
-          ),
-          child: Slider(
-            value: powerSavingLevel,
-            onChanged: (value) {
-              setState(() {
-                powerSavingLevel = value;
-              });
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Low', style: Theme.of(context).textTheme.bodySmall),
-              Text('High', style: Theme.of(context).textTheme.bodySmall),
+        return Container(
+          padding: const EdgeInsets.all(25),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).cardColor,
+                Theme.of(context).primaryColor,
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).shadowColor.withAlpha(80),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
             ],
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          powerSavingText,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: Theme.of(context).colorScheme.secondary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (hasDueDate) ...[
+                  Text(
+                    'Due Date',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        size: 28,
+                        color: isOverdue ? Colors.red : Theme.of(context).colorScheme.secondary,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        dueDateProvider.getFormattedDueDate() ?? '',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w300,
+                          color: isOverdue ? Colors.red : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isOverdue ? Colors.red : Theme.of(context).colorScheme.secondary,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          isOverdue
+                              ? 'Overdue by ${dueDateProvider.getDaysRemaining()!.abs()} days'
+                              : '${dueDateProvider.getDaysRemaining()} days remaining',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else ...[
+                  Text(
+                    'No Due Date Set',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        size: 28,
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Tap to set',
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w300,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+        );
+      },
     );
   }
 
@@ -810,6 +965,10 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
   }
 
   Widget _buildPreferences() {
+    final User? user = FirebaseAuth.instance.currentUser;
+    final bool isPasswordProvider = user?.providerData.any((info) => info.providerId == 'password') ?? false;
+    final bool isGoogleProvider = user?.providerData.any((info) => info.providerId == 'google.com') ?? false;
+
     return Consumer<ThemeNotifier>(
       builder: (context, theme, _) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -827,20 +986,22 @@ class _EnergySettingScreenState extends State<EnergySettingScreen>
               },
             ),
           ),
-          _buildSettingItem(
-            icon: Icons.person,
-            iconColor: Theme.of(context).colorScheme.primary,
-            title: 'Profile Settings',
-            trailing: Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color, size: 24),
-            onTap: _navigateToProfileSettings,
-          ),
-          _buildSettingItem(
-            icon: Icons.home,
-            iconColor: Theme.of(context).colorScheme.secondary,
-            title: 'Back to Home',
-            trailing: Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color, size: 24),
-            onTap: _navigateToMain,
-          ),
+          if (isPasswordProvider)
+            _buildSettingItem(
+              icon: Icons.lock,
+              iconColor: Theme.of(context).colorScheme.primary,
+              title: 'Change Password',
+              trailing: Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color, size: 24),
+              onTap: _showChangePasswordDialog,
+            ),
+          if (isGoogleProvider)
+            _buildSettingItem(
+              icon: Icons.manage_accounts,
+              iconColor: Colors.red,
+              title: 'Manage Google Account',
+              trailing: Icon(Icons.open_in_new, color: Theme.of(context).iconTheme.color, size: 24),
+              onTap: _openGoogleAccountSettings,
+            ),
         ],
       ),
     );
