@@ -141,19 +141,24 @@ class _HubDeviceCard extends StatelessWidget {
     List<Map<String, dynamic>> plugInfo = [];
     if (hubData.containsKey('plugs') && hubData['plugs'] is Map) {
       final plugs = hubData['plugs'] as Map;
-      plugCount = plugs.length;
       plugs.forEach((key, value) {
         if (value is Map) {
-          plugInfo.add({
-            'id': key.toString(),
-            'nickname': value['nickname']?.toString() ?? 'Unknown Plug',
-            'power': (value['data']?['power'] as num?)?.toDouble() ?? 0.0,
-            'voltage': (value['data']?['voltage'] as num?)?.toDouble() ?? 0.0,
-            'current': (value['data']?['current'] as num?)?.toDouble() ?? 0.0,
-            'energy': (value['data']?['energy'] as num?)?.toDouble() ?? 0.0,
-          });
+          // Only add plug if it has actual sensor data (not just lastUpdate)
+          final data = value['data'];
+          if (data is Map && (data.containsKey('power') || data.containsKey('voltage') ||
+              data.containsKey('current') || data.containsKey('energy'))) {
+            plugInfo.add({
+              'id': key.toString(),
+              'nickname': value['nickname']?.toString() ?? 'Unknown Plug',
+              'power': (data['power'] as num?)?.toDouble() ?? 0.0,
+              'voltage': (data['voltage'] as num?)?.toDouble() ?? 0.0,
+              'current': (data['current'] as num?)?.toDouble() ?? 0.0,
+              'energy': (data['energy'] as num?)?.toDouble() ?? 0.0,
+            });
+          }
         }
       });
+      plugCount = plugInfo.length; // Count only plugs with actual data
     }
 
     double totalPower = plugInfo.fold(0.0, (sum, plug) => sum + (plug['power'] as double));
@@ -1599,15 +1604,40 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
               ),
             )
           else
-            SizedBox(
-              width: double.infinity,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minWidth: MediaQuery.of(context).size.width - 72,
-                  ),
-                  child: DataTable(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = MediaQuery.of(context).size.width < 600;
+
+                if (isMobile) {
+                  // Mobile view: Show cards
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: filteredDevices.length,
+                    itemBuilder: (context, index) {
+                      final entry = filteredDevices.entries.elementAt(index);
+                      return _HubDeviceMobileCard(
+                        serialNumber: entry.key,
+                        hubData: entry.value,
+                        isDarkMode: isDarkMode,
+                        onTap: () {
+                          // Handle tap if needed
+                        },
+                      );
+                    },
+                  );
+                }
+
+                // Tablet/Desktop view: Show DataTable
+                return SizedBox(
+                  width: double.infinity,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minWidth: MediaQuery.of(context).size.width - 72,
+                      ),
+                      child: DataTable(
                     headingRowHeight: 56,
                     dataRowMinHeight: 70,
                     dataRowMaxHeight: 90,
@@ -1714,7 +1744,6 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                       List<Map<String, dynamic>> plugInfo = [];
                       if (hubData.containsKey('plugs') && hubData['plugs'] is Map) {
                         final plugs = hubData['plugs'] as Map;
-                        plugCount = plugs.length;
                         plugs.forEach((key, value) {
                           String plugId = key.toString();
                           String plugNickname = 'Unknown Plug';
@@ -1722,6 +1751,7 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                           double voltage = 0.0;
                           double current = 0.0;
                           double energy = 0.0;
+                          bool hasValidData = false;
 
                           if (value is Map) {
                             // Get nickname from the plug's data
@@ -1733,29 +1763,39 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                             if (value.containsKey('data')) {
                               final data = value['data'];
                               if (data is Map) {
-                                // Also check nickname in data field as fallback
-                                if (plugNickname == 'Unknown Plug' && data.containsKey('nickname')) {
-                                  plugNickname = data['nickname'].toString();
-                                }
+                                // Check if plug has actual sensor data (not just lastUpdate)
+                                if (data.containsKey('power') || data.containsKey('voltage') ||
+                                    data.containsKey('current') || data.containsKey('energy')) {
+                                  hasValidData = true;
 
-                                // Extract sensor readings
-                                power = (data['power'] as num?)?.toDouble() ?? 0.0;
-                                voltage = (data['voltage'] as num?)?.toDouble() ?? 0.0;
-                                current = (data['current'] as num?)?.toDouble() ?? 0.0;
-                                energy = (data['energy'] as num?)?.toDouble() ?? 0.0;
+                                  // Also check nickname in data field as fallback
+                                  if (plugNickname == 'Unknown Plug' && data.containsKey('nickname')) {
+                                    plugNickname = data['nickname'].toString();
+                                  }
+
+                                  // Extract sensor readings
+                                  power = (data['power'] as num?)?.toDouble() ?? 0.0;
+                                  voltage = (data['voltage'] as num?)?.toDouble() ?? 0.0;
+                                  current = (data['current'] as num?)?.toDouble() ?? 0.0;
+                                  energy = (data['energy'] as num?)?.toDouble() ?? 0.0;
+                                }
                               }
                             }
                           }
 
-                          plugInfo.add({
-                            'id': plugId,
-                            'nickname': plugNickname,
-                            'power': power,
-                            'voltage': voltage,
-                            'current': current,
-                            'energy': energy,
-                          });
+                          // Only add plug if it has valid sensor data
+                          if (hasValidData) {
+                            plugInfo.add({
+                              'id': plugId,
+                              'nickname': plugNickname,
+                              'power': power,
+                              'voltage': voltage,
+                              'current': current,
+                              'energy': energy,
+                            });
+                          }
                         });
+                        plugCount = plugInfo.length; // Count only plugs with actual data
                       }
 
                       // Calculate total real-time data from all plugs
@@ -2003,6 +2043,8 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
                   ),
                 ),
               ),
+            );
+              },
             ),
         ],
       ),
@@ -2114,7 +2156,27 @@ class _MyAdminScreenState extends State<MyAdminScreen> {
 
   Widget _buildDataTable() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
+    if (isMobile) {
+      // Mobile view: Show cards
+      return ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: users.length,
+        itemBuilder: (context, index) {
+          final user = users[index];
+          return _UserMobileCard(
+            user: user,
+            isDarkMode: isDarkMode,
+            onEdit: () => _editUser(index),
+            onDelete: () => _deleteUser(index),
+          );
+        },
+      );
+    }
+
+    // Tablet/Desktop view: Show DataTable
     return SizedBox(
       width: double.infinity,
       child: SingleChildScrollView(
@@ -2684,3 +2746,276 @@ class _PlugCardState extends State<_PlugCard> {
     );
   }
 }
+
+// ------------------ MOBILE CARD VIEWS ------------------
+
+class _HubDeviceMobileCard extends StatelessWidget {
+  final String serialNumber;
+  final Map<String, dynamic> hubData;
+  final bool isDarkMode;
+  final VoidCallback onTap;
+
+  const _HubDeviceMobileCard({
+    required this.serialNumber,
+    required this.hubData,
+    required this.isDarkMode,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final nickname = hubData['nickname']?.toString() ?? '';
+    final ownerId = hubData['ownerId']?.toString() ?? 'N/A';
+    final assigned = hubData['assigned'] == true;
+    final ssrState = hubData['ssr_state']?.toString() ?? 'false';
+
+    int plugCount = 0;
+    if (hubData.containsKey('plugs') && hubData['plugs'] is Map) {
+      final plugs = hubData['plugs'] as Map;
+      plugs.forEach((key, value) {
+        if (value is Map) {
+          final data = value['data'];
+          if (data is Map && (data.containsKey('power') || data.containsKey('voltage') ||
+              data.containsKey('current') || data.containsKey('energy'))) {
+            plugCount++;
+          }
+        }
+      });
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.hub,
+                    color: isDarkMode ? Colors.purpleAccent : Colors.purple,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          serialNumber,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (nickname.isNotEmpty)
+                          Text(
+                            nickname,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: assigned ? Colors.green.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      assigned ? 'Assigned' : 'Not Assigned',
+                      style: TextStyle(
+                        color: assigned ? Colors.green : Colors.grey,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 24),
+              _buildInfoRow(context, Icons.person, 'Owner ID', ownerId),
+              const SizedBox(height: 8),
+              _buildInfoRow(context, Icons.power, 'SSR State', ssrState == 'true' ? 'Active' : 'Inactive'),
+              const SizedBox(height: 8),
+              _buildInfoRow(context, Icons.electrical_services, 'Connected Plugs', '$plugCount'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.grey,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _UserMobileCard extends StatelessWidget {
+  final UserModel user;
+  final bool isDarkMode;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _UserMobileCard({
+    required this.user,
+    required this.isDarkMode,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: isDarkMode ? Colors.purpleAccent : Colors.purple,
+                  child: Text(
+                    user.name[0].toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.name,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        user.email,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.grey,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: user.status == 'active'
+                        ? Colors.green.withValues(alpha: 0.2)
+                        : Colors.red.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    user.status.toUpperCase(),
+                    style: TextStyle(
+                      color: user.status == 'active' ? Colors.green : Colors.red,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            _buildInfoRow(context, Icons.location_on, 'Address', user.address),
+            const SizedBox(height: 8),
+            _buildInfoRow(context, Icons.calendar_today, 'Registered', user.dateRegistered),
+            const SizedBox(height: 8),
+            _buildInfoRow(context, Icons.devices, 'Devices', '${user.devices.length}'),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('Edit'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isDarkMode ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete, size: 16),
+                  label: const Text('Delete'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(BuildContext context, IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.grey,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
