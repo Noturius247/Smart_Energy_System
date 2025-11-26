@@ -11,13 +11,14 @@ import 'explore.dart'; // Import DevicesTab
 import 'analytics.dart'; // Import AnalyticsScreen
 import 'history.dart'; // Import EnergyHistoryScreen
 import 'settings.dart'; // Import EnergySettingScreen
+import 'profile.dart'; // Import EnergyProfileScreen
 
 class HomeScreen extends StatefulWidget {
   final int initialIndex;
   final RealtimeDbService realtimeDbService;
   const HomeScreen({
     super.key,
-    this.initialIndex = 0,
+    this.initialIndex = 1, // Default to Energy page (index 1)
     required this.realtimeDbService,
   });
 
@@ -37,15 +38,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _currentIndex = widget.initialIndex;
     _realtimeDbService = widget.realtimeDbService;
 
-    // Initialize the list of pages
+    // Initialize the list of pages (reordered to match sidebar)
     _pages = [
+      EnergyProfileScreen(realtimeDbService: _realtimeDbService), // Profile (index 0)
       EnergyOverviewScreen(
           realtimeDbService:
-              _realtimeDbService), // The new 'Energy' dashboard page
-      DevicesTab(realtimeDbService: _realtimeDbService),
-      AnalyticsScreen(realtimeDbService: _realtimeDbService),
-      EnergyHistoryScreen(realtimeDbService: _realtimeDbService),
-      EnergySettingScreen(realtimeDbService: _realtimeDbService),
+              _realtimeDbService), // Energy dashboard (index 1)
+      DevicesTab(realtimeDbService: _realtimeDbService), // Devices (index 2)
+      AnalyticsScreen(realtimeDbService: _realtimeDbService), // Analytics (index 3)
+      EnergyHistoryScreen(realtimeDbService: _realtimeDbService), // History (index 4)
+      EnergySettingScreen(realtimeDbService: _realtimeDbService), // Settings (index 5)
     ];
   }
 
@@ -126,6 +128,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             isSidebarOpen: false,
             isDarkMode: themeNotifier.darkTheme,
             onToggleDarkMode: themeNotifier.toggleTheme,
+            onProfileTap: () {
+              setState(() {
+                _currentIndex = 0; // Navigate to Profile page (index 0)
+              });
+            },
             realtimeDbService: _realtimeDbService,
           ),
           Expanded(
