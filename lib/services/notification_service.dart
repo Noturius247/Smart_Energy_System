@@ -14,6 +14,8 @@ enum NotificationType {
   scheduleDeleted,
   energyAlert,
   costAlert,
+  analyticsUpdate,
+  historyUpdate,
 }
 
 class NotificationItem {

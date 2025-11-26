@@ -63,6 +63,10 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
   int _usageHistoryOffset = 0; // For pagination/scrolling
   final ScrollController _usageScrollController = ScrollController();
 
+  // Export state flags to prevent duplicate exports
+  bool _isExportingCentralHub = false;
+  bool _isExportingUsage = false;
+
 
   // Sorting state
   String? _sortColumn;
@@ -652,6 +656,12 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
 
   /// EFFICIENT Excel export for Central Hub Data with progress indicator
   Future<void> _exportCentralHubDataToExcel() async {
+    // Prevent duplicate exports
+    if (_isExportingCentralHub) {
+      debugPrint('[EnergyHistory] Export already in progress, ignoring duplicate request');
+      return;
+    }
+
     if (_historyRecords.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -660,6 +670,8 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
       }
       return;
     }
+
+    setState(() => _isExportingCentralHub = true);
 
     try {
       // Show loading dialog
@@ -849,16 +861,15 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
             excel_lib.IntCellValue(record.totalReadings);
       }
 
-      // Get user info for filename
-      final String userName = user.displayName ?? user.email?.split('@').first ?? 'User';
-      final String sanitizedUserName = userName.replaceAll(RegExp(r'[^\w\s-]'), '');
-
       // Get hub serial numbers (combine all if multiple hubs)
       final hubSerials = allRecords.map((r) => r.hubName).toSet().join('_');
       final String sanitizedSerials = hubSerials.replaceAll(RegExp(r'[^\w\s-]'), '').replaceAll(' ', '_');
 
+      // Get aggregation type for filename
+      final String aggregationTypeName = _selectedAggregation.name.substring(0, 1).toUpperCase() + _selectedAggregation.name.substring(1);
+
       final String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final String fileName = 'SmartEnergyMeter_${sanitizedUserName}_${sanitizedSerials}_CentralHub_$timestamp.xlsx';
+      final String fileName = 'SmartEnergyMeter_${sanitizedSerials}_${aggregationTypeName}_CentralHub_$timestamp.xlsx';
 
       // Save file
       await _saveExcelFile(excel, fileName);
@@ -871,11 +882,21 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
           SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingCentralHub = false);
+      }
     }
   }
 
   /// EFFICIENT Excel export for Usage History
   Future<void> _exportUsageHistoryToExcel() async {
+    // Prevent duplicate exports
+    if (_isExportingUsage) {
+      debugPrint('[EnergyHistory] Export already in progress, ignoring duplicate request');
+      return;
+    }
+
     if (_usageHistoryEntries.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -884,6 +905,8 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
       }
       return;
     }
+
+    setState(() => _isExportingUsage = true);
 
     try {
       // Show loading dialog
@@ -952,11 +975,6 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
             excel_lib.DoubleCellValue(entry.usage);
       }
 
-      // Get user info for filename
-      final User? user = FirebaseAuth.instance.currentUser;
-      final String userName = user?.displayName ?? user?.email?.split('@').first ?? 'User';
-      final String sanitizedUserName = userName.replaceAll(RegExp(r'[^\w\s-]'), '');
-
       // Get hub info
       final hubInfo = _availableHubs.firstWhere(
         (hub) => hub['serialNumber'] == _selectedHubForUsage,
@@ -965,8 +983,11 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
       final String hubSerial = hubInfo['serialNumber'] ?? 'Unknown';
       final String sanitizedSerial = hubSerial.replaceAll(RegExp(r'[^\w\s-]'), '');
 
+      // Get interval type for filename
+      final String intervalTypeName = _selectedUsageInterval.name.substring(0, 1).toUpperCase() + _selectedUsageInterval.name.substring(1);
+
       final String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final String fileName = 'SmartEnergyMeter_${sanitizedUserName}_${sanitizedSerial}_Usage_$timestamp.xlsx';
+      final String fileName = 'SmartEnergyMeter_${sanitizedSerial}_${intervalTypeName}_Usage_$timestamp.xlsx';
 
       await _saveExcelFile(excel, fileName);
 
@@ -977,6 +998,10 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isExportingUsage = false);
       }
     }
   }
@@ -1351,6 +1376,7 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
                                                 _buildHeaderCell('Avg Power\n(W)', flex: 2, sortKey: 'power'),
                                                 _buildHeaderCell('Total Energy\n(kWh)', flex: 2, sortKey: 'energy'),
                                                 _buildHeaderCell('Avg Voltage\n(V)', flex: 2, sortKey: 'voltage'),
+                                                _buildHeaderCell('Avg Current\n(A)', flex: 2, sortKey: 'current'),
                                                 _buildHeaderCell('Readings', flex: 1, sortKey: 'readings'),
                                               ],
                                             ),
@@ -1403,6 +1429,7 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
                                                           fontWeight: FontWeight.bold,
                                                         ),
                                                         _buildDataCell(record.averageVoltage.toStringAsFixed(1), flex: 2),
+                                                        _buildDataCell(record.averageCurrent.toStringAsFixed(2), flex: 2),
                                                         _buildDataCell('${record.totalReadings}', flex: 1),
                                                       ],
                                                     ),

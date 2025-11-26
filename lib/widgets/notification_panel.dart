@@ -31,6 +31,10 @@ class NotificationPanel extends StatelessWidget {
         return Icons.warning_amber;
       case NotificationType.costAlert:
         return Icons.account_balance_wallet;
+      case NotificationType.analyticsUpdate:
+        return Icons.analytics;
+      case NotificationType.historyUpdate:
+        return Icons.history;
     }
   }
 
@@ -56,6 +60,10 @@ class NotificationPanel extends StatelessWidget {
         return const Color(0xFFFF5722);
       case NotificationType.costAlert:
         return const Color(0xFFFFC107);
+      case NotificationType.analyticsUpdate:
+        return const Color(0xFF673AB7);
+      case NotificationType.historyUpdate:
+        return const Color(0xFF607D8B);
     }
   }
 
