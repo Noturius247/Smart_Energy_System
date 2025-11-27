@@ -124,7 +124,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         debugPrint('[AnalyticsScreen] SSR state changed: ${isOn ? "ON" : "OFF"}, Chart paused: $_isChartPaused');
 
         // Pause/resume recording service for all active hubs based on SSR state
-        _updateRecordingState(isOn);
+         _updateRecordingState(isOn);
       }
     });
   }

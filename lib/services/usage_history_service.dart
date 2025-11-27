@@ -68,6 +68,29 @@ class UsageHistoryService {
     return entries;
   }
 
+  /// Applies a timezone correction to a timestamp.
+  ///
+  /// This handles two cases:
+  /// 1. If the timestamp is in UTC, it's converted to the local timezone.
+  /// 2. A workaround for a specific issue where timestamps from a UTC+3 source
+  ///    are incorrectly parsed as local time (e.g., in a UTC+8 environment),
+  ///    causing a 5-hour discrepancy. This is corrected by adding 5 hours.
+  DateTime _applyTimezoneCorrection(DateTime timestamp) {
+    DateTime corrected = timestamp;
+    if (corrected.isUtc) {
+      corrected = corrected.toLocal();
+      debugPrint('[UsageHistoryService] ✅ Converted UTC to local time: $timestamp -> $corrected');
+    } else {
+      // WORKAROUND: Correct for potential UTC+3 data parsed as local (UTC+8)
+      final hoursDifference = DateTime.now().difference(corrected).inHours;
+      if (hoursDifference > 4 && hoursDifference < 6) {
+        corrected = corrected.add(const Duration(hours: 5));
+        debugPrint('[UsageHistoryService] ⚠️ TIMEZONE CORRECTION: Added 5 hours (UTC+3 → UTC+8) to $timestamp');
+      }
+    }
+    return corrected;
+  }
+
   /// Calculate hourly usage history from aggregated readings
   ///
   /// This calculates usage for each hour by taking the difference between
@@ -111,15 +134,18 @@ class UsageHistoryService {
       // This gives us the actual energy consumed in that hour
       final usage = (current.energy - previous.energy).abs();
 
+      // Apply timezone correction to the timestamp
+      final correctedTimestamp = _applyTimezoneCorrection(current.timestamp);
+
       entries.add(UsageHistoryEntry(
-        timestamp: current.timestamp,
+        timestamp: correctedTimestamp,
         interval: UsageInterval.hourly,
         previousReading: previous.energy,
         currentReading: current.energy,
         usage: usage,
       ));
 
-      debugPrint('[UsageHistoryService] HOURLY: ${current.timestamp.toString().substring(0, 16)} - '
+      debugPrint('[UsageHistoryService] HOURLY: ${correctedTimestamp.toString().substring(0, 16)} - '
           'Previous: ${previous.energy.toStringAsFixed(3)} kWh, '
           'Current: ${current.energy.toStringAsFixed(3)} kWh, '
           'Usage: ${usage.toStringAsFixed(3)} kWh');
@@ -179,15 +205,18 @@ class UsageHistoryService {
       // This gives us the actual energy consumed in that day
       final usage = (current.energy - previous.energy).abs();
 
+      // Apply timezone correction to the timestamp
+      final correctedTimestamp = _applyTimezoneCorrection(current.timestamp);
+
       entries.add(UsageHistoryEntry(
-        timestamp: current.timestamp,
+        timestamp: correctedTimestamp,
         interval: UsageInterval.daily,
         previousReading: previous.energy,
         currentReading: current.energy,
         usage: usage,
       ));
 
-      debugPrint('[UsageHistoryService] DAILY: ${current.timestamp.toString().substring(0, 10)} - '
+      debugPrint('[UsageHistoryService] DAILY: ${correctedTimestamp.toString().substring(0, 10)} - '
           'Previous: ${previous.energy.toStringAsFixed(3)} kWh, '
           'Current: ${current.energy.toStringAsFixed(3)} kWh, '
           'Usage: ${usage.toStringAsFixed(3)} kWh');
@@ -246,15 +275,18 @@ class UsageHistoryService {
       // This gives us the actual energy consumed in that week
       final usage = (current.energy - previous.energy).abs();
 
+      // Apply timezone correction to the timestamp
+      final correctedTimestamp = _applyTimezoneCorrection(current.timestamp);
+
       entries.add(UsageHistoryEntry(
-        timestamp: current.timestamp,
+        timestamp: correctedTimestamp,
         interval: UsageInterval.weekly,
         previousReading: previous.energy,
         currentReading: current.energy,
         usage: usage,
       ));
 
-      debugPrint('[UsageHistoryService] WEEKLY: ${current.timestamp.toString().substring(0, 10)} - '
+      debugPrint('[UsageHistoryService] WEEKLY: ${correctedTimestamp.toString().substring(0, 10)} - '
           'Previous: ${previous.energy.toStringAsFixed(3)} kWh, '
           'Current: ${current.energy.toStringAsFixed(3)} kWh, '
           'Usage: ${usage.toStringAsFixed(3)} kWh');
@@ -314,15 +346,18 @@ class UsageHistoryService {
       // This gives us the actual energy consumed in that month
       final usage = (current.energy - previous.energy).abs();
 
+      // Apply timezone correction to the timestamp
+      final correctedTimestamp = _applyTimezoneCorrection(current.timestamp);
+
       entries.add(UsageHistoryEntry(
-        timestamp: current.timestamp,
+        timestamp: correctedTimestamp,
         interval: UsageInterval.monthly,
         previousReading: previous.energy,
         currentReading: current.energy,
         usage: usage,
       ));
 
-      debugPrint('[UsageHistoryService] MONTHLY: ${current.timestamp.toString().substring(0, 10)} - '
+      debugPrint('[UsageHistoryService] MONTHLY: ${correctedTimestamp.toString().substring(0, 10)} - '
           'Previous: ${previous.energy.toStringAsFixed(3)} kWh, '
           'Current: ${current.energy.toStringAsFixed(3)} kWh, '
           'Usage: ${usage.toStringAsFixed(3)} kWh');

@@ -772,31 +772,185 @@ class RealtimeDbService {
         return {};
       }
 
-      Query query = _dbRef
-          .child('$rtdbUserPath/hubs/$hubSerialNumber/aggregations/$aggregationType')
-          .orderByKey();
+      // OPTIMIZED: Fetch ALL data on initial load to show everything available
+      // Only use pagination for loading more (when endAtKey is provided)
+      final ref = _dbRef.child('$rtdbUserPath/hubs/$hubSerialNumber/aggregations/$aggregationType');
 
-      // If endAtKey is provided, we fetch the page *before* that key.
+      final DataSnapshot snapshot;
       if (endAtKey != null) {
-        query = query.endBefore(endAtKey);
+        // Pagination: fetch page before the endAtKey
+        Query query = ref.orderByKey().endBefore(endAtKey).limitToLast(limit);
+        snapshot = await query.get();
+      } else {
+        // Initial load: fetch ALL data (no limit, no query, no filtering!)
+        // Just get everything directly from the reference
+        snapshot = await ref.get();
       }
-
-      // We limit to the last `limit` number of records from that point.
-      query = query.limitToLast(limit);
-
-      final snapshot = await query.get();
 
       if (snapshot.exists && snapshot.value != null) {
         // Data is returned as a Map, so we can just cast and return it.
         // The keys are the aggregation periods (e.g., "2025-11-20").
-        return Map<String, dynamic>.from(snapshot.value as Map);
+        final data = Map<String, dynamic>.from(snapshot.value as Map);
+
+        // Debug: Log the keys (dates) being returned
+        final keys = data.keys.toList()..sort();
+        debugPrint('[getAggregatedDataPaginated] $aggregationType: Fetched ${data.length} records. Keys: ${keys.take(5).join(", ")}${keys.length > 5 ? "... ${keys.skip(keys.length - 2).join(", ")}" : ""}');
+
+        return data;
       } else {
+        debugPrint('[getAggregatedDataPaginated] $aggregationType: No data found for hub $hubSerialNumber');
         return {};
       }
     } catch (e) {
       debugPrint('[getAggregatedDataPaginated] Error fetching paginated $aggregationType data: $e');
       return {};
     }
+  }
+
+  /// Stream the list of hubs owned by the current user.
+  /// Returns a list of maps containing serialNumber and nickname for each hub.
+  /// This eliminates the need for separate database calls to fetch hub lists.
+  ///
+  /// Returns: List<Map<String, String>> with format:
+  /// [
+  ///   {'serialNumber': 'ESP32_001', 'nickname': 'Living Room'},
+  ///   {'serialNumber': 'ESP32_002', 'nickname': 'Bedroom'},
+  /// ]
+  Stream<List<Map<String, String>>> getHubListStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      debugPrint('[getHubListStream] User not authenticated');
+      return Stream.value([]);
+    }
+
+    final String uid = user.uid;
+    final hubsRef = _dbRef.child('$rtdbUserPath/hubs');
+
+    return hubsRef
+        .orderByChild('ownerId')
+        .equalTo(uid)
+        .onValue
+        .map((event) {
+      if (!event.snapshot.exists || event.snapshot.value == null) {
+        debugPrint('[getHubListStream] No hubs found for user');
+        return <Map<String, String>>[];
+      }
+
+      final hubs = Map<String, dynamic>.from(event.snapshot.value as Map);
+      final List<Map<String, String>> hubList = [];
+
+      for (final entry in hubs.entries) {
+        final String serialNumber = entry.key;
+        final hubData = entry.value is Map
+            ? Map<String, dynamic>.from(entry.value)
+            : {'nickname': null, 'assigned': true, 'ownerId': uid};
+
+        final bool isAssigned = hubData['assigned'] as bool? ?? false;
+        final String? hubOwnerId = hubData['ownerId'] as String?;
+
+        // Only include hubs owned by this user
+        if (isAssigned && hubOwnerId == uid) {
+          final String nickname = hubData['nickname'] as String? ?? 'Hub ${serialNumber.substring(0, 6)}';
+          hubList.add({
+            'serialNumber': serialNumber,
+            'nickname': nickname,
+          });
+        }
+      }
+
+      debugPrint('[getHubListStream] Streaming ${hubList.length} hubs');
+      return hubList;
+    });
+  }
+
+  /// Stream aggregated data for all user's hubs based on the selected aggregation type.
+  /// This provides real-time updates when new aggregation data is written to Firebase.
+  /// Returns a map with hub serial numbers as keys and their aggregated data as values.
+  ///
+  /// The returned data structure includes hub metadata (_hubNickname) along with aggregation data:
+  /// {
+  ///   "hub_serial_123": {
+  ///     "_hubNickname": "My Hub",
+  ///     "2025-01-15": { aggregation data... },
+  ///     "2025-01-16": { aggregation data... },
+  ///   }
+  /// }
+  Stream<Map<String, Map<String, dynamic>>> getAggregatedDataStreamForAllHubs(
+    String aggregationType,
+  ) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      debugPrint('[getAggregatedDataStreamForAllHubs] User not authenticated');
+      return Stream.value({});
+    }
+
+    final String uid = user.uid;
+
+    // First, get the list of hubs owned by this user
+    final hubsRef = _dbRef.child('$rtdbUserPath/hubs');
+
+    return hubsRef
+        .orderByChild('ownerId')
+        .equalTo(uid)
+        .onValue
+        .switchMap((hubsEvent) { // Use switchMap to manage changing hub lists
+      if (!hubsEvent.snapshot.exists || hubsEvent.snapshot.value == null) {
+        debugPrint('[getAggregatedDataStreamForAllHubs] No hubs found for user');
+        return Stream.value({});
+      }
+
+      final hubs = Map<String, dynamic>.from(hubsEvent.snapshot.value as Map);
+      final List<Stream<MapEntry<String, Map<String, dynamic>>>> hubStreams = [];
+
+      // For each hub, create a stream that listens to its aggregation data
+      for (final hubEntry in hubs.entries) {
+        final String serialNumber = hubEntry.key;
+        final hubData = hubEntry.value is Map
+            ? Map<String, dynamic>.from(hubEntry.value)
+            : {'nickname': null, 'assigned': true, 'ownerId': uid};
+
+        final bool isAssigned = hubData['assigned'] as bool? ?? false;
+        final String? hubOwnerId = hubData['ownerId'] as String?;
+
+        if (!isAssigned || hubOwnerId != uid) continue;
+
+        // Extract nickname for inclusion in stream data
+        final String nickname = hubData['nickname'] as String? ?? 'Hub ${serialNumber.substring(0, 6)}';
+
+        final aggregatedRef = _dbRef.child(
+          '$rtdbUserPath/hubs/$serialNumber/aggregations/$aggregationType'
+        );
+
+        hubStreams.add(
+          aggregatedRef.onValue.map((event) { // Stream changes for each hub
+            Map<String, dynamic> aggregationData = {};
+            if (event.snapshot.exists && event.snapshot.value != null) {
+              aggregationData = Map<String, dynamic>.from(event.snapshot.value as Map);
+            }
+            debugPrint('[getAggregatedDataStreamForAllHubs] Hub $serialNumber ($nickname): ${aggregationData.length} $aggregationType records');
+
+            // Include hub metadata (nickname) WITH aggregation data in the stream
+            // This eliminates the need for separate database calls or caching
+            return MapEntry(serialNumber, {
+              '_hubNickname': nickname, // Hub metadata
+              ...aggregationData,       // Spread aggregation data (hourly/daily/weekly/monthly records)
+            });
+          })
+        );
+      }
+
+      if (hubStreams.isEmpty) {
+        return Stream.value({});
+      }
+
+      // Combine the latest data from all individual hub streams
+      return Rx.combineLatestList(hubStreams).map((listOfEntries) {
+        // Convert the list of MapEntry back into the desired Map structure
+        final combinedData = Map.fromEntries(listOfEntries);
+        debugPrint('[getAggregatedDataStreamForAllHubs] Streaming ${combinedData.length} hubs with $aggregationType data');
+        return combinedData;
+      });
+    });
   }
 
   /// Returns an efficient, listening stream of the last 24 hours of HOURLY data.

@@ -40,19 +40,14 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
   AggregationType _selectedAggregation = AggregationType.daily;
   StreamSubscription<String>? _hubRemovedSubscription;
   StreamSubscription<Map<String, String>>? _hubAddedSubscription;
+  StreamSubscription<Map<String, Map<String, dynamic>>>? _historySubscription;
+  StreamSubscription<List<Map<String, String>>>? _hubListSubscription;
+  StreamController<List<HistoryRecord>>? _historyStreamController;
+  Timer? _refreshTimer;
 
-  // -- Pagination state for Central Hub Data --
-  final ScrollController _historyScrollController = ScrollController();
-  bool _isLoadingMoreHistory = false;
-  bool _canLoadMoreHistory = true;
-  static const int _historyPageLimit = 10; // Optimized: Reduced from 15 for better efficiency with multiple hubs
-  Timer? _historyScrollDebounce; // Debounce timer for scroll events
+  List<Map<String, String>>? _cachedHubList;
+  Map<String, List<HistoryRecord>> _aggregationCache = {};
 
-  // -- Cache for aggregation data to avoid refetching --
-  final Map<String, List<HistoryRecord>> _aggregationCache = {};
-  List<Map<String, String>>? _cachedHubList; // Cache hub list to avoid repeated queries
-
-  // Usage History - Live calculation from readings
   late UsageHistoryService _usageHistoryService;
   List<UsageHistoryEntry> _usageHistoryEntries = [];
   List<UsageHistoryEntry> _filteredUsageHistoryEntries = [];
@@ -60,24 +55,25 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
   UsageInterval _selectedUsageInterval = UsageInterval.daily;
   String? _selectedHubForUsage;
   List<Map<String, String>> _availableHubs = [];
-  int _usageHistoryOffset = 0; // For pagination/scrolling
+  int _usageHistoryOffset = 0;
   final ScrollController _usageScrollController = ScrollController();
+  final ScrollController _historyScrollController = ScrollController();
 
-  // Export state flags to prevent duplicate exports
+  // Pagination state for history table
+  bool _isLoadingMoreHistory = false;
+  bool _canLoadMoreHistory = false;
+  Timer? _historyScrollDebounce;
+
   bool _isExportingCentralHub = false;
   bool _isExportingUsage = false;
 
-
-  // Sorting state
   String? _sortColumn;
   bool _sortAscending = true;
 
-  // Calculator state
   final TextEditingController _kwhController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   double _calculatedCost = 0.0;
 
-  // Previous data for comparison
   List<HistoryRecord> _previousHistoryRecords = [];
 
   // Color mapping for each aggregation type
@@ -99,8 +95,8 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
     super.initState();
     _realtimeDbService = widget.realtimeDbService;
     _usageHistoryService = UsageHistoryService(_realtimeDbService);
-    _loadHistoryData(); // Initial data load
-    _loadAvailableHubs();
+    _startHubListStream(); // Start hub list stream (replaces database call!)
+    _startHistoryDataStream(); // Start aggregation data stream
     _startHubRemovedListener();
     _startHubAddedListener();
 
@@ -118,103 +114,52 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
   }
 
   void _onHistoryScroll() {
-    // Debounce scroll events to prevent rapid-fire downloads
-    _historyScrollDebounce?.cancel();
-    _historyScrollDebounce = Timer(const Duration(milliseconds: 300), () {
-      if (_historyScrollController.position.pixels >= _historyScrollController.position.maxScrollExtent * 0.8) {
-        if (_canLoadMoreHistory && !_isLoadingMoreHistory) {
-          _loadMoreHistory();
-        }
-      }
-    });
-  }
-
-  Future<void> _loadMoreHistory() async {
-    if (_isLoadingMoreHistory || !_canLoadMoreHistory) return;
-
-    setState(() => _isLoadingMoreHistory = true);
-    debugPrint('[EnergyHistory] Loading more history data...');
-
-    // Use the key of the last record as the cursor for the next page
-    final String? lastKey = _historyRecords.isNotEmpty ? _historyRecords.last.periodKey : null;
-
-    await _loadHistoryData(endAtKey: lastKey);
-
-    setState(() => _isLoadingMoreHistory = false);
-  }
-
-  Future<void> _loadAvailableHubs({bool forceRefresh = false}) async {
-    final User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    // Use cached hub list if available and not forcing refresh
-    if (_cachedHubList != null && !forceRefresh) {
-      setState(() {
-        _availableHubs = _cachedHubList!;
-        if (_availableHubs.isNotEmpty && _selectedHubForUsage == null) {
-          _selectedHubForUsage = _availableHubs.first['serialNumber'];
-        }
-      });
-      return;
+    // With streaming, we get all data automatically, so no pagination needed
+    // This method is kept for future enhancement if pagination is needed
+    if (_historyScrollController.position.pixels >=
+        _historyScrollController.position.maxScrollExtent * 0.8) {
+      // Can implement pagination here if needed in the future
+      debugPrint('[EnergyHistory] Reached end of history list');
     }
+  }
 
-    try {
-      final hubSnapshot = await FirebaseDatabase.instance
-          .ref('$rtdbUserPath/hubs')
-          .orderByChild('ownerId')
-          .equalTo(user.uid)
-          .get();
+  /// Subscribe to hub list stream to get real-time updates
+  /// This replaces the old _loadAvailableHubs() database call with streaming
+  void _startHubListStream() {
+    debugPrint('[EnergyHistory] Starting hub list stream...');
 
-      if (hubSnapshot.exists && hubSnapshot.value != null) {
-        final allHubs = json.decode(json.encode(hubSnapshot.value)) as Map<String, dynamic>;
-        final List<Map<String, String>> hubList = [];
+    _hubListSubscription = _realtimeDbService.getHubListStream().listen((hubList) {
+      if (!mounted) return;
 
-        for (final serialNumber in allHubs.keys) {
-          final hubData = allHubs[serialNumber] as Map<String, dynamic>;
-          final String? nickname = hubData['nickname'] as String?;
+      debugPrint('[EnergyHistory] Hub list stream update: ${hubList.length} hubs');
 
-          hubList.add({
-            'serialNumber': serialNumber,
-            'nickname': nickname ?? 'Central Hub',
-          });
-        }
+      // Cache the hub list for Excel export
+      _cachedHubList = hubList;
 
-        // Cache the hub list
-        _cachedHubList = hubList;
+      setState(() {
+        final previouslySelectedHub = _selectedHubForUsage;
+        _availableHubs = hubList;
 
-        setState(() {
-          final previouslySelectedHub = _selectedHubForUsage;
-          _availableHubs = hubList;
+        if (hubList.isNotEmpty) {
+          // Check if the previously selected hub still exists
+          final stillExists = hubList.any((hub) => hub['serialNumber'] == previouslySelectedHub);
 
-          if (hubList.isNotEmpty) {
-            // Check if the previously selected hub still exists
-            final stillExists = hubList.any((hub) => hub['serialNumber'] == previouslySelectedHub);
-
-            if (stillExists) {
-              _selectedHubForUsage = previouslySelectedHub;
-            } else {
-              _selectedHubForUsage = hubList.first['serialNumber'];
-              debugPrint('[EnergyHistory] Previously selected hub removed, switching to: $_selectedHubForUsage');
-            }
-            _loadUsageHistory();
+          if (stillExists) {
+            _selectedHubForUsage = previouslySelectedHub;
           } else {
-            _selectedHubForUsage = null;
-            _usageHistoryEntries = [];
-            debugPrint('[EnergyHistory] No hubs available, cleared usage history');
+            _selectedHubForUsage = hubList.first['serialNumber'];
+            debugPrint('[EnergyHistory] Previously selected hub removed, switching to: $_selectedHubForUsage');
           }
-        });
-      } else {
-        // No hubs found in database
-        _cachedHubList = [];
-        setState(() {
-          _availableHubs = [];
+          _loadUsageHistory();
+        } else {
           _selectedHubForUsage = null;
           _usageHistoryEntries = [];
-        });
-      }
-    } catch (e) {
-      debugPrint('[EnergyHistory] Error loading hubs: $e');
-    }
+          debugPrint('[EnergyHistory] No hubs available, cleared usage history');
+        }
+      });
+    }, onError: (error) {
+      debugPrint('[EnergyHistory] Hub list stream error: $error');
+    });
   }
 
   Future<void> _loadUsageHistory() async {
@@ -281,33 +226,24 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
   void _startHubRemovedListener() {
     _hubRemovedSubscription = _realtimeDbService.hubRemovedStream.listen((removedHubSerial) {
       if (!mounted) return;
-      debugPrint('[EnergyHistory] Hub removed event received: $removedHubSerial. Updating caches...');
-      final bool wasSelectedHub = _selectedHubForUsage == removedHubSerial;
+      debugPrint('[EnergyHistory] Hub removed event received: $removedHubSerial');
 
-      // OPTIMIZED: Only invalidate affected data, not entire cache
-      // Remove records for the deleted hub from cache instead of clearing everything
+      // Hub list stream will automatically update _availableHubs and _cachedHubList
+      // Just need to clear aggregation cache and refresh history data
+
+      // Remove records for the deleted hub from aggregation cache
       for (var cacheKey in _aggregationCache.keys) {
         _aggregationCache[cacheKey] = _aggregationCache[cacheKey]!
             .where((record) => record.hubName != removedHubSerial)
             .toList();
       }
-      _cachedHubList = null; // Only clear hub list cache
 
-      // Reload hub list and history with force refresh
-      _loadAvailableHubs(forceRefresh: true).then((_) {
-        if (wasSelectedHub && _availableHubs.isEmpty) {
-          setState(() {
-            _usageHistoryEntries = [];
-            _selectedHubForUsage = null;
-          });
-        }
-      });
-      _loadHistoryData(forceRefresh: true); // Single call with force refresh
+      _loadHistoryData(forceRefresh: true);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Hub $removedHubSerial has been unlinked. ${wasSelectedHub ? 'Usage history updated.' : 'History updated.'}'),
+            content: Text('Hub $removedHubSerial has been unlinked. History updated.'),
             backgroundColor: Colors.orange,
             duration: const Duration(seconds: 3),
           ),
@@ -321,19 +257,12 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
       if (!mounted) return;
       final String serialNumber = hubData['serialNumber']!;
       final String nickname = hubData['nickname'] ?? 'Central Hub';
-      debugPrint('[EnergyHistory] Hub added event received: $serialNumber. Updating caches...');
+      debugPrint('[EnergyHistory] Hub added event received: $serialNumber');
 
-      // OPTIMIZED: Keep existing cache, just invalidate hub list
-      // No need to clear aggregation cache since new hub won't have old cached data
-      _cachedHubList = null; // Only clear hub list cache
+      // Hub list stream will automatically update _availableHubs and _cachedHubList
+      // Just need to refresh history data
 
-      // Reload hub list and history with force refresh
-      _loadAvailableHubs(forceRefresh: true).then((_) {
-        if (_availableHubs.length == 1) {
-          debugPrint('[EnergyHistory] First hub added, automatically loading usage history');
-        }
-      });
-      _loadHistoryData(forceRefresh: true); // Single call with force refresh
+      _loadHistoryData(forceRefresh: true);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -347,162 +276,144 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
     });
   }
 
-  /// Refactored to support pagination for the Central Hub Data table with caching and parallel queries.
-  Future<void> _loadHistoryData({String? endAtKey, bool forceRefresh = false}) async {
-    // Check cache first (only for initial load, not pagination)
-    if (endAtKey == null && !forceRefresh) {
-      final cacheKey = _selectedAggregation.name;
-      if (_aggregationCache.containsKey(cacheKey)) {
-        setState(() {
-          _historyRecords = _aggregationCache[cacheKey]!;
-          _filteredHistoryRecords = List.from(_historyRecords); // CRITICAL: Update filtered records too!
-          _isLoading = false;
-          _canLoadMoreHistory = true;
-        });
-        debugPrint('[EnergyHistory] Loaded from cache: $cacheKey (${_historyRecords.length} records)');
-        return;
+  /// Applies a timezone correction to a timestamp.
+  ///
+  /// This handles two cases:
+  /// 1. If the timestamp is in UTC, it's converted to the local timezone.
+  /// 2. A workaround for a specific issue where timestamps from a UTC+3 source
+  ///    are incorrectly parsed as local time (e.g., in a UTC+8 environment),
+  ///    causing a 5-hour discrepancy. This is corrected by adding 5 hours.
+  DateTime _applyTimezoneCorrection(DateTime timestamp) {
+    DateTime corrected = timestamp;
+    if (corrected.isUtc) {
+      corrected = corrected.toLocal();
+      debugPrint('[EnergyHistory] ✅ Converted UTC to local time: $timestamp -> $corrected');
+    } else {
+      // WORKAROUND: Correct for potential UTC+3 data parsed as local (UTC+8)
+      final hoursDifference = DateTime.now().difference(corrected).inHours;
+      if (hoursDifference > 4 && hoursDifference < 6) {
+        corrected = corrected.add(const Duration(hours: 5));
+        debugPrint('[EnergyHistory] ⚠️ TIMEZONE CORRECTION: Added 5 hours (UTC+3 → UTC+8) to $timestamp');
       }
     }
+    return corrected;
+  }
 
-    // For initial load, show main spinner. For subsequent loads, use the bottom spinner.
-    if (endAtKey == null) {
-      setState(() => _isLoading = true);
+  void _startHistoryDataStream() {
+    setState(() {
+      _isLoading = true;
+    });
+
+    // Cancel existing subscription if any
+    _historySubscription?.cancel();
+
+    final User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _isLoading = false;
+      });
+      return;
     }
 
-    try {
-      final User? user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        if (endAtKey == null) setState(() => _isLoading = false);
-        return;
-      }
+    // Subscribe to the aggregated data stream
+    _historySubscription = _realtimeDbService
+        .getAggregatedDataStreamForAllHubs(_selectedAggregation.name)
+        .listen((hubsData) async {
+      if (!mounted) return;
 
-      // Use cached hub list if available to avoid extra query
-      Map<String, dynamic> hubs;
-      if (_cachedHubList != null && _cachedHubList!.isNotEmpty) {
-        hubs = {for (var hub in _cachedHubList!) hub['serialNumber']!: {'nickname': hub['nickname'], 'assigned': true, 'ownerId': user.uid}};
-      } else {
-        // First, get the list of user's hubs
-        final hubSnapshot = await FirebaseDatabase.instance
-            .ref('$rtdbUserPath/hubs')
-            .orderByChild('ownerId')
-            .equalTo(user.uid)
-            .get();
+      // --- DIAGNOSTIC LOGGING ---
+      final now = DateTime.now();
+      final formattedTime = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}";
+      debugPrint("[$formattedTime] [EnergyHistory] 🔵 STREAM RECEIVED: Hubs=${hubsData.length}. Aggregation='${_selectedAggregation.name}'.");
+      // --- END DIAGNOSTIC LOGGING ---
 
-        if (!hubSnapshot.exists) {
-          if (endAtKey == null) {
-            setState(() {
-              _historyRecords = [];
-              _isLoading = false;
-              _canLoadMoreHistory = false;
-            });
-          }
-          return;
-        }
-        hubs = Map<String, dynamic>.from(hubSnapshot.value as Map);
-      }
+      debugPrint('[EnergyHistory] Stream update received: ${hubsData.length} hubs');
 
-      List<HistoryRecord> newRecords = [];
-      String aggregationType = _selectedAggregation.name;
+      // Process the streamed data
+      List<HistoryRecord> allRecords = [];
 
-      // OPTIMIZATION: Fetch data for all hubs in parallel instead of sequentially
-      final futures = hubs.entries.map((hubEntry) async {
-        final hubData = hubEntry.value is Map ? Map<String, dynamic>.from(hubEntry.value) : {'nickname': null, 'assigned': true, 'ownerId': user.uid};
+      for (var hubEntry in hubsData.entries) {
         final String serialNumber = hubEntry.key;
-        final bool isAssigned = hubData['assigned'] as bool? ?? false;
-        final String? hubOwnerId = hubData['ownerId'] as String?;
+        final Map<String, dynamic> hubData = hubEntry.value;
 
-        if (!isAssigned || hubOwnerId != user.uid) return <HistoryRecord>[];
+        // Extract hub nickname directly from stream data (no database call needed!)
+        final String hubNickname = hubData['_hubNickname'] as String? ?? 'Hub ${serialNumber.substring(0, 6)}';
+        debugPrint('[EnergyHistory] Processing hub: $hubNickname ($serialNumber)');
 
-        final String hubNickname = hubData['nickname'] as String? ?? 'Hub ${serialNumber.substring(0, 6)}';
+        for (var dataEntry in hubData.entries) {
+          final String timeKey = dataEntry.key;
 
-        try {
-          final paginatedData = await _realtimeDbService.getAggregatedDataPaginated(
-            hubSerialNumber: serialNumber,
-            aggregationType: aggregationType,
-            limit: _historyPageLimit,
-            endAtKey: endAtKey,
-          );
+          // Skip hub metadata (only process aggregation data)
+          if (timeKey.startsWith('_')) continue;
 
-          final hubRecords = <HistoryRecord>[];
-          for (var entry in paginatedData.entries) {
-            final String timeKey = entry.key;
-            final data = Map<String, dynamic>.from(entry.value);
+          try {
+            final recordData = Map<String, dynamic>.from(dataEntry.value);
 
             DateTime timestamp;
-            if (data['timestamp'] != null) {
-              timestamp = DateTime.parse(data['timestamp']);
+            if (recordData['timestamp'] != null) {
+              // Parse timestamp from the dedicated field
+              timestamp = DateTime.parse(recordData['timestamp']);
             } else {
+              // Fallback to parsing timestamp from the record's key
               timestamp = _parseTimestampFromKey(timeKey, _selectedAggregation);
+              debugPrint('[EnergyHistory] ⚠️ No timestamp field, parsed from key: $timestamp');
             }
 
-            hubRecords.add(HistoryRecord(
+            // Apply the centralized timezone correction
+            timestamp = _applyTimezoneCorrection(timestamp);
+
+            // DEBUG: Log the final timestamp after correction
+            final now = DateTime.now();
+            debugPrint('[EnergyHistory] 🕐 Final timestamp: $timestamp');
+            debugPrint('[EnergyHistory] 🕐 Current time: $now');
+            debugPrint('[EnergyHistory] 🕐 Difference: ${now.difference(timestamp).inHours} hours');
+
+            allRecords.add(HistoryRecord(
               timestamp: timestamp,
               deviceName: 'All Devices',
               hubName: hubNickname,
-              averagePower: (data['average_power'] ?? 0).toDouble(),
-              minPower: (data['min_power'] ?? 0).toDouble(),
-              maxPower: (data['max_power'] ?? 0).toDouble(),
-              averageVoltage: (data['average_voltage'] ?? 0).toDouble(),
-              minVoltage: (data['min_voltage'] ?? 0).toDouble(),
-              maxVoltage: (data['max_voltage'] ?? 0).toDouble(),
-              averageCurrent: (data['average_current'] ?? 0).toDouble(),
-              minCurrent: (data['min_current'] ?? 0).toDouble(),
-              maxCurrent: (data['max_current'] ?? 0).toDouble(),
-              totalEnergy: (data['total_energy'] ?? 0).toDouble(),
-              totalReadings: (data['total_readings'] ?? data['total_readings_in_snapshot'] ?? 0).toInt(),
+              averagePower: (recordData['average_power'] ?? 0).toDouble(),
+              minPower: (recordData['min_power'] ?? 0).toDouble(),
+              maxPower: (recordData['max_power'] ?? 0).toDouble(),
+              averageVoltage: (recordData['average_voltage'] ?? 0).toDouble(),
+              minVoltage: (recordData['min_voltage'] ?? 0).toDouble(),
+              maxVoltage: (recordData['max_voltage'] ?? 0).toDouble(),
+              averageCurrent: (recordData['average_current'] ?? 0).toDouble(),
+              minCurrent: (recordData['min_current'] ?? 0).toDouble(),
+              maxCurrent: (recordData['max_current'] ?? 0).toDouble(),
+              totalEnergy: (recordData['total_energy'] ?? 0).toDouble(),
+              totalReadings: (recordData['total_readings'] ?? recordData['total_readings_in_snapshot'] ?? 0).toInt(),
               aggregationType: _selectedAggregation,
               periodKey: timeKey,
             ));
+          } catch (e) {
+            debugPrint('[EnergyHistory] 🔴 FAILED TO PARSE RECORD: hub=$serialNumber, key=$timeKey, error=$e');
           }
-          return hubRecords;
-        } catch (e) {
-          debugPrint('[EnergyHistory] Error loading data for hub $serialNumber: $e');
-          return <HistoryRecord>[];
         }
-      });
-
-      // Wait for all hub queries to complete in parallel
-      final results = await Future.wait(futures);
-      for (var hubRecords in results) {
-        newRecords.addAll(hubRecords);
       }
 
-      // Sort all records fetched from all hubs by timestamp
-      newRecords.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      allRecords.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-      setState(() {
-        if (endAtKey == null) {
-          // Initial load - cache the results
-          _previousHistoryRecords = List.from(_historyRecords);
-          _historyRecords = newRecords;
-          _filteredHistoryRecords = List.from(newRecords);
-          if (!forceRefresh) {
-            _aggregationCache[_selectedAggregation.name] = newRecords;
-            debugPrint('[EnergyHistory] Cached ${newRecords.length} records for ${_selectedAggregation.name}');
-          }
-        } else {
-          // Loading more, append new records
-          _historyRecords.addAll(newRecords);
-          _filteredHistoryRecords = List.from(_historyRecords);
-        }
+      if (mounted) {
+        setState(() {
+          _historyRecords = allRecords;
+          _filteredHistoryRecords = allRecords;
+          _isLoading = false;
+        });
+      }
+    }, onError: (error) {
+      debugPrint('[EnergyHistory] Stream error: $error');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    });
+  }
 
-        // If we received fewer records than we asked for, we've reached the end
-        if (newRecords.length < _historyPageLimit) {
-          _canLoadMoreHistory = false;
-        } else {
-          _canLoadMoreHistory = true;
-        }
-
-        _isLoading = false;
-        _isLoadingMoreHistory = false;
-      });
-    } catch (e) {
-      print('Error loading history: $e');
-      setState(() {
-        _isLoading = false;
-        _isLoadingMoreHistory = false;
-      });
-    }
+  Future<void> _loadHistoryData({bool forceRefresh = false}) async {
+    // Restart the stream when user manually refreshes or changes aggregation type
+    _startHistoryDataStream();
   }
 
   DateTime _parseTimestampFromKey(String key, AggregationType type) {
@@ -1094,6 +1005,8 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
   void dispose() {
     _hubRemovedSubscription?.cancel();
     _hubAddedSubscription?.cancel();
+    _historySubscription?.cancel(); // Cancel history data stream
+    _hubListSubscription?.cancel(); // Cancel hub list stream
     _historyScrollDebounce?.cancel(); // Cancel debounce timer
     _usageScrollController.dispose();
     _historyScrollController.dispose(); // Dispose the new controller
@@ -1931,8 +1844,8 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
                     if (selected) {
                       setState(() {
                         _selectedUsageInterval = interval;
-                        _loadUsageHistory();
                       });
+                      _loadUsageHistory();
                     }
                   },
                   selectedColor: intervalColor,
