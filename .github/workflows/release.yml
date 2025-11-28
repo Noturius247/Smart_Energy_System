@@ -1,0 +1,161 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Triggers on version tags like v1.0.0, v1.2.3, etc.
+  workflow_dispatch:  # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  build-android:
+    name: Build Android APK & App Bundle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'  # Update to your Flutter version
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Run tests (optional)
+        run: flutter test
+        continue-on-error: true
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Build App Bundle
+        run: flutter build appbundle --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload App Bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-appbundle
+          path: build/app/outputs/bundle/release/app-release.aab
+
+  build-windows:
+    name: Build Windows App
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows
+        run: flutter build windows --release
+
+      - name: Create Windows ZIP
+        run: |
+          cd build/windows/x64/runner/Release
+          Compress-Archive -Path * -DestinationPath ../../../../../smart-energy-windows.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-app
+          path: smart-energy-windows.zip
+
+  build-web:
+    name: Build Web App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Web
+        run: flutter build web --release
+
+      - name: Create Web ZIP
+        run: |
+          cd build/web
+          zip -r ../../smart-energy-web.zip .
+
+      - name: Upload Web artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-app
+          path: smart-energy-web.zip
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-android, build-windows, build-web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Smart Energy System ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/android-apk/app-release.apk
+            artifacts/android-appbundle/app-release.aab
+            artifacts/windows-app/smart-energy-windows.zip
+            artifacts/web-app/smart-energy-web.zip
+          body: |
+            ## Smart Energy System Release ${{ steps.get_version.outputs.VERSION }}
+
+            ### Downloads
+            - **Android APK**: `app-release.apk` - Install directly on Android devices
+            - **Android App Bundle**: `app-release.aab` - For Google Play Store
+            - **Windows**: `smart-energy-windows.zip` - Extract and run on Windows
+            - **Web**: `smart-energy-web.zip` - Deploy to any web server
+
+            ### What's Changed
+            See the release notes below for detailed changes.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
