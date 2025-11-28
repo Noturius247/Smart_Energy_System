@@ -30,6 +30,15 @@ class _AuthPageState extends State<AuthPage> {
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+
+  // Form key for validation
+  final _formKey = GlobalKey<FormState>();
+
+  // Error messages
+  String? _emailError;
+  String? _passwordError;
+  String? _nameError;
+  String? _confirmPasswordError;
   // OAuth 2.0 Web Client ID - Get from the redirect URI configuration
   // Steps to find it:
   // 1. Go to: https://console.cloud.google.com/apis/credentials?project=smart-plug-and-energy-meter
@@ -56,13 +65,13 @@ class _AuthPageState extends State<AuthPage> {
   Widget build(BuildContext context) {
     try {
       final size = MediaQuery.of(context).size;
-      final isMobile = size.width < 600;
-      final isTablet = size.width >= 600 && size.width < 1000;
+      final isMobile = size.width < 768;
+      final isTablet = size.width >= 768 && size.width < 1024;
 
       return Scaffold(
         body: Stack(
-          // Use Stack to place CustomHeader on top
           children: [
+            // Simplified background gradient
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -74,34 +83,47 @@ class _AuthPageState extends State<AuthPage> {
                   end: Alignment.bottomRight,
                 ),
               ),
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1100),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Theme.of(context).cardColor,
-                                Theme.of(context).primaryColor,
+              child: SafeArea(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: isMobile ? 80 : 100,
+                      bottom: 16,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1100),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                          child: Container(
+                            padding: EdgeInsets.all(isMobile ? 20 : 32),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .cardColor
+                                  .withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.2),
+                                width: 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 20,
+                                  offset: const Offset(0, 10),
+                                ),
                               ],
                             ),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withOpacity(0.3),
-                            ),
+                            child: isMobile
+                                ? _buildVerticalLayout(context)
+                                : _buildHorizontalLayout(context, isTablet),
                           ),
-                          child: isMobile
-                              ? _buildVerticalLayout(context)
-                              : _buildHorizontalLayout(context, isTablet),
                         ),
                       ),
                     ),
@@ -109,8 +131,45 @@ class _AuthPageState extends State<AuthPage> {
                 ),
               ),
             ),
-            // CustomHeader at the top
-            Positioned(top: 0, left: 0, right: 0, child: LoginHeader()),
+            // Header at the top
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LoginHeader(),
+            ),
+            // Loading overlay
+            if (_isLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  child: Center(
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Please wait...',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       );
@@ -129,33 +188,22 @@ class _AuthPageState extends State<AuthPage> {
               end: Alignment.bottomRight,
             ),
           ),
-          child: Center(
+          child: const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   Icons.error_outline,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  color: Colors.red,
                   size: 64,
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 Text(
                   'Error loading login page',
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
+                    color: Colors.white,
                     fontSize: 20,
                   ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  e.toString(),
-                  style: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.7),
-                    fontSize: 12,
-                  ),
-                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -170,10 +218,9 @@ class _AuthPageState extends State<AuthPage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(flex: isTablet ? 1 : 2, child: _buildLeftPanel()),
-        const SizedBox(width: 20),
-        Expanded(flex: 2, child: _buildRightPanel(context)),
-        // <-- conditional
+        Expanded(flex: 3, child: _buildLeftPanel(false)),
+        SizedBox(width: isTablet ? 20 : 40),
+        Expanded(flex: 4, child: _buildRightPanel(context)),
       ],
     );
   }
@@ -182,7 +229,7 @@ class _AuthPageState extends State<AuthPage> {
   Widget _buildVerticalLayout(BuildContext context) {
     return Column(
       children: [
-        _buildLeftPanel(),
+        _buildLeftPanel(true),
         const SizedBox(height: 30),
         _buildRightPanel(context),
       ],
@@ -190,7 +237,7 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   // 🟦 Left side content
-  Widget _buildLeftPanel() {
+  Widget _buildLeftPanel(bool isMobile) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -200,50 +247,54 @@ class _AuthPageState extends State<AuthPage> {
             try {
               return Lottie.asset(
                 'assets/Animation - 1750510706715.json',
-                width: 250,
-                height: 250,
+                width: isMobile ? 200 : 250,
+                height: isMobile ? 200 : 250,
                 errorBuilder: (context, error, stackTrace) {
                   return Icon(
-                    Icons.bolt,
-                    size: 250,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.54),
+                    Icons.bolt_rounded,
+                    size: isMobile ? 200 : 250,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.54),
                   );
                 },
               );
             } catch (e) {
               return Icon(
-                Icons.bolt,
-                size: 250,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withOpacity(0.54),
+                Icons.bolt_rounded,
+                size: isMobile ? 200 : 250,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.54),
               );
             }
           },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Text(
-          'Welcome Back!',
+          'Smart Energy Meter',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 28,
+            fontSize: isMobile ? 24 : 28,
             color: Theme.of(context).textTheme.headlineSmall?.color,
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Text(
-          'We are delighted to have you here.\nPlease enter personal details to your user account.\nIf you need any assistance feel free to reach out.',
+          isMobile
+              ? 'Monitor and manage your energy consumption in real-time.'
+              : 'Monitor your energy usage, track consumption patterns,\nand optimize your power efficiency with real-time insights.',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontSize: 15,
             color: Theme.of(context).textTheme.bodyMedium?.color,
-            height: 1.4,
+            height: 1.5,
           ),
         ),
-        const SizedBox(height: 25),
+        const SizedBox(height: 24),
         _buildToggleButtons(),
       ],
     );
@@ -254,10 +305,11 @@ class _AuthPageState extends State<AuthPage> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
+        color: Theme.of(context).cardColor.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(50),
         border: Border.all(
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
+          width: 1.5,
         ),
       ),
       child: Row(
@@ -271,31 +323,54 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Widget _toggleButton(String label, bool loginMode) {
-    return GestureDetector(
+    final isSelected = isLogin == loginMode;
+    return InkWell(
       onTap: () {
-        setState(() {
-          isLogin = loginMode;
-          // Clear all controllers when switching between login and signup
-          _emailController.clear();
-          _passwordController.clear();
-          _nameController.clear();
-          _confirmPasswordController.clear();
-        });
+        if (isLogin != loginMode) {
+          setState(() {
+            isLogin = loginMode;
+            // Clear all controllers and errors when switching
+            _emailController.clear();
+            _passwordController.clear();
+            _nameController.clear();
+            _confirmPasswordController.clear();
+            _emailError = null;
+            _passwordError = null;
+            _nameError = null;
+            _confirmPasswordError = null;
+          });
+        }
       },
+      borderRadius: BorderRadius.circular(50),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
         decoration: BoxDecoration(
-          color: isLogin == loginMode
+          color: isSelected
               ? Theme.of(context).colorScheme.secondary
               : Colors.transparent,
           borderRadius: BorderRadius.circular(50),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .secondary
+                        .withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: Theme.of(context).textTheme.labelLarge?.color,
-            fontWeight: FontWeight.w600,
+            color: isSelected
+                ? Theme.of(context).colorScheme.onSecondary
+                : Theme.of(context).textTheme.labelLarge?.color,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
             fontSize: 16,
           ),
         ),
@@ -306,111 +381,133 @@ class _AuthPageState extends State<AuthPage> {
   // 🟨 Right side (Login / Signup form)
   Widget _buildRightPanel(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Theme.of(context).cardColor, Theme.of(context).primaryColor],
-        ),
+        color: Theme.of(context).cardColor.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.24),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
+          width: 1.5,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            isLogin ? 'Log in to your account' : 'Create Account',
+            isLogin ? 'Sign In to Your Dashboard' : 'Create Your Account',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
               color: Theme.of(context).textTheme.titleLarge?.color,
             ),
           ),
-          const SizedBox(height: 25),
+          if (!isLogin)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Start monitoring your energy consumption',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+                ),
+              ),
+            ),
+          const SizedBox(height: 28),
 
           if (!isLogin) ...[
             TextField(
               controller: _nameController,
+              autofillHints: const [AutofillHints.name],
+              textInputAction: TextInputAction.next,
               style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               decoration: _inputDecoration('Full Name', Icons.person),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
           ],
 
           TextField(
             controller: _emailController,
+            autofillHints: const [AutofillHints.email],
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
             style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-            decoration: _inputDecoration('Email', Icons.email),
+            decoration: _inputDecoration('Email', Icons.email_outlined),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           TextField(
             controller: _passwordController,
             obscureText: _obscurePassword,
+            autofillHints: isLogin
+                ? const [AutofillHints.password]
+                : const [AutofillHints.newPassword],
+            textInputAction: isLogin ? TextInputAction.done : TextInputAction.next,
+            onSubmitted: isLogin ? (_) => _handleEmailPasswordLogin() : null,
             style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-            decoration: _inputDecoration('Password', Icons.lock).copyWith(
+            decoration: _inputDecoration('Password', Icons.lock_outline).copyWith(
               suffixIcon: IconButton(
                 icon: Icon(
-                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withOpacity(0.7),
+                  _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
                 onPressed: () {
                   setState(() {
                     _obscurePassword = !_obscurePassword;
                   });
                 },
+                tooltip: _obscurePassword ? 'Show password' : 'Hide password',
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
           if (!isLogin)
             TextField(
               controller: _confirmPasswordController,
               obscureText: _obscureConfirmPassword,
+              autofillHints: const [AutofillHints.newPassword],
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _handleEmailPasswordSignup(),
               style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-              decoration:
-                  _inputDecoration(
-                    'Confirm Password',
-                    Icons.lock_outline,
-                  ).copyWith(
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirmPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withOpacity(0.7),
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureConfirmPassword = !_obscureConfirmPassword;
-                        });
-                      },
-                    ),
+              decoration: _inputDecoration('Confirm Password', Icons.lock_outline).copyWith(
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureConfirmPassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
+                  onPressed: () {
+                    setState(() {
+                      _obscureConfirmPassword = !_obscureConfirmPassword;
+                    });
+                  },
+                  tooltip: _obscureConfirmPassword ? 'Show password' : 'Hide password',
+                ),
+              ),
             ),
 
           if (isLogin)
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
+              child: TextButton.icon(
                 onPressed: _handlePasswordReset,
-                child: Text(
+                icon: Icon(
+                  Icons.help_outline,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.secondary,
+                ),
+                label: Text(
                   'Forgot Password?',
                   style: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.7),
+                    color: Theme.of(context).colorScheme.secondary,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
             ),
 
-          const SizedBox(height: 18),
+          SizedBox(height: isLogin ? 24 : 20),
 
           // ✅ Main button
           SizedBox(
@@ -420,86 +517,74 @@ class _AuthPageState extends State<AuthPage> {
                   ? null
                   : () {
                       if (isLogin) {
-                        // Sign-in mode: validate email exists in database
                         _handleEmailPasswordLogin();
                       } else {
-                        // Sign-up mode: create account, save to Firestore and authenticate
                         _handleEmailPasswordSignup();
                       }
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.secondary,
+                foregroundColor: Theme.of(context).colorScheme.onSecondary,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 2,
+                shadowColor: Theme.of(context).colorScheme.secondary.withValues(alpha: 0.4),
+              ),
+              child: Text(
+                isLogin ? 'Sign In' : 'Create Account',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2))),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'OR',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2))),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isLoading ? null : _handleGoogleSignIn,
+              icon: const Icon(FontAwesomeIcons.google, size: 20),
+              label: Text(
+                'Continue with Google',
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
+                  width: 1.5,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: _isLoading
-                  ? SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).colorScheme.onSecondary,
-                        ),
-                      ),
-                    )
-                  : Text(
-                      isLogin ? 'Login' : 'Sign Up',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSecondary,
-                      ),
-                    ),
             ),
-          ),
-
-          const SizedBox(height: 20),
-          Text(
-            'Or sign in/up with',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              InkWell(
-                onTap: _isLoading ? null : _handleGoogleSignIn,
-                borderRadius: BorderRadius.circular(50),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(50),
-                    border: Border.all(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withOpacity(0.3),
-                    ),
-                  ),
-                  child: _isLoading
-                      ? SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(context).colorScheme.onSecondary,
-                            ),
-                          ),
-                        )
-                      : Icon(
-                          FontAwesomeIcons.google,
-                          color: Theme.of(context).colorScheme.onSurface,
-                          size: 24,
-                        ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -683,7 +768,7 @@ class _AuthPageState extends State<AuthPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'A verification email has been sent to your address. Please verify your email to activate your Smart Energy Meter account.',
+              'Verification email sent! Please check your inbox to activate your Smart Energy Meter account.',
             ),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 6),
@@ -899,7 +984,7 @@ class _AuthPageState extends State<AuthPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Please verify your email before logging in.'),
+            content: const Text('Please verify your email to access your energy dashboard.'),
             backgroundColor: Theme.of(
               context,
             ).colorScheme.error, // Themed color
@@ -966,25 +1051,60 @@ class _AuthPageState extends State<AuthPage> {
     return InputDecoration(
       labelText: label,
       labelStyle: TextStyle(
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+        fontSize: 15,
       ),
       prefixIcon: Icon(
         icon,
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+        size: 22,
       ),
       filled: true,
-      fillColor: Theme.of(context).cardColor.withOpacity(0.7),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      fillColor: Theme.of(context).cardColor.withValues(alpha: 0.4),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
+        ),
+      ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.2),
+          width: 1.5,
         ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Theme.of(context).colorScheme.secondary),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.secondary,
+          width: 2,
+        ),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.error,
+          width: 1.5,
+        ),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.error,
+          width: 2,
+        ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nameController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
   }
 }
