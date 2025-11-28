@@ -582,7 +582,9 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
       return;
     }
 
-    setState(() => _isExportingCentralHub = true);
+    // Set flag IMMEDIATELY (synchronously) to prevent race condition
+    _isExportingCentralHub = true;
+    setState(() {});
 
     try {
       // Show loading dialog
@@ -782,6 +784,8 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
       final String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final String fileName = 'SmartEnergyMeter_${sanitizedSerials}_${aggregationTypeName}_CentralHub_$timestamp.xlsx';
 
+      debugPrint('[EnergyHistory] Generated filename: $fileName');
+
       // Save file
       await _saveExcelFile(excel, fileName);
 
@@ -817,7 +821,9 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
       return;
     }
 
-    setState(() => _isExportingUsage = true);
+    // Set flag IMMEDIATELY (synchronously) to prevent race condition
+    _isExportingUsage = true;
+    setState(() {});
 
     try {
       // Show loading dialog
@@ -900,6 +906,8 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
       final String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final String fileName = 'SmartEnergyMeter_${sanitizedSerial}_${intervalTypeName}_Usage_$timestamp.xlsx';
 
+      debugPrint('[EnergyHistory] Generated filename: $fileName');
+
       await _saveExcelFile(excel, fileName);
 
     } catch (e) {
@@ -927,11 +935,16 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
 
       if (kIsWeb) {
         // Web platform - trigger browser download with proper filename
+        debugPrint('[EnergyHistory] Downloading file: $fileName');
         final blob = html.Blob([fileBytes], 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         final url = html.Url.createObjectUrlFromBlob(blob);
-        html.AnchorElement(href: url)
-          ..setAttribute('download', fileName)
-          ..click();
+        final anchor = html.AnchorElement()
+          ..href = url
+          ..download = fileName
+          ..style.display = 'none';
+        html.document.body?.append(anchor);
+        anchor.click();
+        anchor.remove();
         html.Url.revokeObjectUrl(url);
 
         if (mounted) {
