@@ -52,3 +52,25 @@ app.*.map.json
 # Misc
 pubspec.lock
 .DS_Store
+
+# Firebase & Google Services (contains API keys and project IDs)
+**/google-services.json
+**/GoogleService-Info.plist
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Android signing keys and credentials (already in android/.gitignore but adding here too)
+*.keystore
+*.jks
+key.properties
+
+# Firebase hosting cache
+.firebase/hosting.*.cache
