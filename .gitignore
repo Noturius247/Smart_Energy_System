@@ -74,3 +74,8 @@ key.properties
 
 # Firebase hosting cache
 .firebase/hosting.*.cache
+
+# Firebase Service Account Keys (CRITICAL - NEVER COMMIT)
+**/serviceAccountKey.json
+**/*service-account*.json
+**/*serviceAccount*.json
