@@ -79,3 +79,19 @@ key.properties
 **/serviceAccountKey.json
 **/*service-account*.json
 **/*serviceAccount*.json
+
+# BFG Repo-Cleaner artifacts
+..bfg-report/
+bfg.jar
+files-to-delete.txt
+
+# Windows reserved filenames
+nul
+con
+prn
+aux
+com[0-9]
+lpt[0-9]
+
+# Flutter run logs
+flutter_run.log
