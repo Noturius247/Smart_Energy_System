@@ -280,12 +280,15 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   }
 
   Future<void> _initializeDevicesAndHubs() async {
-    // CRITICAL FIX: Start listening to hub data stream BEFORE loading devices
-    // This ensures we capture the initial ssr_state from the real-time stream
+    // CRITICAL FIX: Load devices FIRST to populate _groupedDevices
+    // This ensures the data structure is ready when stream events arrive
+    await _loadAllDevices(); // Await to ensure _groupedDevices is populated
+    debugPrint('[_initializeDevicesAndHubs] Devices loaded, now starting listeners');
+
+    // CRITICAL FIX: Start listening to hub data stream AFTER devices are loaded
+    // This ensures _groupedDevices is populated when stream events arrive
     _listenToHubDataStream();
     debugPrint('[_initializeDevicesAndHubs] Started listening to hub data stream');
-
-    await _loadAllDevices(); // Await to ensure _groupedDevices is populated
 
     // FIX: Ensure real-time listeners are active and wait for initial state sync
     // This prevents the hub from appearing "off" during page refresh
@@ -297,7 +300,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         .toSet();
 
     if (hubSerialNumbers.isNotEmpty) {
-      // Restart streams to ensure fresh connections
+      // Start streams for all hubs to ensure fresh connections
       for (final serialNumber in hubSerialNumbers) {
         if (!_realtimeDbService.currentActiveHubs.contains(serialNumber)) {
           _realtimeDbService.startRealtimeDataStream(serialNumber);
@@ -314,8 +317,33 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
       // CRITICAL FIX: Wait for real-time stream to deliver initial ssr_state
       // This ensures the UI displays the correct state on refresh
-      await Future.delayed(const Duration(milliseconds: 500));
+      await Future.delayed(const Duration(milliseconds: 800));
       debugPrint('[_initializeDevicesAndHubs] Waited for initial ssr_state sync');
+
+      // CRITICAL FIX: Re-fetch SSR state from Firebase to ensure accuracy after stream initialization
+      // This handles any edge cases where the stream event might have been missed
+      for (final serialNumber in hubSerialNumbers) {
+        final ssrStateSnapshot = await FirebaseDatabase.instance
+            .ref('$rtdbUserPath/hubs/$serialNumber/ssr_state')
+            .get();
+
+        final bool currentSsrState = ssrStateSnapshot.exists
+            ? (ssrStateSnapshot.value as bool? ?? false)
+            : false;
+
+        debugPrint('[_initializeDevicesAndHubs] Re-fetched SSR state for $serialNumber: $currentSsrState');
+
+        // Update the hub's state in _groupedDevices
+        final List<ConnectedDevice>? devices = _groupedDevices[serialNumber];
+        if (devices != null) {
+          final hubIndex = devices.indexWhere((d) => d.plug == null);
+          if (hubIndex != -1) {
+            devices[hubIndex].ssr_state = currentSsrState;
+            devices[hubIndex].status = currentSsrState ? 'on' : 'off';
+            debugPrint('[_initializeDevicesAndHubs] Force-updated hub $serialNumber to ssr_state: $currentSsrState');
+          }
+        }
+      }
     }
 
     // CRITICAL FIX: Mark initialization complete and force UI rebuild
@@ -2246,6 +2274,71 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                   ),
                                                 ),
                                               ],
+                                            ),
+                                            SizedBox(height: isSmallScreen ? 8 : 12),
+                                            // SSR State Snapshot Display
+                                            Container(
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: isSmallScreen ? 10 : 12,
+                                                vertical: isSmallScreen ? 6 : 8,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: (hub.ssr_state ?? false)
+                                                    ? Colors.green.withValues(alpha: 0.15)
+                                                    : Colors.grey.withValues(alpha: 0.15),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: (hub.ssr_state ?? false)
+                                                      ? Colors.green.withValues(alpha: 0.4)
+                                                      : Colors.grey.withValues(alpha: 0.4),
+                                                  width: 1.5,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.info_outline_rounded,
+                                                    size: isSmallScreen ? 14 : 16,
+                                                    color: (hub.ssr_state ?? false)
+                                                        ? Colors.green.shade700
+                                                        : Colors.grey.shade700,
+                                                  ),
+                                                  SizedBox(width: isSmallScreen ? 6 : 8),
+                                                  Text(
+                                                    'SSR State: ${hub.ssr_state ?? false ? "ON" : "OFF"}',
+                                                    style: TextStyle(
+                                                      fontSize: isSmallScreen ? 11 : 13,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: (hub.ssr_state ?? false)
+                                                          ? Colors.green.shade800
+                                                          : Colors.grey.shade800,
+                                                    ),
+                                                  ),
+                                                  SizedBox(width: isSmallScreen ? 6 : 8),
+                                                  Container(
+                                                    padding: EdgeInsets.symmetric(
+                                                      horizontal: isSmallScreen ? 6 : 8,
+                                                      vertical: isSmallScreen ? 2 : 4,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: (hub.ssr_state ?? false)
+                                                          ? Colors.green.shade700
+                                                          : Colors.grey.shade600,
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: Text(
+                                                      hub.ssr_state ?? false ? 'true' : 'false',
+                                                      style: TextStyle(
+                                                        fontSize: isSmallScreen ? 9 : 11,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Colors.white,
+                                                        fontFamily: 'monospace',
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
                                             SizedBox(height: isSmallScreen ? 8 : 12),
                                             Row(
