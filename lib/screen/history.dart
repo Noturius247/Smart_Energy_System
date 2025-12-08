@@ -337,7 +337,9 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
         final Map<String, dynamic> hubData = hubEntry.value;
 
         // Extract hub nickname directly from stream data (no database call needed!)
-        final String hubNickname = hubData['_hubNickname'] as String? ?? 'Hub ${serialNumber.substring(0, 6)}';
+        // Safe substring: use min of serial length or 6 chars
+        final int truncateLength = serialNumber.length < 6 ? serialNumber.length : 6;
+        final String hubNickname = hubData['_hubNickname'] as String? ?? 'Hub ${serialNumber.substring(0, truncateLength)}';
         debugPrint('[EnergyHistory] Processing hub: $hubNickname ($serialNumber)');
 
         for (var dataEntry in hubData.entries) {
@@ -368,24 +370,62 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
             debugPrint('[EnergyHistory] 🕐 Current time: $now');
             debugPrint('[EnergyHistory] 🕐 Difference: ${now.difference(timestamp).inHours} hours');
 
-            allRecords.add(HistoryRecord(
+            // Support both old and new field formats (combine values if both exist)
+            // Helper function to safely convert values to double
+            double safeToDouble(dynamic value) {
+              if (value == null) return 0.0;
+              if (value is double) return value;
+              if (value is int) return value.toDouble();
+              if (value is String) return double.tryParse(value) ?? 0.0;
+              return 0.0;
+            }
+
+            // Helper function to safely convert values to int
+            int safeToInt(dynamic value) {
+              if (value == null) return 0;
+              if (value is int) return value;
+              if (value is double) return value.toInt();
+              if (value is String) return int.tryParse(value) ?? 0;
+              return 0;
+            }
+
+            final averagePower = safeToDouble(recordData['average_power'] ?? recordData['averagepower'] ?? recordData['average_power_w']);
+            final minPower = safeToDouble(recordData['min_power'] ?? recordData['minpower']);
+            final maxPower = safeToDouble(recordData['max_power'] ?? recordData['maxpower']);
+            final averageVoltage = safeToDouble(recordData['average_voltage'] ?? recordData['averagevoltage']);
+            final minVoltage = safeToDouble(recordData['min_voltage'] ?? recordData['minvoltage']);
+            final maxVoltage = safeToDouble(recordData['max_voltage'] ?? recordData['maxvoltage']);
+            final averageCurrent = safeToDouble(recordData['average_current'] ?? recordData['averagecurrent']);
+            final minCurrent = safeToDouble(recordData['min_current'] ?? recordData['mincurrent']);
+            final maxCurrent = safeToDouble(recordData['max_current'] ?? recordData['maxcurrent']);
+            final totalEnergy = safeToDouble(recordData['total_energy'] ?? recordData['totalenergy']);
+            final totalReadings = safeToInt(recordData['total_readings'] ?? recordData['totalreadings'] ?? recordData['total_readings_in_snapshot'] ?? recordData['totalreadingsinsnapshot']);
+
+            final record = HistoryRecord(
               timestamp: timestamp,
               deviceName: 'All Devices',
               hubName: hubNickname,
-              averagePower: (recordData['average_power'] ?? 0).toDouble(),
-              minPower: (recordData['min_power'] ?? 0).toDouble(),
-              maxPower: (recordData['max_power'] ?? 0).toDouble(),
-              averageVoltage: (recordData['average_voltage'] ?? 0).toDouble(),
-              minVoltage: (recordData['min_voltage'] ?? 0).toDouble(),
-              maxVoltage: (recordData['max_voltage'] ?? 0).toDouble(),
-              averageCurrent: (recordData['average_current'] ?? 0).toDouble(),
-              minCurrent: (recordData['min_current'] ?? 0).toDouble(),
-              maxCurrent: (recordData['max_current'] ?? 0).toDouble(),
-              totalEnergy: (recordData['total_energy'] ?? 0).toDouble(),
-              totalReadings: (recordData['total_readings'] ?? recordData['total_readings_in_snapshot'] ?? 0).toInt(),
+              averagePower: averagePower,
+              minPower: minPower,
+              maxPower: maxPower,
+              averageVoltage: averageVoltage,
+              minVoltage: minVoltage,
+              maxVoltage: maxVoltage,
+              averageCurrent: averageCurrent,
+              minCurrent: minCurrent,
+              maxCurrent: maxCurrent,
+              totalEnergy: totalEnergy,
+              totalReadings: totalReadings,
               aggregationType: _selectedAggregation,
               periodKey: timeKey,
-            ));
+            );
+
+            // Skip records where all critical values are zero (likely missing data)
+            if (record.averagePower > 0 || record.totalEnergy > 0 || record.averageVoltage > 0 || record.totalReadings > 0) {
+              allRecords.add(record);
+            } else {
+              debugPrint('[EnergyHistory] ⚠️ Skipping empty record for hub=$serialNumber, key=$timeKey (all values are zero)');
+            }
           } catch (e) {
             debugPrint('[EnergyHistory] 🔴 FAILED TO PARSE RECORD: hub=$serialNumber, key=$timeKey, error=$e');
           }
@@ -652,7 +692,9 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
 
         if (!isAssigned || hubOwnerId != user.uid) return <HistoryRecord>[];
 
-        final String hubNickname = hubData['nickname'] as String? ?? 'Hub ${serialNumber.substring(0, 6)}';
+        // Safe substring: use min of serial length or 6 chars
+        final int truncateLength = serialNumber.length < 6 ? serialNumber.length : 6;
+        final String hubNickname = hubData['nickname'] as String? ?? 'Hub ${serialNumber.substring(0, truncateLength)}';
 
         try {
           // Fetch ALL data (limit set to a very large number to get everything)
@@ -675,24 +717,60 @@ class _EnergyHistoryScreenState extends State<EnergyHistoryScreen> {
               timestamp = _parseTimestampFromKey(timeKey, _selectedAggregation);
             }
 
-            hubRecords.add(HistoryRecord(
+            // Support both old and new field formats (combine values if both exist)
+            // Helper function to safely convert values to double
+            double safeToDouble(dynamic value) {
+              if (value == null) return 0.0;
+              if (value is double) return value;
+              if (value is int) return value.toDouble();
+              if (value is String) return double.tryParse(value) ?? 0.0;
+              return 0.0;
+            }
+
+            // Helper function to safely convert values to int
+            int safeToInt(dynamic value) {
+              if (value == null) return 0;
+              if (value is int) return value;
+              if (value is double) return value.toInt();
+              if (value is String) return int.tryParse(value) ?? 0;
+              return 0;
+            }
+
+            final averagePower = safeToDouble(data['average_power'] ?? data['averagepower'] ?? data['average_power_w']);
+            final minPower = safeToDouble(data['min_power'] ?? data['minpower']);
+            final maxPower = safeToDouble(data['max_power'] ?? data['maxpower']);
+            final averageVoltage = safeToDouble(data['average_voltage'] ?? data['averagevoltage']);
+            final minVoltage = safeToDouble(data['min_voltage'] ?? data['minvoltage']);
+            final maxVoltage = safeToDouble(data['max_voltage'] ?? data['maxvoltage']);
+            final averageCurrent = safeToDouble(data['average_current'] ?? data['averagecurrent']);
+            final minCurrent = safeToDouble(data['min_current'] ?? data['mincurrent']);
+            final maxCurrent = safeToDouble(data['max_current'] ?? data['maxcurrent']);
+            final totalEnergy = safeToDouble(data['total_energy'] ?? data['totalenergy']);
+            final totalReadings = safeToInt(data['total_readings'] ?? data['totalreadings'] ?? data['total_readings_in_snapshot'] ?? data['totalreadingsinsnapshot']);
+
+            final record = HistoryRecord(
               timestamp: timestamp,
               deviceName: 'All Devices',
               hubName: hubNickname,
-              averagePower: (data['average_power'] ?? 0).toDouble(),
-              minPower: (data['min_power'] ?? 0).toDouble(),
-              maxPower: (data['max_power'] ?? 0).toDouble(),
-              averageVoltage: (data['average_voltage'] ?? 0).toDouble(),
-              minVoltage: (data['min_voltage'] ?? 0).toDouble(),
-              maxVoltage: (data['max_voltage'] ?? 0).toDouble(),
-              averageCurrent: (data['average_current'] ?? 0).toDouble(),
-              minCurrent: (data['min_current'] ?? 0).toDouble(),
-              maxCurrent: (data['max_current'] ?? 0).toDouble(),
-              totalEnergy: (data['total_energy'] ?? 0).toDouble(),
-              totalReadings: (data['total_readings'] ?? data['total_readings_in_snapshot'] ?? 0).toInt(),
+              averagePower: averagePower,
+              minPower: minPower,
+              maxPower: maxPower,
+              averageVoltage: averageVoltage,
+              minVoltage: minVoltage,
+              maxVoltage: maxVoltage,
+              averageCurrent: averageCurrent,
+              minCurrent: minCurrent,
+              maxCurrent: maxCurrent,
+              totalEnergy: totalEnergy,
+              totalReadings: totalReadings,
               aggregationType: _selectedAggregation,
               periodKey: timeKey,
-            ));
+            );
+
+            // Skip records where all critical values are zero (likely missing data)
+            if (record.averagePower > 0 || record.totalEnergy > 0 || record.averageVoltage > 0 || record.totalReadings > 0) {
+              hubRecords.add(record);
+            }
           }
           return hubRecords;
         } catch (e) {

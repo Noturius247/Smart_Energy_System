@@ -819,11 +819,12 @@ class RealtimeDbService {
   Stream<List<Map<String, String>>> getHubListStream() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      debugPrint('[getHubListStream] User not authenticated');
+      debugPrint('[getHubListStream] ❌ User not authenticated');
       return Stream.value([]);
     }
 
     final String uid = user.uid;
+    debugPrint('[getHubListStream] 🔍 Querying hubs for user: $uid');
     final hubsRef = _dbRef.child('$rtdbUserPath/hubs');
 
     return hubsRef
@@ -831,8 +832,11 @@ class RealtimeDbService {
         .equalTo(uid)
         .onValue
         .map((event) {
+      debugPrint('[getHubListStream] 📡 Query response received. Exists: ${event.snapshot.exists}');
+
       if (!event.snapshot.exists || event.snapshot.value == null) {
-        debugPrint('[getHubListStream] No hubs found for user');
+        debugPrint('[getHubListStream] ⚠️ No hubs found for user $uid');
+        debugPrint('[getHubListStream] 💡 TIP: Check if Firebase has index on "ownerId" field');
         return <Map<String, String>>[];
       }
 
@@ -850,11 +854,14 @@ class RealtimeDbService {
 
         // Only include hubs owned by this user
         if (isAssigned && hubOwnerId == uid) {
-          final String nickname = hubData['nickname'] as String? ?? 'Hub ${serialNumber.substring(0, 6)}';
+          // Safe substring: use min of serial length or 6 chars
+          final int truncateLength = serialNumber.length < 6 ? serialNumber.length : 6;
+          final String nickname = hubData['nickname'] as String? ?? 'Hub ${serialNumber.substring(0, truncateLength)}';
           hubList.add({
             'serialNumber': serialNumber,
             'nickname': nickname,
           });
+          debugPrint('[getHubListStream] ✅ Added hub: $serialNumber (nickname: $nickname)');
         }
       }
 
@@ -915,7 +922,9 @@ class RealtimeDbService {
         if (!isAssigned || hubOwnerId != uid) continue;
 
         // Extract nickname for inclusion in stream data
-        final String nickname = hubData['nickname'] as String? ?? 'Hub ${serialNumber.substring(0, 6)}';
+        // Safe substring: use min of serial length or 6 chars
+        final int truncateLength = serialNumber.length < 6 ? serialNumber.length : 6;
+        final String nickname = hubData['nickname'] as String? ?? 'Hub ${serialNumber.substring(0, truncateLength)}';
 
         final aggregatedRef = _dbRef.child(
           '$rtdbUserPath/hubs/$serialNumber/aggregations/$aggregationType'

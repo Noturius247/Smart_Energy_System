@@ -10,6 +10,8 @@ import '../realtime_db_service.dart';
 import '../due_date_provider.dart';
 import '../widgets/notification_box.dart';
 import '../constants.dart';
+import '../services/usage_history_service.dart';
+import '../models/usage_history_entry.dart';
 
 // Device data model
 class DeviceData {
@@ -86,8 +88,9 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   DateTime? _lastDeviceFetch;
   Timer? _deviceRefreshTimer;
 
-  // Latest daily total energy from aggregation
-  double _latestDailyTotalEnergy = 0.0;
+  // Latest daily usage data from usage history
+  UsageHistoryEntry? _latestDailyUsage;
+  late UsageHistoryService _usageHistoryService;
 
   /// Returns a stream of LIVE per-second data for the selected hub or all hubs.
   Stream<List<TimestampedFlSpot>> _getLiveDataStream() {
@@ -106,6 +109,9 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     // Prioritize the primary hub from the service on initial load
     _selectedHubSerial = widget.realtimeDbService.primaryHub;
 
+    // Initialize usage history service
+    _usageHistoryService = UsageHistoryService(widget.realtimeDbService);
+
     _initializeHubStreams();
     _loadPricePerKWH();
     _loadCurrencySymbol();
@@ -113,7 +119,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     _startDeviceRefreshTimer();
     _startHubRemovedListener();
     _startHubAddedListener();
-    _fetchLatestDailyEnergyTotal(); // Fetch latest daily energy for cost calculation
+    _fetchLatestDailyUsage(); // Fetch latest daily usage for cost calculation
 
     // Listen for changes to the primary hub
     _primaryHubSubscription =
@@ -127,8 +133,8 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
           // Re-initialize listeners for the new hub and force a rebuild to get new data
           _initializeSsrStateListener();
         });
-        // Fetch latest daily energy for the new hub
-        _fetchLatestDailyEnergyTotal();
+        // Fetch latest daily usage for the new hub
+        _fetchLatestDailyUsage();
       }
     });
   }
@@ -153,43 +159,45 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     }
   }
 
-  /// Fetch the latest daily total energy from aggregations
-  Future<void> _fetchLatestDailyEnergyTotal() async {
+  /// Fetch the latest daily usage from usage history
+  /// This calculates the difference between past and present daily readings
+  Future<void> _fetchLatestDailyUsage() async {
     if (_selectedHubSerial == null) {
-      debugPrint('[EnergyOverview] No hub selected, skipping latest daily energy fetch');
+      debugPrint('[EnergyOverview] No hub selected, skipping latest daily usage fetch');
       return;
     }
 
     try {
-      // Get date range for the last 7 days to be safe
-      final now = DateTime.now();
-      final sevenDaysAgo = now.subtract(const Duration(days: 7));
+      debugPrint('[EnergyOverview] Fetching latest daily usage for hub $_selectedHubSerial');
 
-      debugPrint('[EnergyOverview] Fetching daily energy for last 7 days for hub $_selectedHubSerial');
-
-      // Fetch daily aggregation data for the last 7 days
-      final dailyData = await widget.realtimeDbService.getDailyAggregationData(
-        _selectedHubSerial!,
-        sevenDaysAgo,
-        now, // end at today
+      // Get the latest daily usage history (just need 1 entry - the most recent)
+      final usageHistory = await _usageHistoryService.calculateUsageHistory(
+        hubSerialNumber: _selectedHubSerial!,
+        interval: UsageInterval.daily,
+        minRows: 1,
+        offset: 0,
       );
 
-      debugPrint('[EnergyOverview] Fetched ${dailyData.length} daily data points');
-
-      if (dailyData.isNotEmpty && mounted) {
-        // The list is sorted by timestamp, so the last one is the latest.
-        final latestDailyData = dailyData.last;
-
+      if (usageHistory.isNotEmpty && mounted) {
         setState(() {
-          // Get the total energy value from the latest daily data
-          _latestDailyTotalEnergy = latestDailyData.energy;
-          debugPrint('[EnergyOverview] Latest daily total energy set to: $_latestDailyTotalEnergy kWh (from ${latestDailyData.timestamp})');
+          // Store the latest daily usage entry
+          _latestDailyUsage = usageHistory.first;
+          debugPrint('[EnergyOverview] Latest daily usage: '
+              '${_latestDailyUsage!.usage.toStringAsFixed(3)} kWh '
+              '(${_latestDailyUsage!.getFormattedTimestamp()}) - '
+              'Previous: ${_latestDailyUsage!.previousReading.toStringAsFixed(3)} kWh, '
+              'Current: ${_latestDailyUsage!.currentReading.toStringAsFixed(3)} kWh');
         });
       } else {
-        debugPrint('[EnergyOverview] No daily data found, keeping _latestDailyTotalEnergy at $_latestDailyTotalEnergy');
+        debugPrint('[EnergyOverview] No daily usage data available');
+        if (mounted) {
+          setState(() {
+            _latestDailyUsage = null;
+          });
+        }
       }
     } catch (e) {
-      debugPrint('[EnergyOverview] Error fetching latest daily energy: $e');
+      debugPrint('[EnergyOverview] Error fetching latest daily usage: $e');
     }
   }
 
@@ -533,13 +541,15 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   }
 
   Widget _solarProductionCard(List<TimestampedFlSpot> data) {
-    // Get the most recent per-second energy reading (today's cumulative energy)
-    final recentEnergy = data.isNotEmpty ? data.last.energy : 0.0;
-
-    // Calculate daily energy as: recent per-second energy - latest daily total energy
-    // This gives us the energy consumed since the last daily aggregation
-    final totalEnergy = (recentEnergy - _latestDailyTotalEnergy).clamp(0.0, double.infinity);
+    // Use the latest daily usage from Usage History
+    // This shows the difference between past and present daily readings
+    final totalEnergy = _latestDailyUsage?.usage ?? 0.0;
     final totalCost = totalEnergy * _pricePerKWH;
+
+    // Get the date of the latest daily usage
+    final dateLabel = _latestDailyUsage != null
+        ? _latestDailyUsage!.getFormattedTimestamp()
+        : 'No data';
 
     return Container(
       width: 110,
@@ -557,14 +567,14 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Daily Cost',
+                  'Daily Usage',
                   style: Theme.of(
                     context,
                   ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ),
               Tooltip(
-                message: 'Daily energy cost calculated as the difference between current energy reading and yesterday\'s daily total, multiplied by your configured price per kWh.',
+                message: 'Latest daily energy usage calculated from Usage History as the difference between today\'s reading and yesterday\'s reading, multiplied by your configured price per kWh.',
                 child: Icon(
                   Icons.info_outline,
                   size: 12,
@@ -584,7 +594,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
           ),
           const SizedBox(height: 3),
           LinearProgressIndicator(
-            value: 0.7,
+            value: totalEnergy > 0 ? 0.7 : 0.0,
             backgroundColor: Theme.of(
               context,
             ).primaryColor.withAlpha((255 * 0.2).round()),
@@ -596,6 +606,14 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
             'Energy: ${totalEnergy.toStringAsFixed(2)} kWh',
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          const SizedBox(height: 2),
+          Text(
+            dateLabel,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 9,
+              color: Colors.grey[600],
+            ),
+          ),
         ],
       ),
     );
@@ -605,10 +623,9 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   Widget _monthlyCostCard(List<TimestampedFlSpot> data) {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
 
-    // Calculate average daily energy from 24h data
-    final dailyEnergy = data.isNotEmpty
-        ? data.map((d) => d.energy).reduce((a, b) => a + b) / data.length
-        : 0.0;
+    // Use the latest daily usage from Usage History
+    // This provides accurate daily consumption based on actual meter readings
+    final dailyEnergy = _latestDailyUsage?.usage ?? 0.0;
 
     // Estimate monthly cost (daily * 30 days)
     final monthlyCost = dailyEnergy * 30 * _pricePerKWH;
@@ -656,7 +673,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                         ),
                         const SizedBox(width: 4),
                         Tooltip(
-                          message: 'Projected monthly cost based on your average daily consumption over the last 24 hours.',
+                          message: 'Projected monthly cost based on your latest daily usage from Usage History (today\'s consumption × 30 days).',
                           child: Icon(
                             Icons.info_outline,
                             size: 14,
@@ -1782,12 +1799,12 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
             debugPrint('[EnergyOverview] Switched to hub: $_selectedHubSerial');
             // Restart SSR state listener for the new hub
             _initializeSsrStateListener();
-            // Fetch yesterday's energy for the new hub
-            _fetchLatestDailyEnergyTotal();
+            // Fetch latest daily usage for the new hub
+            _fetchLatestDailyUsage();
           } else {
             _selectedHubSerial = null;
             _isHubActive = false;
-            _latestDailyTotalEnergy = 0.0;
+            _latestDailyUsage = null;
             debugPrint('[EnergyOverview] No hubs available after removal');
           }
         }
