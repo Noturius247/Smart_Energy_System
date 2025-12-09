@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:intl/intl.dart';
 import '../theme_provider.dart';
 import '../theme_provider.dart' show darkTheme;
+import '../services/chatbot_data_service.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -18,6 +22,13 @@ class _ChatbotScreenState extends State<ChatbotScreen>
   late AnimationController _slideController;
   late Animation<Offset> _slideAnimation;
 
+  // Connection status tracking
+  bool _isOnline = false;
+  final int _connectionAlertMinutes = 5;
+
+  // Data service for fetching dynamic data
+  final ChatbotDataService _dataService = ChatbotDataService();
+
   @override
   void initState() {
     super.initState();
@@ -31,15 +42,79 @@ class _ChatbotScreenState extends State<ChatbotScreen>
         );
     _slideController.forward();
 
-    // Welcome message
-    Future.delayed(const Duration(milliseconds: 500), () {
+    // Start monitoring connection status
+    _monitorConnectionStatus();
+
+    // Welcome message with system status
+    Future.delayed(const Duration(milliseconds: 500), () async {
       if (mounted) {
-        setState(() {
-          _messages.add({
-            "sender": "bot",
-            "message":
-                "👋 Hello! I'm your smart home assistant. How can I help you today?",
+        final welcomeMsg = await _generateWelcomeMessage();
+        if (mounted) {
+          setState(() {
+            _messages.add({
+              "sender": "bot",
+              "message": welcomeMsg,
+            });
           });
+        }
+      }
+    });
+  }
+
+  void _monitorConnectionStatus() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _isOnline = false;
+      });
+      return;
+    }
+
+    // Monitor the latest data from Firebase to determine connection status
+    final databaseRef = FirebaseDatabase.instance.ref('users/${user.uid}/hubs');
+
+    databaseRef.onValue.listen((event) {
+      if (!mounted) return;
+
+      if (event.snapshot.value != null) {
+        try {
+          final hubsData = Map<String, dynamic>.from(event.snapshot.value as Map);
+          DateTime? latestTimestamp;
+
+          // Find the most recent data update across all hubs
+          for (var hubEntry in hubsData.entries) {
+            final hubData = hubEntry.value as Map?;
+            if (hubData != null && hubData['data'] != null) {
+              final dataMap = Map<String, dynamic>.from(hubData['data'] as Map);
+              for (var dataEntry in dataMap.values) {
+                if (dataEntry is Map && dataEntry['timestamp'] != null) {
+                  final timestamp = DateTime.parse(dataEntry['timestamp'] as String);
+                  if (latestTimestamp == null || timestamp.isAfter(latestTimestamp)) {
+                    latestTimestamp = timestamp;
+                  }
+                }
+              }
+            }
+          }
+
+          if (latestTimestamp != null) {
+            final minutesSinceUpdate = DateTime.now().difference(latestTimestamp).inMinutes;
+            setState(() {
+              _isOnline = minutesSinceUpdate < _connectionAlertMinutes;
+            });
+          } else {
+            setState(() {
+              _isOnline = false;
+            });
+          }
+        } catch (e) {
+          setState(() {
+            _isOnline = false;
+          });
+        }
+      } else {
+        setState(() {
+          _isOnline = false;
         });
       }
     });
@@ -53,7 +128,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
     super.dispose();
   }
 
-  void _sendMessage() {
+  void _sendMessage() async {
     if (_controller.text.trim().isEmpty) return;
 
     final userMessage = _controller.text.trim();
@@ -65,23 +140,434 @@ class _ChatbotScreenState extends State<ChatbotScreen>
     _controller.clear();
     _scrollToBottom();
 
-    // Simulate bot response
-    Future.delayed(const Duration(milliseconds: 800), () {
+    // Generate bot response with dynamic data
+    try {
+      final response = await _generateBotResponse(userMessage);
       if (mounted) {
         setState(() {
           _messages.add({
             "sender": "bot",
-            "message": _generateBotResponse(userMessage),
+            "message": response,
           });
           _isTyping = false;
         });
         _scrollToBottom();
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _messages.add({
+            "sender": "bot",
+            "message": "Sorry, I encountered an error while fetching data. Please try again.",
+          });
+          _isTyping = false;
+        });
+        _scrollToBottom();
+      }
+    }
   }
 
-  String _generateBotResponse(String userMessage) {
+  Future<String> _generateBotResponse(String userMessage) async {
     final msg = userMessage.toLowerCase();
+
+    // === DYNAMIC DATA QUERIES ===
+
+    // Quick shorthand queries
+    if (msg == 'status' || msg == 'overview' || msg == 'dashboard') {
+      final metrics = await _dataService.getCurrentEnergyMetrics();
+      final dailyData = await _dataService.getDailyEnergyAndCost();
+      final hubs = await _dataService.getUserHubs();
+
+      if (metrics == null || metrics['online'] == false) {
+        return "⚠️ System Status: Offline\n\n"
+            "Hubs: ${hubs.length}\n"
+            "Please turn on SSR to see live data.";
+      }
+
+      final power = metrics['power'] as double;
+      final energy = metrics['energy'] as double;
+      final dailyCost = dailyData['cost'] as double;
+
+      return "📊 System Overview:\n\n"
+          "⚡ Current Power: ${power.toStringAsFixed(2)} W\n"
+          "💡 Total Energy: ${energy.toStringAsFixed(2)} kWh\n"
+          "💰 Today's Cost: ₱${dailyCost.toStringAsFixed(2)}\n"
+          "🔗 Active Hubs: ${metrics['activeHubs']}\n"
+          "🔌 Devices: ${(await _dataService.getUserDevices()).length}";
+    }
+
+    // Simple "how much" queries
+    if ((msg.contains('how much') || msg.contains('what') || msg.contains('tell me')) &&
+        (msg.contains('spending') || msg.contains('spent') || msg.contains('cost today'))) {
+      final dailyData = await _dataService.getDailyEnergyAndCost();
+      final cost = dailyData['cost'] as double;
+      final energy = dailyData['energy'] as double;
+
+      return "💰 Today's Spending:\n\n"
+          "₱${cost.toStringAsFixed(2)}\n\n"
+          "Energy used: ${energy.toStringAsFixed(2)} kWh\n"
+          "Based on consumption since midnight.";
+    }
+
+    // Energy/power now queries
+    if ((msg.contains('power') || msg.contains('energy') || msg.contains('usage')) &&
+        (msg.contains('now') || msg.contains('right now') || msg.contains('currently'))) {
+      final metrics = await _dataService.getCurrentEnergyMetrics();
+      if (metrics == null || metrics['online'] == false) {
+        return "⚠️ Unable to get current reading.\n\nPlease ensure SSR is ON and hubs are connected.";
+      }
+
+      final power = metrics['power'] as double;
+      return "⚡ Current Power Usage:\n\n${power.toStringAsFixed(2)} Watts\n\nUpdated just now!";
+    }
+
+    // Current energy usage
+    if (msg.contains('current') && (msg.contains('usage') || msg.contains('energy') || msg.contains('power'))) {
+      final metrics = await _dataService.getCurrentEnergyMetrics();
+      if (metrics == null) {
+        return "❌ Unable to fetch energy data. Please make sure you're logged in and have hubs connected.";
+      }
+      if (metrics['online'] == false) {
+        return "⚠️ ${metrics['message']}\n\nPlease ensure:\n• At least one hub is connected\n• SSR (main breaker) is turned ON\n• Hub has reported data within the last 5 minutes";
+      }
+
+      final power = metrics['power'] as double;
+      final voltage = metrics['voltage'] as double;
+      final current = metrics['current'] as double;
+      final energy = metrics['energy'] as double;
+      final activeHubs = metrics['activeHubs'] as int;
+      final lastUpdate = metrics['lastUpdate'] as DateTime?;
+
+      final timeAgo = lastUpdate != null
+          ? _formatTimeAgo(lastUpdate)
+          : 'Unknown';
+
+      return "⚡ Current Energy Metrics:\n\n"
+          "🔌 Power: ${power.toStringAsFixed(2)} W\n"
+          "⚡ Voltage: ${voltage.toStringAsFixed(2)} V\n"
+          "🔋 Current: ${current.toStringAsFixed(2)} A\n"
+          "💡 Energy: ${energy.toStringAsFixed(2)} kWh\n\n"
+          "📊 Active Hubs: $activeHubs\n"
+          "🕐 Last Update: $timeAgo\n\n"
+          "All metrics are live and updating in real-time!";
+    }
+
+    // Daily cost
+    if (msg.contains('daily') && (msg.contains('cost') || msg.contains('spending') || msg.contains('bill'))) {
+      final dailyData = await _dataService.getDailyEnergyAndCost();
+      final energy = dailyData['energy'] as double;
+      final cost = dailyData['cost'] as double;
+      final price = dailyData['price'] as double;
+
+      if (price == 0.0) {
+        return "⚠️ Daily Energy: ${energy.toStringAsFixed(2)} kWh\n\n"
+            "💰 Cost: Not calculated\n\n"
+            "Please set your electricity price in Settings to see cost calculations!";
+      }
+
+      return "📊 Today's Energy Usage:\n\n"
+          "⚡ Energy Consumed: ${energy.toStringAsFixed(2)} kWh\n"
+          "💰 Total Cost: ₱${cost.toStringAsFixed(2)}\n"
+          "💵 Price Rate: ₱${price.toStringAsFixed(2)}/kWh\n\n"
+          "This is based on consumption since midnight.";
+    }
+
+    // Monthly estimate
+    if (msg.contains('monthly') && (msg.contains('cost') || msg.contains('estimate') || msg.contains('bill') || msg.contains('projection'))) {
+      final monthlyData = await _dataService.getMonthlyEstimate();
+      final energy = monthlyData['energy'] as double;
+      final cost = monthlyData['cost'] as double;
+      final dailyAvg = monthlyData['dailyAverage'] as double;
+      final price = monthlyData['price'] as double;
+
+      if (price == 0.0) {
+        return "⚠️ Monthly Estimate: ${energy.toStringAsFixed(2)} kWh\n\n"
+            "💰 Cost: Not calculated\n\n"
+            "Please set your electricity price in Settings to see cost estimates!";
+      }
+
+      return "📅 Monthly Cost Estimate:\n\n"
+          "⚡ Projected Energy: ${energy.toStringAsFixed(2)} kWh\n"
+          "💰 Estimated Cost: ₱${cost.toStringAsFixed(2)}\n"
+          "📊 Daily Average: ${dailyAvg.toStringAsFixed(2)} kWh\n"
+          "💵 Price Rate: ₱${price.toStringAsFixed(2)}/kWh\n\n"
+          "This is a 30-day projection based on your last 24 hours of usage.";
+    }
+
+    // Hub information
+    if (msg.contains('hub') && (msg.contains('status') || msg.contains('info') || msg.contains('list') || msg.contains('show'))) {
+      final hubs = await _dataService.getUserHubs();
+      if (hubs.isEmpty) {
+        return "❌ No hubs found.\n\n"
+            "To get started:\n"
+            "1. Go to Settings screen\n"
+            "2. Add your hub's serial number\n"
+            "3. Your hub will automatically link to your account";
+      }
+
+      String response = "🔗 Your Hubs (${hubs.length}):\n\n";
+      for (var i = 0; i < hubs.length; i++) {
+        final hub = hubs[i];
+        final nickname = hub['nickname'] as String;
+        final serialNumber = hub['serialNumber'] as String;
+        final ssrState = hub['ssrState'] as bool;
+        final isOnline = hub['isOnline'] as bool;
+        final lastSeen = hub['lastSeen'] as DateTime?;
+
+        final statusIcon = isOnline ? '🟢' : '🔴';
+        final ssrIcon = ssrState ? '✅' : '❌';
+        final timeAgo = lastSeen != null ? _formatTimeAgo(lastSeen) : 'Never';
+
+        response += "${i + 1}. $nickname\n";
+        response += "   Serial: $serialNumber\n";
+        response += "   Status: $statusIcon ${isOnline ? 'Online' : 'Offline'}\n";
+        response += "   SSR: $ssrIcon ${ssrState ? 'ON' : 'OFF'}\n";
+        response += "   Last Seen: $timeAgo\n\n";
+      }
+
+      return response;
+    }
+
+    // Device information
+    if (msg.contains('device') && (msg.contains('status') || msg.contains('info') || msg.contains('list') || msg.contains('show'))) {
+      final devices = await _dataService.getUserDevices();
+      if (devices.isEmpty) {
+        return "❌ No devices found.\n\n"
+            "To add devices:\n"
+            "1. Go to Devices screen\n"
+            "2. Tap 'Add Device' button\n"
+            "3. Configure your smart plug";
+      }
+
+      String response = "🔌 Your Devices (${devices.length}):\n\n";
+      for (var i = 0; i < devices.length; i++) {
+        final device = devices[i];
+        final nickname = device['nickname'] as String;
+        final state = device['state'] as bool;
+        final power = device['power'] as double;
+        final energy = device['energy'] as double;
+        final hubNickname = device['hubNickname'] as String;
+
+        final stateIcon = state ? '🟢 ON' : '🔴 OFF';
+
+        response += "${i + 1}. $nickname\n";
+        response += "   State: $stateIcon\n";
+        response += "   Power: ${power.toStringAsFixed(2)} W\n";
+        response += "   Energy: ${energy.toStringAsFixed(2)} kWh\n";
+        response += "   Hub: $hubNickname\n\n";
+      }
+
+      return response;
+    }
+
+    // Top consumer
+    if (msg.contains('top') && msg.contains('consumer')) {
+      final topConsumer = await _dataService.getTopConsumer();
+      if (topConsumer == null) {
+        return "❌ No device data available.\n\n"
+            "Make sure you have devices connected and reporting data.";
+      }
+
+      final nickname = topConsumer['nickname'] as String;
+      final energy = topConsumer['energy'] as double;
+      final cost = topConsumer['cost'] as double;
+      final power = topConsumer['power'] as double;
+      final state = topConsumer['state'] as bool;
+
+      return "🏆 Top Energy Consumer:\n\n"
+          "📱 Device: $nickname\n"
+          "⚡ Energy Used: ${energy.toStringAsFixed(2)} kWh\n"
+          "💰 Total Cost: ₱${cost.toStringAsFixed(2)}\n"
+          "🔌 Current Power: ${power.toStringAsFixed(2)} W\n"
+          "Status: ${state ? '🟢 ON' : '🔴 OFF'}\n\n"
+          "This device is consuming the most energy!";
+    }
+
+    // Analytics summary
+    if (msg.contains('analytics') || msg.contains('summary') || msg.contains('statistics')) {
+      String timeRange = 'hourly';
+      if (msg.contains('daily')) timeRange = 'daily';
+      if (msg.contains('weekly')) timeRange = 'weekly';
+      if (msg.contains('monthly')) timeRange = 'monthly';
+
+      final summary = await _dataService.getAnalyticsSummary(timeRange);
+      if (summary.isEmpty || summary['count'] == 0) {
+        return "❌ No analytics data available for $timeRange range.\n\n"
+            "Data will appear once your hubs start reporting metrics.";
+      }
+
+      final min = summary['min'] as double;
+      final max = summary['max'] as double;
+      final avg = summary['avg'] as double;
+      final total = summary['total'] as double;
+      final count = summary['count'] as int;
+
+      String rangeName = timeRange.substring(0, 1).toUpperCase() + timeRange.substring(1);
+
+      return "📊 $rangeName Analytics Summary:\n\n"
+          "📉 Minimum: ${min.toStringAsFixed(2)} kWh\n"
+          "📈 Maximum: ${max.toStringAsFixed(2)} kWh\n"
+          "📊 Average: ${avg.toStringAsFixed(2)} kWh\n"
+          "💡 Total Energy: ${total.toStringAsFixed(2)} kWh\n"
+          "📅 Data Points: $count\n\n"
+          "View detailed charts in the Analytics screen!";
+    }
+
+    // Price information
+    if (msg.contains('price') && (msg.contains('current') || msg.contains('what') || msg.contains('rate'))) {
+      final price = await _dataService.getCurrentPrice();
+      if (price == 0.0) {
+        return "⚠️ No electricity price configured.\n\n"
+            "To set your price:\n"
+            "1. Go to Settings screen\n"
+            "2. Enter your price per kWh\n"
+            "3. Tap Save\n\n"
+            "Once set, all cost calculations will update automatically!";
+      }
+
+      return "💵 Current Electricity Rate:\n\n"
+          "₱${price.toStringAsFixed(2)} per kWh\n\n"
+          "You can update this in the Settings screen.\n"
+          "All cost calculations use this rate.";
+    }
+
+    // Due date information
+    if (msg.contains('due date') || msg.contains('billing date') || msg.contains('bill due')) {
+      final dueDateInfo = await _dataService.getDueDateInfo();
+      if (dueDateInfo == null) {
+        return "⚠️ No billing due date configured.\n\n"
+            "To set your due date:\n"
+            "1. Go to Settings screen\n"
+            "2. Set your billing due date\n"
+            "3. Tap Save";
+      }
+
+      final dueDate = dueDateInfo['dueDate'] as DateTime;
+      final daysRemaining = dueDateInfo['daysRemaining'] as int;
+      final formattedDate = DateFormat('MMM dd, yyyy').format(dueDate);
+
+      String urgency = '';
+      if (daysRemaining < 0) {
+        urgency = '⚠️ OVERDUE!';
+      } else if (daysRemaining <= 3) {
+        urgency = '🔴 Due soon!';
+      } else if (daysRemaining <= 7) {
+        urgency = '🟡 Coming up';
+      } else {
+        urgency = '🟢 On track';
+      }
+
+      return "📅 Billing Due Date:\n\n"
+          "$urgency\n\n"
+          "Due Date: $formattedDate\n"
+          "Days Remaining: ${daysRemaining.abs()} ${daysRemaining < 0 ? 'days overdue' : 'days'}\n\n"
+          "View monthly estimate to plan your payment!";
+    }
+
+    // History queries
+    if (msg.contains('history') || msg.contains('past') || msg.contains('previous') || msg.contains('recent')) {
+      String timeRange = 'daily';
+      if (msg.contains('hourly')) timeRange = 'hourly';
+      if (msg.contains('daily')) timeRange = 'daily';
+      if (msg.contains('weekly')) timeRange = 'weekly';
+      if (msg.contains('monthly')) timeRange = 'monthly';
+
+      final history = await _dataService.getRecentHistory(timeRange: timeRange, limit: 5);
+      if (history.isEmpty || history['count'] == 0) {
+        return "❌ No history data available.\n\n"
+            "Historical data will appear once your system has been running for a while.";
+      }
+
+      final records = history['records'] as List;
+      final totalEnergy = history['totalEnergy'] as double;
+      final totalCost = history['totalCost'] as double;
+      final avgPower = history['avgPower'] as double;
+
+      String timeRangeName = timeRange.substring(0, 1).toUpperCase() + timeRange.substring(1);
+      String response = "📜 Recent $timeRangeName History:\n\n";
+
+      for (var i = 0; i < records.length && i < 5; i++) {
+        final record = records[i] as Map<String, dynamic>;
+        final timestamp = record['timestamp'] as DateTime;
+        final energy = record['totalEnergy'] as double;
+        final power = record['avgPower'] as double;
+
+        String dateStr;
+        switch (timeRange) {
+          case 'hourly':
+            dateStr = DateFormat('MMM dd, HH:mm').format(timestamp);
+            break;
+          case 'daily':
+            dateStr = DateFormat('MMM dd, yyyy').format(timestamp);
+            break;
+          case 'weekly':
+            dateStr = 'Week of ${DateFormat('MMM dd').format(timestamp)}';
+            break;
+          case 'monthly':
+            dateStr = DateFormat('MMMM yyyy').format(timestamp);
+            break;
+          default:
+            dateStr = DateFormat('MMM dd, yyyy').format(timestamp);
+        }
+
+        response += "${i + 1}. $dateStr\n";
+        response += "   Energy: ${energy.toStringAsFixed(2)} kWh\n";
+        response += "   Avg Power: ${power.toStringAsFixed(1)} W\n\n";
+      }
+
+      response += "📊 Summary (last ${records.length} periods):\n";
+      response += "⚡ Total Energy: ${totalEnergy.toStringAsFixed(2)} kWh\n";
+      response += "💰 Total Cost: ₱${totalCost.toStringAsFixed(2)}\n";
+      response += "📈 Avg Power: ${avgPower.toStringAsFixed(1)} W\n\n";
+      response += "View detailed history in the History screen!";
+
+      return response;
+    }
+
+    // Compare today vs yesterday
+    if ((msg.contains('compare') || msg.contains('comparison') || msg.contains('vs') || msg.contains('versus')) ||
+        (msg.contains('today') && msg.contains('yesterday')) ||
+        msg.contains('difference')) {
+      final comparison = await _dataService.getUsageComparison();
+      if (comparison.isEmpty) {
+        return "❌ Not enough data for comparison.\n\n"
+            "Comparison data will be available after your system runs for at least 2 days.";
+      }
+
+      final todayEnergy = comparison['todayEnergy'] as double;
+      final yesterdayEnergy = comparison['yesterdayEnergy'] as double;
+      final difference = comparison['difference'] as double;
+      final percentChange = comparison['percentChange'] as double;
+      final todayCost = comparison['todayCost'] as double;
+      final yesterdayCost = comparison['yesterdayCost'] as double;
+      final isIncreasing = comparison['isIncreasing'] as bool;
+
+      String trend = '';
+      String trendIcon = '';
+      if (difference.abs() < 0.1) {
+        trend = 'About the same';
+        trendIcon = '➡️';
+      } else if (isIncreasing) {
+        trend = 'Increased';
+        trendIcon = '📈';
+      } else {
+        trend = 'Decreased';
+        trendIcon = '📉';
+      }
+
+      return "📊 Usage Comparison:\n\n"
+          "TODAY:\n"
+          "⚡ Energy: ${todayEnergy.toStringAsFixed(2)} kWh\n"
+          "💰 Cost: ₱${todayCost.toStringAsFixed(2)}\n\n"
+          "YESTERDAY:\n"
+          "⚡ Energy: ${yesterdayEnergy.toStringAsFixed(2)} kWh\n"
+          "💰 Cost: ₱${yesterdayCost.toStringAsFixed(2)}\n\n"
+          "CHANGE:\n"
+          "$trendIcon $trend ${percentChange.abs().toStringAsFixed(1)}%\n"
+          "Difference: ${difference.abs().toStringAsFixed(2)} kWh\n"
+          "Cost Impact: ₱${(todayCost - yesterdayCost).abs().toStringAsFixed(2)}\n\n"
+          "${isIncreasing ? '⚠️ You\'re using more energy today!' : '✅ You\'re using less energy today!'}";
+    }
 
     // Greetings
     if (msg.contains('hello') || msg.contains('hi') || msg.contains('hey')) {
@@ -220,7 +706,43 @@ class _ChatbotScreenState extends State<ChatbotScreen>
       return "🌓 Theme Options:\n\nToggle between:\n• Dark Mode (default)\n• Light Mode\n\nHow to change:\n1. Find theme toggle in header\n2. Click to switch\n3. Preference saves automatically\n\nWorks across all screens!\nChoose what's comfortable for your eyes!";
     }
 
-    // Profile
+    // Profile - Dynamic profile information
+    if ((msg.contains('show') || msg.contains('view') || msg.contains('my') || msg.contains('what')) &&
+        (msg.contains('profile') || msg.contains('account') || msg.contains('info') || msg.contains('details'))) {
+      final profile = await _dataService.getUserProfile();
+      if (profile == null) {
+        return "❌ Unable to fetch profile data.\n\nPlease ensure you're logged in.";
+      }
+
+      final email = profile['email'] as String;
+      final fullName = profile['fullName'] as String;
+      final address = profile['address'] as String;
+      final phoneNumber = profile['phoneNumber'] as String;
+      final accountCreated = profile['accountCreated'] as DateTime?;
+      final lastSignIn = profile['lastSignIn'] as DateTime?;
+
+      String accountCreatedStr = 'Unknown';
+      String lastSignInStr = 'Unknown';
+
+      if (accountCreated != null) {
+        accountCreatedStr = DateFormat('MMM dd, yyyy').format(accountCreated);
+      }
+      if (lastSignIn != null) {
+        lastSignInStr = _formatTimeAgo(lastSignIn);
+      }
+
+      return "👤 Your Profile:\n\n"
+          "📧 Email: $email\n"
+          "👨 Name: $fullName\n"
+          "📍 Address: $address\n"
+          "📱 Phone: $phoneNumber\n\n"
+          "📅 Account Info:\n"
+          "Created: $accountCreatedStr\n"
+          "Last Sign In: $lastSignInStr\n\n"
+          "You can update your profile in the Settings screen!";
+    }
+
+    // Profile - Static guide (when not asking for data)
     if (msg.contains('profile') || msg.contains('account')) {
       return "👤 Profile Management:\n\nView & edit:\n• Display name\n• Email address\n• Physical address\n• Hub serial numbers\n• Price per kWh\n\nHow to edit:\n1. Go to Profile screen\n2. Click Edit button\n3. Update information\n4. Save changes\n\nAll data syncs to cloud!";
     }
@@ -306,7 +828,28 @@ class _ChatbotScreenState extends State<ChatbotScreen>
     }
 
     // Default response with suggestions
-    return "I heard: \"$userMessage\"\n\n🤔 Not sure about that! Try asking:\n\n• 'What features?' - Learn about app capabilities\n• 'How to use dashboard?' - Monitoring guide\n• 'How to add devices?' - Device setup\n• 'Energy monitoring' - Metrics explained\n• 'Analytics' - Trends & reports\n• 'Settings' - Configuration help\n• 'Export data' - Excel downloads\n• 'Help' - Full help menu\n\nWhat would you like to know?";
+    return "I heard: \"$userMessage\"\n\n🤔 Not sure about that! Try asking:\n\n"
+        "📊 LIVE DATA:\n"
+        "• 'Current energy usage' - Real-time metrics\n"
+        "• 'Daily cost' - Today's spending\n"
+        "• 'Monthly estimate' - Projected bill\n"
+        "• 'Status' - Quick overview\n\n"
+        "📜 HISTORY:\n"
+        "• 'History' - Recent usage records\n"
+        "• 'Daily history' - Last 5 days\n"
+        "• 'Compare today vs yesterday'\n"
+        "• 'Usage comparison'\n\n"
+        "🔌 DEVICES & HUBS:\n"
+        "• 'Show my hubs' - Hub status\n"
+        "• 'Show my devices' - Device list\n"
+        "• 'Top consumer' - Highest usage\n\n"
+        "📈 ANALYTICS:\n"
+        "• 'Analytics summary' - Stats\n"
+        "• 'What's my price?' - Current rate\n\n"
+        "💡 GUIDES:\n"
+        "• 'Features' - App capabilities\n"
+        "• 'How to use dashboard?' - Help\n\n"
+        "What would you like to know?";
   }
 
   void _scrollToBottom() {
@@ -319,6 +862,69 @@ class _ChatbotScreenState extends State<ChatbotScreen>
         );
       }
     });
+  }
+
+  String _formatTimeAgo(DateTime dateTime) {
+    final difference = DateTime.now().difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return '${difference.inSeconds} seconds ago';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
+    } else if (difference.inDays < 30) {
+      return '${difference.inDays} day${difference.inDays == 1 ? '' : 's'} ago';
+    } else {
+      return DateFormat('MMM dd, yyyy HH:mm').format(dateTime);
+    }
+  }
+
+  Future<String> _generateWelcomeMessage() async {
+    try {
+      // Get system overview
+      final hubs = await _dataService.getUserHubs();
+      final devices = await _dataService.getUserDevices();
+      final metrics = await _dataService.getCurrentEnergyMetrics();
+
+      String statusMsg = '';
+
+      if (hubs.isEmpty) {
+        statusMsg = '⚠️ No hubs connected. Add a hub in Settings to get started!';
+      } else {
+        final onlineHubs = hubs.where((h) => h['isOnline'] == true).length;
+        final totalHubs = hubs.length;
+
+        if (metrics != null && metrics['online'] == true) {
+          final power = metrics['power'] as double;
+          statusMsg = '✅ System Online\n';
+          statusMsg += '📊 Hubs: $onlineHubs/$totalHubs active\n';
+          statusMsg += '🔌 Devices: ${devices.length}\n';
+          statusMsg += '⚡ Current Power: ${power.toStringAsFixed(1)} W';
+        } else {
+          statusMsg = '⚠️ System Offline\n';
+          statusMsg += '📊 Hubs: $onlineHubs/$totalHubs online\n';
+          statusMsg += 'Turn on SSR to start monitoring!';
+        }
+      }
+
+      return "👋 Hello! I'm your Smart Energy Assistant.\n\n"
+          "$statusMsg\n\n"
+          "💬 You can ask me:\n"
+          "• 'Current energy usage'\n"
+          "• 'Daily cost'\n"
+          "• 'Monthly estimate'\n"
+          "• 'Show my hubs'\n"
+          "• 'Show my devices'\n"
+          "• 'Top consumer'\n"
+          "• 'Analytics summary'\n"
+          "• 'What's my price?'\n\n"
+          "What would you like to know?";
+    } catch (e) {
+      return "👋 Hello! I'm your Smart Energy Assistant.\n\n"
+          "I can provide real-time information about your energy usage, costs, devices, and more.\n\n"
+          "What would you like to know?";
+    }
   }
 
   bool _isSmallScreen(BuildContext context) {
@@ -404,12 +1010,25 @@ class _ChatbotScreenState extends State<ChatbotScreen>
                                         fontWeight: FontWeight.bold,
                                       ),
                                 ),
-                                Text(
-                                  "Online",
-                                  style: TextStyle(
-                                    color: Colors.green,
-                                    fontSize: 12,
-                                  ),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        color: _isOnline ? Colors.green : Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _isOnline ? "Online" : "Offline",
+                                      style: TextStyle(
+                                        color: _isOnline ? Colors.green : Colors.red,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -502,6 +1121,48 @@ class _ChatbotScreenState extends State<ChatbotScreen>
                             ],
                           ),
                         ),
+                      ),
+                    ),
+
+                  // Sample questions chips
+                  if (_messages.isNotEmpty && !_isTyping)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4, bottom: 8),
+                            child: Text(
+                              'Try asking:',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).textTheme.bodySmall?.color?.withAlpha(179),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _buildSampleQuestionChip(context, '⚡ Current usage', 'Current energy usage'),
+                                const SizedBox(width: 8),
+                                _buildSampleQuestionChip(context, '💰 Daily cost', 'Daily cost'),
+                                const SizedBox(width: 8),
+                                _buildSampleQuestionChip(context, '📅 Monthly estimate', 'Monthly estimate'),
+                                const SizedBox(width: 8),
+                                _buildSampleQuestionChip(context, '🔌 Show devices', 'Show my devices'),
+                                const SizedBox(width: 8),
+                                _buildSampleQuestionChip(context, '🔗 Show hubs', 'Show my hubs'),
+                                const SizedBox(width: 8),
+                                _buildSampleQuestionChip(context, '🏆 Top consumer', 'Top consumer'),
+                                const SizedBox(width: 8),
+                                _buildSampleQuestionChip(context, '📊 Status', 'Status'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 
@@ -712,6 +1373,35 @@ class _ChatbotScreenState extends State<ChatbotScreen>
           setState(() {});
         }
       },
+    );
+  }
+
+  Widget _buildSampleQuestionChip(BuildContext context, String label, String query) {
+    return InkWell(
+      onTap: () {
+        _controller.text = query;
+        _sendMessage();
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.teal.withAlpha((255 * 0.15).round()),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.teal.withAlpha((255 * 0.3).round()),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.teal,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 }

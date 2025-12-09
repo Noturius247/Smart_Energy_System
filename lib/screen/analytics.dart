@@ -57,7 +57,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   DateTime? _lastDataUpdate;
   bool _isDeviceConnected = false;
   final AnalyticsRecordingService _recordingService = AnalyticsRecordingService();
-  int _connectionAlertMinutes = 5; // Default connection alert threshold
 
   // Hub selection for per-hub analytics
   List<Map<String, String>> _availableHubs = []; // List of {serialNumber, nickname}
@@ -120,8 +119,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         setState(() {
           // Pause chart when SSR is OFF (false), resume when ON (true)
           _isChartPaused = !isOn;
+          // Update connection status based on SSR state
+          _isDeviceConnected = isOn;
         });
-        debugPrint('[AnalyticsScreen] SSR state changed: ${isOn ? "ON" : "OFF"}, Chart paused: $_isChartPaused');
+        debugPrint('[AnalyticsScreen] SSR state changed: ${isOn ? "ON" : "OFF"}, Chart paused: $_isChartPaused, Connected: $_isDeviceConnected');
 
         // Pause/resume recording service for all active hubs based on SSR state
          _updateRecordingState(isOn);
@@ -173,9 +174,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             (e) => e.toString().split('.').last == timeRangeString,
             orElse: () => _TimeRange.hourly,
           );
-
-          // Load connection alert threshold
-          _connectionAlertMinutes = data['connectionAlertMinutes'] as int? ?? 5;
         });
       }
     } catch (e) {
@@ -709,18 +707,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 final List<TimestampedFlSpot> allData = snapshot.data ?? [];
                 final List<TimestampedFlSpot> filteredData = _filterDataByTimeRange(allData);
 
-                // Update connection status and last update time (scheduled after build)
+                // Update last update time only (scheduled after build)
                 if (allData.isNotEmpty) {
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (mounted) {
                       final newLastUpdate = allData.last.timestamp;
-                      final newConnectedStatus = DateTime.now().difference(newLastUpdate).inMinutes < _connectionAlertMinutes;
 
-                      // Only setState if values changed
-                      if (_lastDataUpdate != newLastUpdate || _isDeviceConnected != newConnectedStatus) {
+                      // Only setState if last update changed
+                      if (_lastDataUpdate != newLastUpdate) {
                         setState(() {
                           _lastDataUpdate = newLastUpdate;
-                          _isDeviceConnected = newConnectedStatus;
                         });
                       }
                     }
