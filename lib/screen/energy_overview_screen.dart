@@ -106,8 +106,16 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   @override
   void initState() {
     super.initState();
+
+    // FIRST debug log - verify initState is called
+    debugPrint('═══════════════════════════════════════════════════════');
+    debugPrint('[EnergyOverview] ⭐⭐⭐ INIT STATE CALLED ⭐⭐⭐');
+    debugPrint('═══════════════════════════════════════════════════════');
+
     // Prioritize the primary hub from the service on initial load
     _selectedHubSerial = widget.realtimeDbService.primaryHub;
+
+    debugPrint('[EnergyOverview] 🚀 INIT - Selected hub: $_selectedHubSerial');
 
     // Initialize usage history service
     _usageHistoryService = UsageHistoryService(widget.realtimeDbService);
@@ -117,7 +125,16 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     _startDeviceRefreshTimer();
     _startHubRemovedListener();
     _startHubAddedListener();
-    _fetchLatestDailyUsage(); // Fetch latest daily usage for cost calculation
+
+    // Delay fetching daily usage to ensure hub is initialized
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) {
+        debugPrint('[EnergyOverview] ⚠️ Widget disposed before delayed fetch');
+        return;
+      }
+      debugPrint('[EnergyOverview] 🕐 Delayed fetch - Hub now: $_selectedHubSerial');
+      _fetchLatestDailyUsage();
+    });
 
     // Listen for changes to the primary hub
     _primaryHubSubscription =
@@ -144,6 +161,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     // Refresh device data every 30 seconds instead of on every stream update
     _deviceRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       _refreshDevices();
+      _fetchLatestDailyUsage(); // Also refresh daily usage calculation
     });
   }
 
@@ -158,17 +176,21 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   }
 
   /// Fetch the latest daily usage from usage history
-  /// This calculates the difference between past and present daily readings
+  /// This calculates: Current Hub Total Energy - Yesterday's Total Energy
   Future<void> _fetchLatestDailyUsage() async {
     if (_selectedHubSerial == null) {
-      debugPrint('[EnergyOverview] No hub selected, skipping latest daily usage fetch');
+      debugPrint('[EnergyOverview] ❌ No hub selected, skipping latest daily usage fetch');
       return;
     }
 
     try {
-      debugPrint('[EnergyOverview] Fetching latest daily usage for hub $_selectedHubSerial');
+      debugPrint('[EnergyOverview] 🔄 Calculating daily usage for hub: $_selectedHubSerial');
 
-      // Get the latest daily usage history (just need 1 entry - the most recent)
+      // Get current hub total energy
+      final currentEnergy = await _getCurrentHubEnergy();
+      debugPrint('[EnergyOverview] 📊 Current hub energy: ${currentEnergy.toStringAsFixed(3)} kWh');
+
+      // Get yesterday's total energy from usage history
       final usageHistory = await _usageHistoryService.calculateUsageHistory(
         hubSerialNumber: _selectedHubSerial!,
         interval: UsageInterval.daily,
@@ -177,25 +199,81 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
       );
 
       if (usageHistory.isNotEmpty && mounted) {
+        // Yesterday's reading is the "current reading" from the history entry
+        final yesterdayEnergy = usageHistory.first.currentReading;
+        final todayUsage = currentEnergy - yesterdayEnergy;
+
+        debugPrint('[EnergyOverview] 📅 Yesterday energy: ${yesterdayEnergy.toStringAsFixed(3)} kWh');
+        debugPrint('[EnergyOverview] ⚡ Today usage: ${todayUsage.toStringAsFixed(3)} kWh');
+
         setState(() {
-          // Store the latest daily usage entry
-          _latestDailyUsage = usageHistory.first;
-          debugPrint('[EnergyOverview] Latest daily usage: '
+          // Create a usage entry for today
+          _latestDailyUsage = UsageHistoryEntry(
+            timestamp: DateTime.now(),
+            interval: UsageInterval.daily,
+            previousReading: yesterdayEnergy,
+            currentReading: currentEnergy,
+            usage: todayUsage > 0 ? todayUsage : 0.0, // Ensure non-negative
+          );
+
+          debugPrint('[EnergyOverview] ✅ Daily usage set: '
               '${_latestDailyUsage!.usage.toStringAsFixed(3)} kWh '
-              '(${_latestDailyUsage!.getFormattedTimestamp()}) - '
-              'Previous: ${_latestDailyUsage!.previousReading.toStringAsFixed(3)} kWh, '
-              'Current: ${_latestDailyUsage!.currentReading.toStringAsFixed(3)} kWh');
+              '(Current: ${currentEnergy.toStringAsFixed(3)} kWh - '
+              'Yesterday: ${yesterdayEnergy.toStringAsFixed(3)} kWh)');
         });
       } else {
-        debugPrint('[EnergyOverview] No daily usage data available');
+        debugPrint('[EnergyOverview] ⚠️ No yesterday data available, using current hub energy as fallback');
         if (mounted) {
           setState(() {
-            _latestDailyUsage = null;
+            // If no yesterday data, just show current hub energy as today's usage
+            _latestDailyUsage = UsageHistoryEntry(
+              timestamp: DateTime.now(),
+              interval: UsageInterval.daily,
+              previousReading: 0.0,
+              currentReading: currentEnergy,
+              usage: currentEnergy,
+            );
+            debugPrint('[EnergyOverview] ✅ Daily usage set to current energy: ${currentEnergy.toStringAsFixed(3)} kWh');
           });
         }
       }
+    } catch (e, stackTrace) {
+      debugPrint('[EnergyOverview] ❌ Error fetching latest daily usage: $e');
+      debugPrint('[EnergyOverview] Stack trace: $stackTrace');
+    }
+  }
+
+  /// Get current total energy for the selected hub by summing all device energies
+  Future<double> _getCurrentHubEnergy() async {
+    try {
+      final hubSnapshot = await FirebaseDatabase.instance
+          .ref('$rtdbUserPath/hubs/$_selectedHubSerial/plugs')
+          .get();
+
+      if (!hubSnapshot.exists || hubSnapshot.value == null) {
+        debugPrint('[EnergyOverview] No devices found for hub $_selectedHubSerial');
+        return 0.0;
+      }
+
+      final plugs = Map<String, dynamic>.from(hubSnapshot.value as Map);
+      double totalEnergy = 0.0;
+
+      for (final plugId in plugs.keys) {
+        final plugData = Map<String, dynamic>.from(plugs[plugId]);
+        final data = plugData['data'];
+
+        if (data != null && data is Map) {
+          final dataMap = Map<String, dynamic>.from(data);
+          final energy = (dataMap['energy'] as num?)?.toDouble() ?? 0.0;
+          totalEnergy += energy;
+        }
+      }
+
+      debugPrint('[EnergyOverview] Current hub total energy: ${totalEnergy.toStringAsFixed(3)} kWh');
+      return totalEnergy;
     } catch (e) {
-      debugPrint('[EnergyOverview] Error fetching latest daily usage: $e');
+      debugPrint('[EnergyOverview] Error getting current hub energy: $e');
+      return 0.0;
     }
   }
 
