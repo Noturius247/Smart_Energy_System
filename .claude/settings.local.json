@@ -9,7 +9,8 @@
       "Bash(test:*)",
       "Bash(\"C:/Android/sdk/cmdline-tools/latest/bin/sdkmanager.bat\" \"system-images;android-35;google_apis_playstore;x86_64\")",
       "Bash(flutter analyze:*)",
-      "Bash(flutter test:*)"
+      "Bash(flutter test:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

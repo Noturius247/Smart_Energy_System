@@ -8,6 +8,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../realtime_db_service.dart';
 import '../due_date_provider.dart';
+import '../price_provider.dart';
 import '../widgets/notification_box.dart';
 import '../constants.dart';
 import '../services/usage_history_service.dart';
@@ -73,7 +74,6 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   StreamSubscription<Map<String, String>>? _hubAddedSubscription; // Added for hub addition
 
   // Settings
-  double _pricePerKWH = 0.0;
   String _currencySymbol = '₱';
 
   // Calculator input state
@@ -113,9 +113,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     _usageHistoryService = UsageHistoryService(widget.realtimeDbService);
 
     _initializeHubStreams();
-    _loadPricePerKWH();
     _loadCurrencySymbol();
-    _calculateCustomCost(); // Initialize calculator with default values
     _startDeviceRefreshTimer();
     _startHubRemovedListener();
     _startHubAddedListener();
@@ -277,24 +275,6 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     });
   }
 
-  Future<void> _loadPricePerKWH() async {
-    final User? user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-      if (doc.exists && doc.data()!.containsKey('pricePerKWH')) {
-        setState(() {
-          _pricePerKWH = (doc.data()!['pricePerKWH'] as num?)?.toDouble() ?? 12.0;
-        });
-      }
-    } catch (e) {
-      debugPrint('[EnergyOverview] Error loading price: $e');
-    }
-  }
 
   Future<void> _loadCurrencySymbol() async {
     final User? user = FirebaseAuth.instance.currentUser;
@@ -540,11 +520,15 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     );
   }
 
-  Widget _solarProductionCard(List<TimestampedFlSpot> data) {
+  Widget _solarProductionCard(List<TimestampedFlSpot> data, double pricePerKWH) {
     // Use the latest daily usage from Usage History
     // This shows the difference between past and present daily readings
     final totalEnergy = _latestDailyUsage?.usage ?? 0.0;
-    final totalCost = totalEnergy * _pricePerKWH;
+    final totalCost = totalEnergy * pricePerKWH;
+
+    debugPrint('[EnergyOverview] Daily Usage Card - Energy: ${totalEnergy.toStringAsFixed(2)} kWh, '
+        'Price: $_currencySymbol${pricePerKWH.toStringAsFixed(2)}/kWh, '
+        'Cost: $_currencySymbol${totalCost.toStringAsFixed(2)}');
 
     // Get the date of the latest daily usage
     final dateLabel = _latestDailyUsage != null
@@ -620,7 +604,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   }
 
   // Monthly Cost Estimate Card
-  Widget _monthlyCostCard(List<TimestampedFlSpot> data) {
+  Widget _monthlyCostCard(List<TimestampedFlSpot> data, double pricePerKWH) {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
 
     // Use the latest daily usage from Usage History
@@ -628,8 +612,11 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     final dailyEnergy = _latestDailyUsage?.usage ?? 0.0;
 
     // Estimate monthly cost (daily * 30 days)
-    final monthlyCost = dailyEnergy * 30 * _pricePerKWH;
+    final monthlyCost = dailyEnergy * 30 * pricePerKWH;
     final monthlyEnergy = dailyEnergy * 30;
+
+    debugPrint('[EnergyOverview] Monthly Estimate - Daily Energy: ${dailyEnergy.toStringAsFixed(2)} kWh, '
+        'Monthly Cost: $_currencySymbol${monthlyCost.toStringAsFixed(2)}');
 
     return Container(
       padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -716,7 +703,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                       ),
                     ),
                     Text(
-                      '$_currencySymbol${(dailyEnergy * _pricePerKWH).toStringAsFixed(2)}',
+                      '$_currencySymbol${(dailyEnergy * pricePerKWH).toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: isSmallScreen ? 14 : 16,
                         fontWeight: FontWeight.bold,
@@ -759,7 +746,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   }
 
   // Cost Calculator Widget
-  Widget _costCalculator() {
+  Widget _costCalculator(double pricePerKWH) {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
 
     return Container(
@@ -786,7 +773,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
               ),
               const SizedBox(width: 6),
               Tooltip(
-                message: 'Calculate estimated costs based on your current electricity price of $_currencySymbol$_pricePerKWH per kWh.',
+                message: 'Calculate estimated costs based on your current electricity price of $_currencySymbol${pricePerKWH.toStringAsFixed(2)} per kWh.',
                 child: Icon(
                   Icons.info_outline,
                   size: 16,
@@ -797,7 +784,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Current Rate: $_currencySymbol$_pricePerKWH per kWh',
+            'Current Rate: $_currencySymbol${pricePerKWH.toStringAsFixed(2)} per kWh',
             style: TextStyle(
               fontSize: isSmallScreen ? 12 : 14,
               color: Colors.grey[600],
@@ -865,7 +852,10 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                                 ),
                               ),
                             ),
-                            onChanged: (_) => _calculateCustomCost(),
+                            onChanged: (_) {
+                              final priceProvider = Provider.of<PriceProvider>(context, listen: false);
+                              _calculateCustomCost(priceProvider.pricePerKWH);
+                            },
                           ),
                         ],
                       ),
@@ -906,7 +896,10 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                                 ),
                               ),
                             ),
-                            onChanged: (_) => _calculateCustomCost(),
+                            onChanged: (_) {
+                              final priceProvider = Provider.of<PriceProvider>(context, listen: false);
+                              _calculateCustomCost(priceProvider.pricePerKWH);
+                            },
                           ),
                         ],
                       ),
@@ -1006,26 +999,32 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     );
   }
 
-  void _calculateCustomCost() {
+  void _calculateCustomCost(double pricePerKWH) {
     final wattage = double.tryParse(_wattageController.text) ?? 0;
     final hours = double.tryParse(_hoursController.text) ?? 0;
 
     // Calculate: (Wattage / 1000) * Hours * PricePerKWH = Daily Cost
     final energyKWH = (wattage / 1000) * hours;
     setState(() {
-      _calculatedCost = energyKWH * _pricePerKWH;
+      _calculatedCost = energyKWH * pricePerKWH;
     });
+
+    debugPrint('[EnergyOverview] Cost Calculator - Wattage: $wattage W, Hours: $hours, '
+        'Energy: ${energyKWH.toStringAsFixed(3)} kWh, Cost: $_currencySymbol${_calculatedCost.toStringAsFixed(2)}');
   }
 
   // Device Summary Widget
-  Widget _deviceSummaryCard(List<DeviceData> devices) {
+  Widget _deviceSummaryCard(List<DeviceData> devices, double pricePerKWH) {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
 
     final activeDevices = devices.where((d) => d.isOn).length;
     final totalDevices = devices.length;
     final totalPower = devices.fold<double>(0.0, (sum, d) => sum + (d.power ?? 0.0));
     final totalEnergy = devices.fold<double>(0.0, (sum, d) => sum + (d.energy ?? 0.0));
-    final totalCost = totalEnergy * _pricePerKWH;
+    final totalCost = totalEnergy * pricePerKWH;
+
+    debugPrint('[EnergyOverview] Device Summary - Total Energy: ${totalEnergy.toStringAsFixed(2)} kWh, '
+        'Total Cost: $_currencySymbol${totalCost.toStringAsFixed(2)}');
 
     return Container(
       padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -1155,7 +1154,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
   }
 
   // Top Energy Consumer Widget
-  Widget _topEnergyConsumer(List<DeviceData> devices) {
+  Widget _topEnergyConsumer(List<DeviceData> devices, double pricePerKWH) {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
 
     if (devices.isEmpty) {
@@ -1173,6 +1172,10 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
 
     final totalPower = devices.fold<double>(0.0, (sum, d) => sum + (d.power ?? 0.0));
     final percentage = totalPower > 0 ? ((topDevice.power ?? 0.0) / totalPower * 100) : 0.0;
+
+    debugPrint('[EnergyOverview] Top Consumer - Device: ${topDevice.name}, '
+        'Power: ${topDevice.power?.toStringAsFixed(1)} W, '
+        'Energy: ${topDevice.energy?.toStringAsFixed(2)} kWh');
 
     return Container(
       padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
@@ -1272,7 +1275,7 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
               ),
               _topDeviceMetric(
                 'Cost',
-                '$_currencySymbol${((topDevice.energy ?? 0.0) * _pricePerKWH).toStringAsFixed(2)}',
+                '$_currencySymbol${((topDevice.energy ?? 0.0) * pricePerKWH).toStringAsFixed(2)}',
                 isSmallScreen,
               ),
             ],
@@ -1882,21 +1885,28 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     // Use cached devices instead of fetching on every stream update
     final List<DeviceData> devices = _cachedDevices;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        children: [
-          // This StreamBuilder handles all widgets that depend on LIVE data
-          StreamBuilder<List<TimestampedFlSpot>>(
-            stream: _getLiveDataStream(),
-            builder: (context, liveSnapshot) {
-              final List<TimestampedFlSpot> liveData = liveSnapshot.data ?? [];
-              // Determine connection status based on the live data stream
-              final bool isDeviceConnected = liveData.isNotEmpty &&
-                  DateTime.now().difference(liveData.last.timestamp).inMinutes <
-                      2;
+    return Consumer<PriceProvider>(
+      builder: (context, priceProvider, _) {
+        final pricePerKWH = priceProvider.pricePerKWH;
 
-              return Column(
+        // Log price value for debugging
+        debugPrint('[EnergyOverview] Build - Using price: $_currencySymbol${pricePerKWH.toStringAsFixed(2)}/kWh');
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              // This StreamBuilder handles all widgets that depend on LIVE data
+              StreamBuilder<List<TimestampedFlSpot>>(
+                stream: _getLiveDataStream(),
+                builder: (context, liveSnapshot) {
+                  final List<TimestampedFlSpot> liveData = liveSnapshot.data ?? [];
+                  // Determine connection status based on the live data stream
+                  final bool isDeviceConnected = liveData.isNotEmpty &&
+                      DateTime.now().difference(liveData.last.timestamp).inMinutes <
+                          2;
+
+                  return Column(
                 children: [
                   const SizedBox(height: 12),
                   // Due Date and Notification Box Row
@@ -2019,24 +2029,24 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
                           child: _currentEnergyCard(liveData,
                               isDeviceConnected: isDeviceConnected)),
                       const SizedBox(width: 10),
-                      _solarProductionCard(liveData),
+                      _solarProductionCard(liveData, pricePerKWH),
                     ],
                   ),
                   const SizedBox(height: 12),
                   // Monthly Cost Estimate
-                  _monthlyCostCard(liveData),
+                  _monthlyCostCard(liveData, pricePerKWH),
                   const SizedBox(height: 12),
                   // Cost Calculator
-                  _costCalculator(),
+                  _costCalculator(pricePerKWH),
                   const SizedBox(height: 12),
                   // Device Summary Card
                   if (devices.isNotEmpty) ...[
-                    _deviceSummaryCard(devices),
+                    _deviceSummaryCard(devices, pricePerKWH),
                     const SizedBox(height: 12),
                   ],
                   // Top Energy Consumer
                   if (devices.isNotEmpty) ...[
-                    _topEnergyConsumer(devices),
+                    _topEnergyConsumer(devices, pricePerKWH),
                     const SizedBox(height: 12),
                   ],
                   // This StreamBuilder handles the historical chart
@@ -2057,6 +2067,8 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
           ),
         ],
       ),
+    );
+      },
     );
   }
 }

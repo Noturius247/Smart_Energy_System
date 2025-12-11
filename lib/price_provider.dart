@@ -17,7 +17,7 @@ class PriceProvider with ChangeNotifier {
   Future<void> _loadPrice() async {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      _pricePerKWH = 0.0;
+      debugPrint('[PriceProvider] No user logged in, price remains: ₱${_pricePerKWH.toStringAsFixed(2)}/kWh');
       notifyListeners();
       return;
     }
@@ -32,13 +32,14 @@ class PriceProvider with ChangeNotifier {
           .get();
 
       if (doc.exists && doc.data()!.containsKey('pricePerKWH')) {
-        _pricePerKWH = (doc.data()!['pricePerKWH'] as num).toDouble();
+        final loadedPrice = (doc.data()!['pricePerKWH'] as num).toDouble();
+        _pricePerKWH = loadedPrice;
+        debugPrint('[PriceProvider] Loaded price from Firestore: ₱${_pricePerKWH.toStringAsFixed(2)}/kWh');
       } else {
-        _pricePerKWH = 0.0;
+        debugPrint('[PriceProvider] Price not found in Firestore, current price: ₱${_pricePerKWH.toStringAsFixed(2)}/kWh');
       }
     } catch (e) {
-      debugPrint('Error loading price: $e');
-      _pricePerKWH = 0.0;
+      debugPrint('[PriceProvider] Error loading price: $e');
     }
 
     _isLoading = false;
