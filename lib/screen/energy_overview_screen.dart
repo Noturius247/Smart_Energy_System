@@ -158,8 +158,8 @@ class _EnergyOverviewScreenState extends State<EnergyOverviewScreen> {
     // Fetch devices immediately
     _refreshDevices();
 
-    // Refresh device data every 30 seconds instead of on every stream update
-    _deviceRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // Refresh device data every 5 seconds for real-time updates
+    _deviceRefreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _refreshDevices();
       _fetchLatestDailyUsage(); // Also refresh daily usage calculation
     });
