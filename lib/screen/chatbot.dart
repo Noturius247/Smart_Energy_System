@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 import '../theme_provider.dart';
 import '../theme_provider.dart' show darkTheme;
 import '../services/chatbot_data_service.dart';
+import '../constants.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -25,6 +27,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
   // Connection status tracking
   bool _isOnline = false;
   final int _connectionAlertMinutes = 5;
+  StreamSubscription<DatabaseEvent>? _connectionSubscription;
 
   // Data service for fetching dynamic data
   final ChatbotDataService _dataService = ChatbotDataService();
@@ -71,48 +74,82 @@ class _ChatbotScreenState extends State<ChatbotScreen>
     }
 
     // Monitor the latest data from Firebase to determine connection status
-    final databaseRef = FirebaseDatabase.instance.ref('users/${user.uid}/hubs');
+    // Use the correct path from constants.dart and filter by ownerId
+    final databaseRef = FirebaseDatabase.instance
+        .ref('$rtdbUserPath/hubs')
+        .orderByChild('ownerId')
+        .equalTo(user.uid);
 
-    databaseRef.onValue.listen((event) {
+    _connectionSubscription = databaseRef.onValue.listen((event) {
       if (!mounted) return;
 
       if (event.snapshot.value != null) {
         try {
           final hubsData = Map<String, dynamic>.from(event.snapshot.value as Map);
           DateTime? latestTimestamp;
+          bool hasRecentData = false;
 
-          // Find the most recent data update across all hubs
+          // Find the most recent data update across user's hubs
+          // Data is stored under plugs/{plugId}/data, not directly under hub/data
           for (var hubEntry in hubsData.entries) {
             final hubData = hubEntry.value as Map?;
-            if (hubData != null && hubData['data'] != null) {
-              final dataMap = Map<String, dynamic>.from(hubData['data'] as Map);
-              for (var dataEntry in dataMap.values) {
-                if (dataEntry is Map && dataEntry['timestamp'] != null) {
-                  final timestamp = DateTime.parse(dataEntry['timestamp'] as String);
-                  if (latestTimestamp == null || timestamp.isAfter(latestTimestamp)) {
-                    latestTimestamp = timestamp;
+            if (hubData == null) continue;
+
+            // Check plug data for recent timestamps
+            final plugsMap = hubData['plugs'] as Map?;
+            if (plugsMap != null) {
+              for (var plugEntry in plugsMap.values) {
+                if (plugEntry is Map && plugEntry['data'] != null) {
+                  final plugData = plugEntry['data'] as Map?;
+                  if (plugData != null && plugData['lastUpdate'] != null) {
+                    try {
+                      // Use lastUpdate timestamp (milliseconds since epoch)
+                      final lastUpdateMs = plugData['lastUpdate'] as num?;
+                      if (lastUpdateMs != null) {
+                        final timestamp = DateTime.fromMillisecondsSinceEpoch(lastUpdateMs.toInt());
+
+                        // Check if this data is recent (within last 5 minutes)
+                        final minutesSinceUpdate = DateTime.now().difference(timestamp).inMinutes;
+                        if (minutesSinceUpdate < _connectionAlertMinutes) {
+                          hasRecentData = true;
+                        }
+
+                        if (latestTimestamp == null || timestamp.isAfter(latestTimestamp)) {
+                          latestTimestamp = timestamp;
+                        }
+                      }
+                    } catch (e) {
+                      debugPrint('Error parsing timestamp: $e');
+                    }
                   }
                 }
               }
             }
           }
 
-          if (latestTimestamp != null) {
-            final minutesSinceUpdate = DateTime.now().difference(latestTimestamp).inMinutes;
+          if (mounted) {
             setState(() {
-              _isOnline = minutesSinceUpdate < _connectionAlertMinutes;
+              _isOnline = hasRecentData && latestTimestamp != null;
             });
-          } else {
+          }
+        } catch (e) {
+          debugPrint('Connection monitoring error (parsing): $e');
+          if (mounted) {
             setState(() {
               _isOnline = false;
             });
           }
-        } catch (e) {
+        }
+      } else {
+        if (mounted) {
           setState(() {
             _isOnline = false;
           });
         }
-      } else {
+      }
+    }, onError: (error) {
+      debugPrint('Connection monitoring error (stream): $error');
+      if (mounted) {
         setState(() {
           _isOnline = false;
         });
@@ -122,6 +159,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
 
   @override
   void dispose() {
+    _connectionSubscription?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     _slideController.dispose();
@@ -181,7 +219,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
       if (metrics == null || metrics['online'] == false) {
         return "⚠️ System Status: Offline\n\n"
             "Hubs: ${hubs.length}\n"
-            "Please turn on SSR to see live data.";
+            "Waiting for hub data... Please ensure hubs are connected.";
       }
 
       final power = metrics['power'] as double;
@@ -214,7 +252,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
         (msg.contains('now') || msg.contains('right now') || msg.contains('currently'))) {
       final metrics = await _dataService.getCurrentEnergyMetrics();
       if (metrics == null || metrics['online'] == false) {
-        return "⚠️ Unable to get current reading.\n\nPlease ensure SSR is ON and hubs are connected.";
+        return "⚠️ Unable to get current reading.\n\nPlease ensure hubs are connected and sending data.";
       }
 
       final power = metrics['power'] as double;
@@ -228,7 +266,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
         return "❌ Unable to fetch energy data. Please make sure you're logged in and have hubs connected.";
       }
       if (metrics['online'] == false) {
-        return "⚠️ ${metrics['message']}\n\nPlease ensure:\n• At least one hub is connected\n• SSR (main breaker) is turned ON\n• Hub has reported data within the last 5 minutes";
+        return "⚠️ ${metrics['message']}\n\nPlease ensure:\n• At least one hub is connected\n• Hub is powered on and connected to internet\n• Hub has reported data within the last 5 minutes";
       }
 
       final power = metrics['power'] as double;
@@ -464,33 +502,183 @@ class _ChatbotScreenState extends State<ChatbotScreen>
           "View monthly estimate to plan your payment!";
     }
 
-    // History queries
-    if (msg.contains('history') || msg.contains('past') || msg.contains('previous') || msg.contains('recent')) {
-      String timeRange = 'daily';
-      if (msg.contains('hourly')) timeRange = 'hourly';
-      if (msg.contains('daily')) timeRange = 'daily';
-      if (msg.contains('weekly')) timeRange = 'weekly';
-      if (msg.contains('monthly')) timeRange = 'monthly';
+    // History queries with specific date/time support
+    if (msg.contains('history') || msg.contains('past') || msg.contains('previous') || msg.contains('recent') ||
+        msg.contains('yesterday') || msg.contains('last week') || msg.contains('this week') ||
+        msg.contains('last month') || msg.contains('this month') || msg.contains('today') ||
+        msg.contains('usage')) {
 
-      final history = await _dataService.getRecentHistory(timeRange: timeRange, limit: 5);
+      String timeRange = 'daily';
+      int limit = 5;
+      DateTime? specificDate;
+
+      // Try to parse specific calendar dates (e.g., "dec 07", "december 7", "12/07")
+      final monthNames = {
+        'jan': 1, 'january': 1,
+        'feb': 2, 'february': 2,
+        'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4,
+        'may': 5,
+        'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7,
+        'aug': 8, 'august': 8,
+        'sep': 9, 'sept': 9, 'september': 9,
+        'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11,
+        'dec': 12, 'december': 12,
+      };
+
+      // Check for month name + day pattern (e.g., "dec 07", "december 7")
+      for (var entry in monthNames.entries) {
+        if (msg.contains(entry.key)) {
+          // Try to extract day number after the month name
+          final regex = RegExp('${entry.key}[a-z]*\\s+(\\d{1,2})');
+          final match = regex.firstMatch(msg);
+          if (match != null) {
+            final day = int.tryParse(match.group(1)!);
+            if (day != null && day >= 1 && day <= 31) {
+              final now = DateTime.now();
+              // Assume current year unless specified
+              specificDate = DateTime(now.year, entry.value, day);
+              // If the date is in the future, assume last year
+              if (specificDate.isAfter(now)) {
+                specificDate = DateTime(now.year - 1, entry.value, day);
+              }
+              break;
+            }
+          }
+        }
+      }
+
+      // Check for numeric date patterns (e.g., "12/07", "07/12/2024")
+      if (specificDate == null) {
+        final numericDateRegex = RegExp(r'(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?');
+        final match = numericDateRegex.firstMatch(msg);
+        if (match != null) {
+          final part1 = int.tryParse(match.group(1)!);
+          final part2 = int.tryParse(match.group(2)!);
+          final yearStr = match.group(3);
+
+          if (part1 != null && part2 != null) {
+            final now = DateTime.now();
+            int year = now.year;
+            if (yearStr != null) {
+              final parsedYear = int.tryParse(yearStr);
+              if (parsedYear != null) {
+                year = parsedYear < 100 ? 2000 + parsedYear : parsedYear;
+              }
+            }
+
+            // Try both MM/DD and DD/MM formats
+            try {
+              specificDate = DateTime(year, part1, part2);
+              if (specificDate.isAfter(now)) {
+                specificDate = DateTime(year - 1, part1, part2);
+              }
+            } catch (e) {
+              try {
+                specificDate = DateTime(year, part2, part1);
+                if (specificDate.isAfter(now)) {
+                  specificDate = DateTime(year - 1, part2, part1);
+                }
+              } catch (e) {
+                // Invalid date
+                specificDate = null;
+              }
+            }
+          }
+        }
+      }
+
+      // Determine time range from query
+      if (msg.contains('hourly') || msg.contains('hour')) {
+        timeRange = 'hourly';
+        limit = 24; // Show more for hourly
+      } else if (msg.contains('weekly') || msg.contains('week')) {
+        timeRange = 'weekly';
+        limit = 4;
+      } else if (msg.contains('monthly') || msg.contains('month')) {
+        timeRange = 'monthly';
+        limit = 6;
+      } else if (msg.contains('daily') || msg.contains('day')) {
+        timeRange = 'daily';
+        limit = 7;
+      }
+
+      // Handle specific date queries
+      String queryPrefix = '';
+      if (msg.contains('yesterday')) {
+        queryPrefix = 'Yesterday\'s ';
+        limit = 1;
+        specificDate = DateTime.now().subtract(const Duration(days: 1));
+      } else if (msg.contains('today')) {
+        queryPrefix = 'Today\'s ';
+        limit = 1;
+        specificDate = DateTime.now();
+      } else if (msg.contains('last week')) {
+        queryPrefix = 'Last Week\'s ';
+        timeRange = 'weekly';
+        limit = 1;
+      } else if (msg.contains('this week')) {
+        queryPrefix = 'This Week\'s ';
+        timeRange = 'weekly';
+        limit = 1;
+      } else if (msg.contains('last month')) {
+        queryPrefix = 'Last Month\'s ';
+        timeRange = 'monthly';
+        limit = 1;
+      } else if (msg.contains('this month')) {
+        queryPrefix = 'This Month\'s ';
+        timeRange = 'monthly';
+        limit = 1;
+      } else if (specificDate != null) {
+        queryPrefix = '${DateFormat('MMM dd, yyyy').format(specificDate)} ';
+        // Request more records to search through when looking for a specific date
+        limit = 30;
+      }
+
+      final history = await _dataService.getRecentHistory(timeRange: timeRange, limit: limit);
       if (history.isEmpty || history['count'] == 0) {
         return "❌ No history data available.\n\n"
             "Historical data will appear once your system has been running for a while.";
       }
 
-      final records = history['records'] as List;
-      final totalEnergy = history['totalEnergy'] as double;
-      final totalCost = history['totalCost'] as double;
-      final avgPower = history['avgPower'] as double;
+      var records = history['records'] as List;
+      var totalEnergy = history['totalEnergy'] as double;
+      var totalCost = history['totalCost'] as double;
+
+      // Filter by specific date if provided
+      if (specificDate != null) {
+        final targetDate = DateTime(specificDate.year, specificDate.month, specificDate.day);
+        records = records.where((record) {
+          final timestamp = record['timestamp'] as DateTime;
+          final recordDate = DateTime(timestamp.year, timestamp.month, timestamp.day);
+          return recordDate.isAtSameMomentAs(targetDate);
+        }).toList();
+
+        // Recalculate totals for filtered records
+        totalEnergy = 0.0;
+        totalCost = 0.0;
+        for (var record in records) {
+          totalEnergy += (record['usage'] as double?) ?? 0.0;
+          totalCost += (record['cost'] as double?) ?? 0.0;
+        }
+
+        if (records.isEmpty) {
+          return "❌ No usage data found for ${DateFormat('MMM dd, yyyy').format(specificDate)}.\n\n"
+              "This date may be outside your available history range.";
+        }
+      }
 
       String timeRangeName = timeRange.substring(0, 1).toUpperCase() + timeRange.substring(1);
-      String response = "📜 Recent $timeRangeName History:\n\n";
+      String response = "📜 $queryPrefix${queryPrefix.isEmpty ? 'Recent $timeRangeName ' : ''}History:\n\n";
 
-      for (var i = 0; i < records.length && i < 5; i++) {
+      int displayCount = limit == 1 ? 1 : (records.length > 5 ? 5 : records.length);
+      for (var i = 0; i < displayCount; i++) {
         final record = records[i] as Map<String, dynamic>;
         final timestamp = record['timestamp'] as DateTime;
-        final energy = record['totalEnergy'] as double;
-        final power = record['avgPower'] as double;
+        final usage = record['usage'] as double;
+        final cost = record['cost'] as double;
 
         String dateStr;
         switch (timeRange) {
@@ -510,16 +698,27 @@ class _ChatbotScreenState extends State<ChatbotScreen>
             dateStr = DateFormat('MMM dd, yyyy').format(timestamp);
         }
 
-        response += "${i + 1}. $dateStr\n";
-        response += "   Energy: ${energy.toStringAsFixed(2)} kWh\n";
-        response += "   Avg Power: ${power.toStringAsFixed(1)} W\n\n";
+        if (limit == 1) {
+          // For specific date queries, show more detail
+          response += "📅 $dateStr\n\n";
+          response += "⚡ Energy Usage: ${usage.toStringAsFixed(2)} kWh\n";
+          response += "💰 Cost: ₱${cost.toStringAsFixed(2)}\n";
+          final currentReading = record['currentReading'] as double;
+          final previousReading = record['previousReading'] as double;
+          response += "📊 Reading: ${previousReading.toStringAsFixed(2)} → ${currentReading.toStringAsFixed(2)} kWh\n";
+        } else {
+          response += "${i + 1}. $dateStr\n";
+          response += "   Usage: ${usage.toStringAsFixed(2)} kWh\n";
+          response += "   Cost: ₱${cost.toStringAsFixed(2)}\n\n";
+        }
       }
 
-      response += "📊 Summary (last ${records.length} periods):\n";
-      response += "⚡ Total Energy: ${totalEnergy.toStringAsFixed(2)} kWh\n";
-      response += "💰 Total Cost: ₱${totalCost.toStringAsFixed(2)}\n";
-      response += "📈 Avg Power: ${avgPower.toStringAsFixed(1)} W\n\n";
-      response += "View detailed history in the History screen!";
+      if (limit > 1) {
+        response += "\n📊 Summary (last $displayCount periods):\n";
+        response += "⚡ Total Energy: ${totalEnergy.toStringAsFixed(2)} kWh\n";
+        response += "💰 Total Cost: ₱${totalCost.toStringAsFixed(2)}\n\n";
+        response += "View detailed history in the History screen!";
+      }
 
       return response;
     }
@@ -904,7 +1103,7 @@ class _ChatbotScreenState extends State<ChatbotScreen>
         } else {
           statusMsg = '⚠️ System Offline\n';
           statusMsg += '📊 Hubs: $onlineHubs/$totalHubs online\n';
-          statusMsg += 'Turn on SSR to start monitoring!';
+          statusMsg += 'Waiting for hub data...';
         }
       }
 

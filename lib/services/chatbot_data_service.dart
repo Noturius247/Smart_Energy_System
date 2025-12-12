@@ -3,11 +3,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../constants.dart';
+import '../realtime_db_service.dart';
+import '../services/usage_history_service.dart';
+import '../models/usage_history_entry.dart';
 
 /// Service class to fetch real-time data for the chatbot
 class ChatbotDataService {
   final DatabaseReference _rtdbRef = FirebaseDatabase.instance.ref();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late final UsageHistoryService _usageHistoryService;
+
+  ChatbotDataService() {
+    final realtimeDbService = RealtimeDbService();
+    _usageHistoryService = UsageHistoryService(realtimeDbService);
+  }
 
   /// Get current user's energy metrics (power, voltage, current, energy)
   Future<Map<String, dynamic>?> getCurrentEnergyMetrics() async {
@@ -41,28 +50,37 @@ class ChatbotDataService {
         final hubData = hubEntry.value as Map?;
         if (hubData == null) continue;
 
-        final ssrState = hubData['ssr_state'] as bool? ?? false;
-        if (!ssrState) continue; // Skip hubs with SSR off
+        // Data is stored under plugs/{plugId}/data, not directly under hub/data
+        final plugsMap = hubData['plugs'] as Map?;
+        if (plugsMap != null) {
+          for (var plugEntry in plugsMap.values) {
+            if (plugEntry is Map && plugEntry['data'] != null) {
+              final plugData = plugEntry['data'] as Map?;
+              if (plugData != null && plugData['lastUpdate'] != null) {
+                try {
+                  // Use lastUpdate timestamp (milliseconds since epoch)
+                  final lastUpdateMs = plugData['lastUpdate'] as num?;
+                  if (lastUpdateMs != null) {
+                    final timestamp = DateTime.fromMillisecondsSinceEpoch(lastUpdateMs.toInt());
 
-        final dataMap = hubData['data'] as Map?;
-        if (dataMap != null) {
-          for (var dataEntry in dataMap.values) {
-            if (dataEntry is Map && dataEntry['timestamp'] != null) {
-              final timestamp = DateTime.parse(dataEntry['timestamp'] as String);
+                    // Check if data is recent (within last 5 minutes)
+                    final minutesSinceUpdate = DateTime.now().difference(timestamp).inMinutes;
+                    if (minutesSinceUpdate < 5) {
+                      anyHubOnline = true;
+                      activeHubs++;
 
-              // Check if data is recent (within last 5 minutes)
-              final minutesSinceUpdate = DateTime.now().difference(timestamp).inMinutes;
-              if (minutesSinceUpdate < 5) {
-                anyHubOnline = true;
-                activeHubs++;
+                      totalPower += (plugData['power'] as num?)?.toDouble() ?? 0.0;
+                      totalVoltage += (plugData['voltage'] as num?)?.toDouble() ?? 0.0;
+                      totalCurrent += (plugData['current'] as num?)?.toDouble() ?? 0.0;
+                      totalEnergy += (plugData['energy'] as num?)?.toDouble() ?? 0.0;
 
-                totalPower += (dataEntry['power'] as num?)?.toDouble() ?? 0.0;
-                totalVoltage += (dataEntry['voltage'] as num?)?.toDouble() ?? 0.0;
-                totalCurrent += (dataEntry['current'] as num?)?.toDouble() ?? 0.0;
-                totalEnergy += (dataEntry['energy'] as num?)?.toDouble() ?? 0.0;
-
-                if (latestTimestamp == null || timestamp.isAfter(latestTimestamp)) {
-                  latestTimestamp = timestamp;
+                      if (latestTimestamp == null || timestamp.isAfter(latestTimestamp)) {
+                        latestTimestamp = timestamp;
+                      }
+                    }
+                  }
+                } catch (e) {
+                  debugPrint('Error parsing timestamp in getCurrentEnergyMetrics: $e');
                 }
               }
             }
@@ -73,7 +91,7 @@ class ChatbotDataService {
       if (!anyHubOnline) {
         return {
           'online': false,
-          'message': 'All hubs are offline or SSR is turned off',
+          'message': 'No recent data from hubs (check if hubs are connected)',
         };
       }
 
@@ -123,20 +141,30 @@ class ChatbotDataService {
         final ssrState = hubData['ssr_state'] as bool? ?? false;
         final ownerId = hubData['ownerId'] as String? ?? '';
 
-        // Check if hub is online
+        // Check if hub is online by looking at plug data
         bool isOnline = false;
         DateTime? lastSeen;
-        final dataMap = hubData['data'] as Map?;
-        if (dataMap != null) {
-          for (var dataEntry in dataMap.values) {
-            if (dataEntry is Map && dataEntry['timestamp'] != null) {
-              final timestamp = DateTime.parse(dataEntry['timestamp'] as String);
-              final minutesSinceUpdate = DateTime.now().difference(timestamp).inMinutes;
-              if (minutesSinceUpdate < 5) {
-                isOnline = true;
-              }
-              if (lastSeen == null || timestamp.isAfter(lastSeen)) {
-                lastSeen = timestamp;
+        final plugsMap = hubData['plugs'] as Map?;
+        if (plugsMap != null) {
+          for (var plugEntry in plugsMap.values) {
+            if (plugEntry is Map && plugEntry['data'] != null) {
+              final plugData = plugEntry['data'] as Map?;
+              if (plugData != null && plugData['lastUpdate'] != null) {
+                try {
+                  final lastUpdateMs = plugData['lastUpdate'] as num?;
+                  if (lastUpdateMs != null) {
+                    final timestamp = DateTime.fromMillisecondsSinceEpoch(lastUpdateMs.toInt());
+                    final minutesSinceUpdate = DateTime.now().difference(timestamp).inMinutes;
+                    if (minutesSinceUpdate < 5) {
+                      isOnline = true;
+                    }
+                    if (lastSeen == null || timestamp.isAfter(lastSeen)) {
+                      lastSeen = timestamp;
+                    }
+                  }
+                } catch (e) {
+                  debugPrint('Error parsing lastUpdate in getUserHubs: $e');
+                }
               }
             }
           }
@@ -193,9 +221,12 @@ class ChatbotDataService {
 
             final plugId = plugEntry.key;
             final nickname = plugData['nickname'] as String? ?? 'Device $plugId';
-            final state = plugData['state'] as bool? ?? false;
-            final power = (plugData['power'] as num?)?.toDouble() ?? 0.0;
-            final energy = (plugData['energy'] as num?)?.toDouble() ?? 0.0;
+
+            // Get data from the 'data' field where actual metrics are stored
+            final dataMap = plugData['data'] as Map?;
+            final state = (dataMap?['ssr_state'] as bool?) ?? false;
+            final power = (dataMap?['power'] as num?)?.toDouble() ?? 0.0;
+            final energy = (dataMap?['energy'] as num?)?.toDouble() ?? 0.0;
 
             devices.add({
               'plugId': plugId,
@@ -286,6 +317,7 @@ class ChatbotDataService {
   }
 
   /// Get monthly cost estimate
+  /// Uses the same approach as energy_overview_screen: current energy minus yesterday's energy
   Future<Map<String, dynamic>> getMonthlyEstimate() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return {'energy': 0.0, 'cost': 0.0, 'dailyAverage': 0.0};
@@ -293,60 +325,26 @@ class ChatbotDataService {
     try {
       final price = await getCurrentPrice();
 
-      // Get 24-hour aggregated data
-      final now = DateTime.now();
-      final last24Hours = now.subtract(const Duration(hours: 24));
+      // Get daily energy and cost (this already calculates today's usage)
+      final dailyData = await getDailyEnergyAndCost();
+      final dailyEnergy = dailyData['energy'] as double;
 
-      double total24hEnergy = 0.0;
-      int dataPoints = 0;
-
-      final hubsSnapshot = await _rtdbRef
-          .child('$rtdbUserPath/hubs')
-          .orderByChild('ownerId')
-          .equalTo(user.uid)
-          .get();
-
-      if (hubsSnapshot.exists && hubsSnapshot.value != null) {
-        final hubsData = Map<String, dynamic>.from(hubsSnapshot.value as Map);
-
-        for (var hubEntry in hubsData.entries) {
-          final hubData = hubEntry.value as Map?;
-          if (hubData == null) continue;
-
-          final hourlyData = hubData['hourly_aggregation'] as Map?;
-          if (hourlyData != null) {
-            for (var hourEntry in hourlyData.entries) {
-              try {
-                final hourTimestamp = DateTime.parse(hourEntry.key as String);
-                if (hourTimestamp.isAfter(last24Hours) && hourTimestamp.isBefore(now)) {
-                  final hourData = hourEntry.value as Map?;
-                  final energy = (hourData?['total_energy'] as num?)?.toDouble() ?? 0.0;
-                  total24hEnergy += energy;
-                  dataPoints++;
-                }
-              } catch (e) {
-                // Skip invalid timestamps
-                continue;
-              }
-            }
-          }
-        }
-      }
-
-      final dailyAverage = total24hEnergy;
-      final monthlyEnergy = dailyAverage * 30;
+      // Estimate monthly cost (daily * 30 days) - same as energy_overview_screen
+      final monthlyEnergy = dailyEnergy * 30;
       final monthlyCost = monthlyEnergy * price;
+
+      debugPrint('[ChatbotDataService] Monthly Estimate - Daily Energy: ${dailyEnergy.toStringAsFixed(2)} kWh, '
+          'Monthly Cost: \$${monthlyCost.toStringAsFixed(2)}');
 
       return {
         'energy': monthlyEnergy,
         'cost': monthlyCost,
-        'dailyAverage': dailyAverage,
+        'dailyAverage': dailyEnergy,
         'price': price,
-        'dataPoints': dataPoints,
       };
     } catch (e) {
       debugPrint('Error fetching monthly estimate: $e');
-      return {'energy': 0.0, 'cost': 0.0, 'dailyAverage': 0.0};
+      return {'energy': 0.0, 'cost': 0.0, 'dailyAverage': 0.0, 'price': 0.0};
     }
   }
 
@@ -488,95 +486,107 @@ class ChatbotDataService {
     }
   }
 
-  /// Get recent history records
+  /// Get recent history records using UsageHistoryService
+  /// Uses the same approach as the History screen for consistent data
   Future<Map<String, dynamic>> getRecentHistory({String timeRange = 'daily', int limit = 5}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return {};
 
     try {
-      final hubsSnapshot = await _rtdbRef
-          .child('$rtdbUserPath/hubs')
-          .orderByChild('ownerId')
-          .equalTo(user.uid)
-          .get();
-
-      if (!hubsSnapshot.exists || hubsSnapshot.value == null) {
-        return {};
+      // Get user's hubs first
+      final hubs = await getUserHubs();
+      if (hubs.isEmpty) {
+        return {
+          'records': [],
+          'totalEnergy': 0.0,
+          'avgPower': 0.0,
+          'totalCost': 0.0,
+          'count': 0,
+          'price': 0.0,
+        };
       }
 
-      final hubsData = Map<String, dynamic>.from(hubsSnapshot.value as Map);
-      final List<Map<String, dynamic>> records = [];
+      // Use the first hub (or you could aggregate across all hubs)
+      final hubSerial = hubs.first['serialNumber'] as String;
 
-      for (var hubEntry in hubsData.entries) {
-        final hubData = hubEntry.value as Map?;
-        if (hubData == null) continue;
-
-        final hubNickname = hubData['nickname'] as String? ?? 'Unnamed Hub';
-        final aggregationKey = '${timeRange}_aggregation';
-        final aggregationData = hubData[aggregationKey] as Map?;
-
-        if (aggregationData != null) {
-          // Get the latest entries
-          final entries = aggregationData.entries.toList();
-          entries.sort((a, b) {
-            try {
-              final dateA = DateTime.parse(a.key as String);
-              final dateB = DateTime.parse(b.key as String);
-              return dateB.compareTo(dateA); // Most recent first
-            } catch (e) {
-              return 0;
-            }
-          });
-
-          for (var entry in entries.take(limit)) {
-            try {
-              final timestamp = DateTime.parse(entry.key as String);
-              final data = entry.value as Map?;
-
-              if (data != null) {
-                records.add({
-                  'timestamp': timestamp,
-                  'hubNickname': hubNickname,
-                  'avgPower': (data['avg_power'] as num?)?.toDouble() ?? 0.0,
-                  'totalEnergy': (data['total_energy'] as num?)?.toDouble() ?? 0.0,
-                  'minVoltage': (data['min_voltage'] as num?)?.toDouble() ?? 0.0,
-                  'maxVoltage': (data['max_voltage'] as num?)?.toDouble() ?? 0.0,
-                  'avgCurrent': (data['avg_current'] as num?)?.toDouble() ?? 0.0,
-                });
-              }
-            } catch (e) {
-              continue;
-            }
-          }
-        }
+      // Map timeRange to UsageInterval
+      UsageInterval interval;
+      switch (timeRange.toLowerCase()) {
+        case 'hourly':
+          interval = UsageInterval.hourly;
+          break;
+        case 'weekly':
+          interval = UsageInterval.weekly;
+          break;
+        case 'monthly':
+          interval = UsageInterval.monthly;
+          break;
+        case 'daily':
+        default:
+          interval = UsageInterval.daily;
+          break;
       }
 
-      // Sort all records by timestamp
-      records.sort((a, b) => (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime));
+      // Get usage history from the service
+      final entries = await _usageHistoryService.calculateUsageHistory(
+        hubSerialNumber: hubSerial,
+        interval: interval,
+        minRows: limit,
+        offset: 0,
+      );
 
-      double totalEnergy = 0.0;
-      double totalAvgPower = 0.0;
-      int count = 0;
-
-      for (var record in records.take(limit)) {
-        totalEnergy += record['totalEnergy'] as double;
-        totalAvgPower += record['avgPower'] as double;
-        count++;
+      if (entries.isEmpty) {
+        return {
+          'records': [],
+          'totalEnergy': 0.0,
+          'avgPower': 0.0,
+          'totalCost': 0.0,
+          'count': 0,
+          'price': 0.0,
+        };
       }
 
+      // Convert UsageHistoryEntry to the format expected by chatbot
       final price = await getCurrentPrice();
+      final records = entries.take(limit).map((entry) {
+        final cost = entry.usage * price;
+        return {
+          'timestamp': entry.timestamp,
+          'hubNickname': hubs.first['nickname'] ?? 'Hub',
+          'usage': entry.usage,
+          'cost': cost,
+          'currentReading': entry.currentReading,
+          'previousReading': entry.previousReading,
+        };
+      }).toList();
+
+      // Calculate totals
+      double totalEnergy = 0.0;
+      double totalCost = 0.0;
+
+      for (var record in records) {
+        totalEnergy += record['usage'] as double;
+        totalCost += record['cost'] as double;
+      }
 
       return {
-        'records': records.take(limit).toList(),
+        'records': records,
         'totalEnergy': totalEnergy,
-        'avgPower': count > 0 ? totalAvgPower / count : 0.0,
-        'totalCost': totalEnergy * price,
-        'count': count,
+        'avgPower': 0.0, // Usage history doesn't track power, only energy
+        'totalCost': totalCost,
+        'count': records.length,
         'price': price,
       };
     } catch (e) {
       debugPrint('Error fetching history: $e');
-      return {};
+      return {
+        'records': [],
+        'totalEnergy': 0.0,
+        'avgPower': 0.0,
+        'totalCost': 0.0,
+        'count': 0,
+        'price': 0.0,
+      };
     }
   }
 
