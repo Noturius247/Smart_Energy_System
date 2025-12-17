@@ -1056,6 +1056,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   }
 
   Widget _buildPlugDeviceRow(ConnectedDevice plug, bool isSmallScreen, bool isHubActive) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: isSmallScreen ? 14.0 : 20.0,
@@ -1274,14 +1277,14 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                     decoration: BoxDecoration(
                       color: isDarkMode
                           ? Colors.purple.shade50
-                          : colorScheme.primaryContainer.withValues(alpha: 0.3),
+                          : Colors.blue,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isDarkMode
-                            ? Colors.purple.shade200
-                            : colorScheme.primary.withValues(alpha: 0.3),
-                        width: 1,
-                      ),
+                      border: isDarkMode
+                          ? Border.all(
+                              color: Colors.purple.shade200,
+                              width: 1,
+                            )
+                          : null,
                     ),
                     child: Badge(
                       isLabelVisible: plug.schedules != null && plug.schedules!.isNotEmpty,
@@ -1290,7 +1293,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                         Icons.schedule,
                         color: isDarkMode
                             ? Colors.purple.shade700
-                            : colorScheme.primary,
+                            : Colors.white,
                         size: isSmallScreen ? 18 : 22,
                       ),
                     ),
@@ -2050,6 +2053,8 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
 
   Widget _buildMainContent() {
     final isSmallScreen = MediaQuery.of(context).size.width < 600;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
 
     // Show loading indicator during initial load to prevent showing stale state
     if (_isInitializing) {
@@ -2463,8 +2468,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                       Text(
                                                         'Serial: $serialNumber',
                                                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                          color: Colors.grey[600],
+                                                          color: isDarkMode ? Colors.grey[600] : Colors.grey[700],
                                                           fontSize: isSmallScreen ? 11 : 13,
+                                                          fontWeight: FontWeight.w500,
                                                         ),
                                                       ),
                                                     ],
@@ -2535,14 +2541,22 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                 vertical: isSmallScreen ? 6 : 8,
                                               ),
                                               decoration: BoxDecoration(
-                                                color: (hub.ssr_state ?? false)
-                                                    ? Colors.green.withValues(alpha: 0.15)
-                                                    : Colors.grey.withValues(alpha: 0.15),
+                                                color: isDarkMode
+                                                    ? ((hub.ssr_state ?? false)
+                                                        ? Colors.green.withValues(alpha: 0.15)
+                                                        : Colors.grey.withValues(alpha: 0.15))
+                                                    : ((hub.ssr_state ?? false)
+                                                        ? Colors.green.shade50
+                                                        : Colors.grey.shade100),
                                                 borderRadius: BorderRadius.circular(10),
                                                 border: Border.all(
-                                                  color: (hub.ssr_state ?? false)
-                                                      ? Colors.green.withValues(alpha: 0.4)
-                                                      : Colors.grey.withValues(alpha: 0.4),
+                                                  color: isDarkMode
+                                                      ? ((hub.ssr_state ?? false)
+                                                          ? Colors.green.withValues(alpha: 0.4)
+                                                          : Colors.grey.withValues(alpha: 0.4))
+                                                      : ((hub.ssr_state ?? false)
+                                                          ? Colors.green.shade300
+                                                          : Colors.grey.shade300),
                                                   width: 1.5,
                                                 ),
                                               ),
@@ -2552,9 +2566,13 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                   Icon(
                                                     Icons.info_outline_rounded,
                                                     size: isSmallScreen ? 14 : 16,
-                                                    color: (hub.ssr_state ?? false)
-                                                        ? Colors.green.shade700
-                                                        : Colors.grey.shade700,
+                                                    color: isDarkMode
+                                                        ? ((hub.ssr_state ?? false)
+                                                            ? Colors.green.shade700
+                                                            : Colors.grey.shade700)
+                                                        : ((hub.ssr_state ?? false)
+                                                            ? Colors.green.shade800
+                                                            : Colors.grey.shade800),
                                                   ),
                                                   SizedBox(width: isSmallScreen ? 6 : 8),
                                                   Text(
@@ -2562,9 +2580,13 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                     style: TextStyle(
                                                       fontSize: isSmallScreen ? 11 : 13,
                                                       fontWeight: FontWeight.w600,
-                                                      color: (hub.ssr_state ?? false)
-                                                          ? Colors.green.shade800
-                                                          : Colors.grey.shade800,
+                                                      color: isDarkMode
+                                                          ? ((hub.ssr_state ?? false)
+                                                              ? Colors.green.shade800
+                                                              : Colors.grey.shade800)
+                                                          : ((hub.ssr_state ?? false)
+                                                              ? Colors.green.shade900
+                                                              : Colors.grey.shade900),
                                                     ),
                                                   ),
                                                   SizedBox(width: isSmallScreen ? 6 : 8),
@@ -2605,6 +2627,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                                           fontSize: isSmallScreen ? 13 : 15,
                                                           fontWeight: FontWeight.w600,
+                                                          color: isDarkMode
+                                                              ? null
+                                                              : Colors.grey.shade900,
                                                         ),
                                                       ),
                                                       const SizedBox(height: 4),
@@ -2629,14 +2654,18 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                               Icon(
                                                                 Icons.power_off_rounded,
                                                                 size: isSmallScreen ? 12 : 14,
-                                                                color: Colors.red.shade700,
+                                                                color: isDarkMode
+                                                                    ? Colors.red.shade700
+                                                                    : Colors.red.shade800,
                                                               ),
                                                               SizedBox(width: isSmallScreen ? 4 : 6),
                                                               Text(
                                                                 'Hub Inactive - No Data',
                                                                 style: TextStyle(
                                                                   fontSize: isSmallScreen ? 10 : 12,
-                                                                  color: Colors.red.shade700,
+                                                                  color: isDarkMode
+                                                                      ? Colors.red.shade700
+                                                                      : Colors.red.shade900,
                                                                   fontWeight: FontWeight.w600,
                                                                 ),
                                                               ),
@@ -2682,7 +2711,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                           decoration: BoxDecoration(
                                                             color: isDarkMode
                                                                 ? Colors.purple.shade50
-                                                                : colorScheme.primaryContainer.withValues(alpha: 0.3),
+                                                                : Colors.blue,
                                                             borderRadius: BorderRadius.circular(12),
                                                           ),
                                                           child: Badge(
@@ -2692,7 +2721,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                               Icons.schedule,
                                                               color: isDarkMode
                                                                   ? Colors.purple.shade600
-                                                                  : colorScheme.primary,
+                                                                  : Colors.white,
                                                               size: isSmallScreen ? 18 : 22,
                                                             ),
                                                           ),
@@ -2914,24 +2943,19 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
       child: Container(
         constraints: const BoxConstraints(maxWidth: 550, maxHeight: 650),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              colorScheme.surface,
-              isDark
-                ? colorScheme.surface.withValues(alpha: 0.95)
-                : colorScheme.primary.withValues(alpha: 0.03),
-            ],
-          ),
+          color: isDark ? colorScheme.surface : Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: colorScheme.primary.withValues(alpha: 0.2),
-            width: 1,
+            color: isDark
+                ? colorScheme.primary.withValues(alpha: 0.2)
+                : colorScheme.primary,
+            width: isDark ? 1 : 2,
           ),
           boxShadow: [
             BoxShadow(
-              color: colorScheme.primary.withValues(alpha: 0.1),
+              color: isDark
+                  ? colorScheme.primary.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.1),
               blurRadius: 30,
               offset: const Offset(0, 10),
               spreadRadius: -5,
@@ -2945,12 +2969,17 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    colorScheme.primary.withValues(alpha: 0.1),
-                    colorScheme.secondary.withValues(alpha: 0.05),
-                  ],
-                ),
+                color: isDark
+                    ? null
+                    : colorScheme.primary.withValues(alpha: 0.05),
+                gradient: isDark
+                    ? LinearGradient(
+                        colors: [
+                          colorScheme.primary.withValues(alpha: 0.1),
+                          colorScheme.secondary.withValues(alpha: 0.05),
+                        ],
+                      )
+                    : null,
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(24),
                   topRight: Radius.circular(24),
@@ -3003,7 +3032,9 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                 ? Icons.router_rounded
                                 : Icons.power_rounded,
                               size: 14,
-                              color: colorScheme.primary,
+                              color: isDark
+                                  ? colorScheme.primary
+                                  : colorScheme.primary.withValues(alpha: 0.8),
                             ),
                             const SizedBox(width: 6),
                             Expanded(
@@ -3362,7 +3393,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                 decoration: BoxDecoration(
                   color: isDark
                       ? colorScheme.primary.withValues(alpha: 0.1)
-                      : colorScheme.primaryContainer.withValues(alpha: 0.5),
+                      : colorScheme.primaryContainer,
                   borderRadius: BorderRadius.circular(8),
                   border: isDark
                       ? null
@@ -3379,7 +3410,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                       size: 14,
                       color: isDark
                           ? colorScheme.primary
-                          : colorScheme.primary.withValues(alpha: 0.9),
+                          : colorScheme.onPrimaryContainer,
                     ),
                     const SizedBox(width: 6),
                     Text(
@@ -3389,7 +3420,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                         fontWeight: FontWeight.w600,
                         color: isDark
                             ? colorScheme.primary
-                            : colorScheme.primary.withValues(alpha: 0.9),
+                            : colorScheme.onPrimaryContainer,
                       ),
                     ),
                   ],
@@ -3404,7 +3435,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
               decoration: BoxDecoration(
                 color: isDark
                     ? colorScheme.secondary.withValues(alpha: 0.1)
-                    : colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                    : colorScheme.secondaryContainer,
                 borderRadius: BorderRadius.circular(8),
                 border: isDark
                     ? null
@@ -3421,7 +3452,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                     size: 16,
                     color: isDark
                         ? colorScheme.secondary
-                        : colorScheme.secondary.withValues(alpha: 0.9),
+                        : colorScheme.onSecondaryContainer,
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -3431,7 +3462,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                       fontWeight: FontWeight.w600,
                       color: isDark
                           ? colorScheme.secondary
-                          : colorScheme.secondary.withValues(alpha: 0.9),
+                          : colorScheme.onSecondaryContainer,
                     ),
                   ),
                 ],
@@ -3472,21 +3503,24 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
             child: Container(
               constraints: const BoxConstraints(maxWidth: 450),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    colorScheme.surface,
-                    isDark
-                      ? colorScheme.surface.withValues(alpha: 0.95)
-                      : colorScheme.primary.withValues(alpha: 0.02),
-                  ],
-                ),
+                color: isDark ? colorScheme.surface : Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: colorScheme.primary.withValues(alpha: 0.2),
-                  width: 1,
+                  color: isDark
+                      ? colorScheme.primary.withValues(alpha: 0.2)
+                      : colorScheme.primary,
+                  width: isDark ? 1 : 2,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark
+                        ? colorScheme.primary.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
+                    spreadRadius: -5,
+                  ),
+                ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -3495,12 +3529,17 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          colorScheme.primary.withValues(alpha: 0.1),
-                          colorScheme.secondary.withValues(alpha: 0.05),
-                        ],
-                      ),
+                      color: isDark
+                          ? null
+                          : colorScheme.primary.withValues(alpha: 0.05),
+                      gradient: isDark
+                          ? LinearGradient(
+                              colors: [
+                                colorScheme.primary.withValues(alpha: 0.1),
+                                colorScheme.secondary.withValues(alpha: 0.05),
+                              ],
+                            )
+                          : null,
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(20),
                         topRight: Radius.circular(20),
@@ -3668,7 +3707,9 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                         : null,
                                       color: selectedAction == ScheduleAction.turnOff
                                         ? null
-                                        : Colors.red.withValues(alpha: 0.1),
+                                        : (isDark
+                                            ? Colors.red.withValues(alpha: 0.1)
+                                            : Colors.red.shade50),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: Colors.red.withValues(
@@ -3685,7 +3726,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                           size: 20,
                                           color: selectedAction == ScheduleAction.turnOff
                                             ? Colors.white
-                                            : Colors.red.shade700,
+                                            : (isDark ? Colors.red.shade700 : Colors.red.shade800),
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
@@ -3694,7 +3735,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                             fontWeight: FontWeight.bold,
                                             color: selectedAction == ScheduleAction.turnOff
                                               ? Colors.white
-                                              : Colors.red.shade700,
+                                              : (isDark ? Colors.red.shade700 : Colors.red.shade800),
                                           ),
                                         ),
                                       ],
@@ -3724,7 +3765,9 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                         : null,
                                       color: selectedAction == ScheduleAction.turnOn
                                         ? null
-                                        : Colors.green.withValues(alpha: 0.1),
+                                        : (isDark
+                                            ? Colors.green.withValues(alpha: 0.1)
+                                            : Colors.green.shade50),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: Colors.green.withValues(
@@ -3741,7 +3784,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                           size: 20,
                                           color: selectedAction == ScheduleAction.turnOn
                                             ? Colors.white
-                                            : Colors.green.shade700,
+                                            : (isDark ? Colors.green.shade700 : Colors.green.shade800),
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
@@ -3750,7 +3793,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                             fontWeight: FontWeight.bold,
                                             color: selectedAction == ScheduleAction.turnOn
                                               ? Colors.white
-                                              : Colors.green.shade700,
+                                              : (isDark ? Colors.green.shade700 : Colors.green.shade800),
                                           ),
                                         ),
                                       ],
@@ -3921,14 +3964,16 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                 : null,
               color: isSelected
                 ? null
-                : isDark
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : colorScheme.primary.withValues(alpha: 0.08),
+                : (isDark
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : colorScheme.primaryContainer),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isSelected
                   ? colorScheme.primary.withValues(alpha: 0.5)
-                  : colorScheme.primary.withValues(alpha: 0.2),
+                  : (isDark
+                      ? colorScheme.primary.withValues(alpha: 0.2)
+                      : colorScheme.primary.withValues(alpha: 0.4)),
                 width: isSelected ? 2 : 1,
               ),
               boxShadow: isSelected
@@ -3960,7 +4005,9 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                     fontSize: 13,
                     color: isSelected
                       ? Colors.white
-                      : colorScheme.primary,
+                      : (isDark
+                          ? colorScheme.primary
+                          : colorScheme.onPrimaryContainer),
                   ),
                 ),
               ],
