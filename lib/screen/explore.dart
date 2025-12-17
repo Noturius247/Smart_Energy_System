@@ -12,6 +12,7 @@ import 'connected_devices.dart';
 
 import '../realtime_db_service.dart';
 import '../notification_provider.dart';
+import '../utils/philippines_time.dart'; // Import Philippine Time utility
 
 class DevicesTab extends StatefulWidget {
   final RealtimeDbService realtimeDbService;
@@ -41,6 +42,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   double _pricePerKWH = 0.0; // New state variable for price per kWh
   String _currencySymbol = '₱'; // Currency symbol loaded from settings
   DateTime? _dueDate;
+  Timer? _scheduleCheckTimer; // Timer to check for scheduled tasks
 
   Future<void> _loadAllDevices() async {
     print('[_loadAllDevices] Starting to load all devices...');
@@ -277,6 +279,9 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         setState(() {}); // Rebuild to update 'Active' indicator
       }
     });
+
+    // Start schedule checker timer (checks every minute)
+    _startScheduleChecker();
   }
 
   Future<void> _initializeDevicesAndHubs() async {
@@ -576,6 +581,7 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     _hubDataSubscription?.cancel(); // Cancel the old stream subscription
     _hubDataStreamSubscription?.cancel(); // Cancel the new stream subscription
     _activeHubSubscription?.cancel(); // Cancel the active hub subscription
+    _scheduleCheckTimer?.cancel(); // Cancel the schedule check timer
     // DO NOT call stopAllRealtimeDataStreams() or dispose() on the service
     // RealtimeDbService is a singleton shared across the app
     // Other screens (like Analytics) are still using it
@@ -1257,6 +1263,41 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
           // Modern Action Buttons
           Column(
             children: [
+              // Schedule Button
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => _showScheduleDialog(plug),
+                  child: Container(
+                    padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
+                    decoration: BoxDecoration(
+                      color: isDarkMode
+                          ? Colors.purple.shade50
+                          : colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDarkMode
+                            ? Colors.purple.shade200
+                            : colorScheme.primary.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Badge(
+                      isLabelVisible: plug.schedules != null && plug.schedules!.isNotEmpty,
+                      label: Text('${plug.schedules?.where((s) => s.isEnabled).length ?? 0}'),
+                      child: Icon(
+                        Icons.schedule,
+                        color: isDarkMode
+                            ? Colors.purple.shade700
+                            : colorScheme.primary,
+                        size: isSmallScreen ? 18 : 22,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: isSmallScreen ? 8 : 10),
               // Edit Button
               Material(
                 color: Colors.transparent,
@@ -1787,6 +1828,217 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
       SnackBar(
         content: Text('Set "$serialNumber" as active hub for analytics.'),
         backgroundColor: Colors.teal,
+      ),
+    );
+  }
+
+  // ========== SCHEDULING METHODS ==========
+
+  /// Start the schedule checker timer that runs every minute
+  void _startScheduleChecker() {
+    _scheduleCheckTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      _checkAndExecuteSchedules();
+    });
+    // Also check immediately on start
+    _checkAndExecuteSchedules();
+  }
+
+  /// Check all devices for schedules that need to be executed
+  /// Uses Philippine Time (UTC+8) regardless of device timezone
+  Future<void> _checkAndExecuteSchedules() async {
+    final currentTime = PhilippinesTime.nowTimeOfDay();
+    final currentWeekday = PhilippinesTime.nowWeekday();
+
+    debugPrint(
+      '[Schedule] Checking schedules at Philippine Time: ${PhilippinesTime.formatTime(currentTime)} (Day ${currentWeekday})',
+    );
+
+    for (final entry in _groupedDevices.entries) {
+      for (final device in entry.value) {
+        // CRITICAL FIX: Reload schedules from Firebase before checking
+        // This ensures we have the latest schedule data
+        await _loadDeviceSchedules(device);
+
+        if (device.schedules == null || device.schedules!.isEmpty) continue;
+
+        for (final schedule in device.schedules!) {
+          if (!schedule.isEnabled) continue;
+
+          // Check if schedule should run today using Philippine timezone
+          if (!PhilippinesTime.shouldRunToday(schedule.repeatDays)) continue;
+
+          // Check if schedule time matches current Philippine time (within same minute)
+          if (PhilippinesTime.isScheduleTime(schedule.time)) {
+            debugPrint(
+              '[Schedule] Executing schedule for ${device.name} at PH Time: ${PhilippinesTime.formatTime(schedule.time)}',
+            );
+
+            // Execute the scheduled action
+            await _executeScheduledAction(device, schedule);
+
+            // If it's a one-time schedule, disable it after execution
+            if (schedule.repeatDays.isEmpty) {
+              schedule.isEnabled = false;
+              await _saveDeviceSchedules(device);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /// Execute a scheduled action on a device
+  Future<void> _executeScheduledAction(
+    ConnectedDevice device,
+    ScheduleData schedule,
+  ) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.email == null) return;
+
+      // Use the constant rtdbUserPath from constants.dart
+      final targetState = schedule.action == ScheduleAction.turnOff ? false : true;
+
+      if (device.plug == null) {
+        // It's a hub
+        await FirebaseDatabase.instance
+            .ref('$rtdbUserPath/hubs/${device.serialNumber}/ssr_state')
+            .set(targetState);
+
+        debugPrint(
+          '[Schedule] Set hub ${device.serialNumber} ssr_state to $targetState',
+        );
+
+        // Send notification
+        if (mounted) {
+          final notifProvider = Provider.of<NotificationProvider>(context, listen: false);
+          final actionText = schedule.action == ScheduleAction.turnOff ? 'turned off' : 'turned on';
+          await notifProvider.trackScheduleUpdated(
+            '${device.nickname ?? device.name} was $actionText by schedule',
+          );
+        }
+      } else {
+        // It's a plug
+        await FirebaseDatabase.instance
+            .ref(
+              '$rtdbUserPath/hubs/${device.serialNumber}/plugs/${device.plug}/data/ssr_state',
+            )
+            .set(targetState);
+
+        debugPrint(
+          '[Schedule] Set plug ${device.plug} ssr_state to $targetState',
+        );
+
+        // Send notification
+        if (mounted) {
+          final notifProvider = Provider.of<NotificationProvider>(context, listen: false);
+          final actionText = schedule.action == ScheduleAction.turnOff ? 'turned off' : 'turned on';
+          await notifProvider.trackScheduleUpdated(
+            '${device.nickname ?? device.name} (${device.plug}) was $actionText by schedule',
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[Schedule] Error executing schedule: $e');
+    }
+  }
+
+  /// Load schedules from Firebase RTDB for a device
+  Future<void> _loadDeviceSchedules(ConnectedDevice device) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.email == null) return;
+
+      // Use the constant rtdbUserPath from constants.dart
+      final schedulePath = device.plug == null
+          ? '$rtdbUserPath/hubs/${device.serialNumber}/schedules'
+          : '$rtdbUserPath/hubs/${device.serialNumber}/plugs/${device.plug}/schedules';
+
+      final snapshot = await FirebaseDatabase.instance.ref(schedulePath).get();
+
+      if (!snapshot.exists || snapshot.value == null) {
+        device.schedules = [];
+        debugPrint('[Schedule] No schedules found for ${device.name}');
+        return;
+      }
+
+      final schedulesData = snapshot.value as Map<dynamic, dynamic>;
+      final schedules = schedulesData.entries
+          .map((entry) => ScheduleData.fromJson(
+                Map<String, dynamic>.from(entry.value as Map),
+              ))
+          .toList();
+
+      device.schedules = schedules;
+      debugPrint('[Schedule] Loaded ${schedules.length} schedules for ${device.name}');
+    } catch (e) {
+      debugPrint('[Schedule] Error loading schedules: $e');
+      device.schedules = [];
+    }
+  }
+
+  /// Save schedules to Firebase RTDB for a device
+  Future<void> _saveDeviceSchedules(ConnectedDevice device) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || user.email == null) {
+        debugPrint('[Schedule] ERROR: User not logged in or email is null');
+        return;
+      }
+
+      // Use the constant rtdbUserPath from constants.dart
+      final schedulePath = device.plug == null
+          ? '$rtdbUserPath/hubs/${device.serialNumber}/schedules'
+          : '$rtdbUserPath/hubs/${device.serialNumber}/plugs/${device.plug}/schedules';
+
+      debugPrint('[Schedule] Saving to path: $schedulePath');
+      debugPrint('[Schedule] Number of schedules to save: ${device.schedules?.length ?? 0}');
+
+      final dbRef = FirebaseDatabase.instance.ref(schedulePath);
+
+      // Clear existing schedules first
+      await dbRef.remove();
+      debugPrint('[Schedule] Cleared existing schedules');
+
+      // Add all current schedules
+      if (device.schedules != null && device.schedules!.isNotEmpty) {
+        final schedulesMap = <String, dynamic>{};
+        for (final schedule in device.schedules!) {
+          final scheduleJson = schedule.toJson();
+          schedulesMap[schedule.id] = scheduleJson;
+          debugPrint('[Schedule] Adding schedule: ${schedule.id} - $scheduleJson');
+        }
+        await dbRef.set(schedulesMap);
+        debugPrint('[Schedule] Successfully wrote ${schedulesMap.length} schedules to Firebase');
+      } else {
+        debugPrint('[Schedule] No schedules to save (schedules list is empty or null)');
+      }
+
+      debugPrint(
+        '[Schedule] ✅ Saved ${device.schedules?.length ?? 0} schedules for ${device.name}',
+      );
+    } catch (e, stackTrace) {
+      debugPrint('[Schedule] ❌ ERROR saving schedules: $e');
+      debugPrint('[Schedule] Stack trace: $stackTrace');
+    }
+  }
+
+  /// Show schedule management dialog
+  Future<void> _showScheduleDialog(ConnectedDevice device) async {
+    // Load schedules first
+    await _loadDeviceSchedules(device);
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => _ScheduleDialog(
+        device: device,
+        onSave: (schedules) async {
+          device.schedules = schedules;
+          await _saveDeviceSchedules(device);
+          setState(() {}); // Refresh UI
+        },
       ),
     );
   }
@@ -2419,6 +2671,35 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                                                 Row(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
+                                                    // Schedule Button - Modern Style
+                                                    Material(
+                                                      color: Colors.transparent,
+                                                      child: InkWell(
+                                                        borderRadius: BorderRadius.circular(12),
+                                                        onTap: () => _showScheduleDialog(hub),
+                                                        child: Container(
+                                                          padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
+                                                          decoration: BoxDecoration(
+                                                            color: isDarkMode
+                                                                ? Colors.purple.shade50
+                                                                : colorScheme.primaryContainer.withValues(alpha: 0.3),
+                                                            borderRadius: BorderRadius.circular(12),
+                                                          ),
+                                                          child: Badge(
+                                                            isLabelVisible: hub.schedules != null && hub.schedules!.isNotEmpty,
+                                                            label: Text('${hub.schedules?.where((s) => s.isEnabled).length ?? 0}'),
+                                                            child: Icon(
+                                                              Icons.schedule,
+                                                              color: isDarkMode
+                                                                  ? Colors.purple.shade600
+                                                                  : colorScheme.primary,
+                                                              size: isSmallScreen ? 18 : 22,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: isSmallScreen ? 6 : 8),
                                                     // Edit Button - Modern Style
                                                     Material(
                                                       color: Colors.transparent,
@@ -2592,6 +2873,1099 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
                             ),
                           ),
                         ),          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ========== SCHEDULE DIALOG WIDGET ==========
+
+class _ScheduleDialog extends StatefulWidget {
+  final ConnectedDevice device;
+  final Function(List<ScheduleData>) onSave;
+
+  const _ScheduleDialog({
+    required this.device,
+    required this.onSave,
+  });
+
+  @override
+  State<_ScheduleDialog> createState() => _ScheduleDialogState();
+}
+
+class _ScheduleDialogState extends State<_ScheduleDialog> {
+  late List<ScheduleData> schedules;
+
+  @override
+  void initState() {
+    super.initState();
+    schedules = List.from(widget.device.schedules ?? []);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 550, maxHeight: 650),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              colorScheme.surface,
+              isDark
+                ? colorScheme.surface.withValues(alpha: 0.95)
+                : colorScheme.primary.withValues(alpha: 0.03),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: colorScheme.primary.withValues(alpha: 0.2),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.primary.withValues(alpha: 0.1),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+              spreadRadius: -5,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Modern Header with gradient
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    colorScheme.primary.withValues(alpha: 0.1),
+                    colorScheme.secondary.withValues(alpha: 0.05),
+                  ],
+                ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+              ),
+              child: Row(
+                children: [
+                  // Animated Icon Container
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          colorScheme.primary,
+                          colorScheme.secondary,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.primary.withValues(alpha: 0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.schedule_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Device Schedules',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              widget.device.plug == null
+                                ? Icons.router_rounded
+                                : Icons.power_rounded,
+                              size: 14,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                widget.device.nickname ?? widget.device.name,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Close button
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.03),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: colorScheme.onSurface.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Schedule List with better empty state
+            Expanded(
+              child: schedules.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.access_alarm_rounded,
+                              size: 64,
+                              color: colorScheme.primary.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'No Schedules Yet',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.onSurface.withValues(alpha: 0.7),
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 40),
+                            child: Text(
+                              'Create automated schedules to turn your device on or off at specific times',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onSurface.withValues(alpha: 0.5),
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      shrinkWrap: true,
+                      itemCount: schedules.length,
+                      itemBuilder: (context, index) {
+                        final schedule = schedules[index];
+                        return _buildScheduleItem(schedule, index);
+                      },
+                    ),
+            ),
+
+            // Action Buttons with better styling
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: isDark
+                  ? Colors.white.withValues(alpha: 0.03)
+                  : Colors.black.withValues(alpha: 0.02),
+                border: Border(
+                  top: BorderSide(
+                    color: colorScheme.primary.withValues(alpha: 0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _addNewSchedule,
+                      icon: const Icon(Icons.add_rounded, size: 20),
+                      label: const Text('Add Schedule'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        side: BorderSide(
+                          color: colorScheme.primary.withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                        foregroundColor: colorScheme.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        widget.onSave(schedules);
+                        Navigator.pop(context);
+                      },
+                      icon: const Icon(Icons.check_rounded, size: 20),
+                      label: const Text('Save Changes'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScheduleItem(ScheduleData schedule, int index) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isOff = schedule.action == ScheduleAction.turnOff;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? colorScheme.surface
+            : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isOff
+            ? (isDark
+                ? Colors.red.withValues(alpha: schedule.isEnabled ? 0.3 : 0.1)
+                : Colors.red.withValues(alpha: schedule.isEnabled ? 0.4 : 0.2))
+            : (isDark
+                ? Colors.green.withValues(alpha: schedule.isEnabled ? 0.3 : 0.1)
+                : Colors.green.withValues(alpha: schedule.isEnabled ? 0.4 : 0.2)),
+          width: 1.5,
+        ),
+        boxShadow: [
+          if (schedule.isEnabled)
+            BoxShadow(
+              color: isDark
+                  ? (isOff ? Colors.red : Colors.green).withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.08),
+              blurRadius: isDark ? 8 : 12,
+              offset: const Offset(0, 2),
+            ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                // Time Display with modern styling
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isOff
+                        ? [Colors.red.shade400, Colors.red.shade600]
+                        : [Colors.green.shade400, Colors.green.shade600],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (isOff ? Colors.red : Colors.green).withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.access_time_rounded,
+                        size: 18,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        schedule.time.format(context),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Action Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? (isOff ? Colors.red : Colors.green).withValues(alpha: 0.2)
+                        : (isOff ? Colors.red.shade50 : Colors.green.shade50),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? (isOff ? Colors.red : Colors.green).withValues(alpha: 0.3)
+                          : (isOff ? Colors.red.shade300 : Colors.green.shade300),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isOff ? Icons.power_off_rounded : Icons.power_settings_new_rounded,
+                        size: 16,
+                        color: isDark
+                            ? (isOff ? Colors.red.shade700 : Colors.green.shade700)
+                            : (isOff ? Colors.red.shade800 : Colors.green.shade800),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isOff ? 'Turn Off' : 'Turn On',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isDark
+                              ? (isOff ? Colors.red.shade700 : Colors.green.shade700)
+                              : (isOff ? Colors.red.shade800 : Colors.green.shade800),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Compact Action Buttons
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Enable/Disable Switch (smaller)
+                    Transform.scale(
+                      scale: 0.85,
+                      child: Switch(
+                        value: schedule.isEnabled,
+                        onChanged: (value) {
+                          setState(() {
+                            schedule.isEnabled = value;
+                          });
+                        },
+                        activeColor: colorScheme.primary,
+                      ),
+                    ),
+
+                    // Edit Button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _editSchedule(schedule, index),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.edit_rounded,
+                            size: 18,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+
+                    // Delete Button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            schedules.removeAt(index);
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.delete_rounded,
+                            size: 18,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            // Label if present
+            if (schedule.label != null && schedule.label!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? colorScheme.primary.withValues(alpha: 0.1)
+                      : colorScheme.primaryContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: isDark
+                      ? null
+                      : Border.all(
+                          color: colorScheme.primary.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.label_rounded,
+                      size: 14,
+                      color: isDark
+                          ? colorScheme.primary
+                          : colorScheme.primary.withValues(alpha: 0.9),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      schedule.label!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? colorScheme.primary
+                            : colorScheme.primary.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Repeat info
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? colorScheme.secondary.withValues(alpha: 0.1)
+                    : colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+                border: isDark
+                    ? null
+                    : Border.all(
+                        color: colorScheme.secondary.withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.repeat_rounded,
+                    size: 16,
+                    color: isDark
+                        ? colorScheme.secondary
+                        : colorScheme.secondary.withValues(alpha: 0.9),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    schedule.getRepeatDescription(),
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isDark
+                          ? colorScheme.secondary
+                          : colorScheme.secondary.withValues(alpha: 0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _addNewSchedule() {
+    _showScheduleEditor(null, -1);
+  }
+
+  void _editSchedule(ScheduleData schedule, int index) {
+    _showScheduleEditor(schedule, index);
+  }
+
+  void _showScheduleEditor(ScheduleData? existingSchedule, int index) {
+    final isEdit = existingSchedule != null;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    TimeOfDay selectedTime = existingSchedule?.time ?? TimeOfDay.now();
+    ScheduleAction selectedAction = existingSchedule?.action ?? ScheduleAction.turnOff;
+    List<int> selectedDays = List.from(existingSchedule?.repeatDays ?? []);
+    String label = existingSchedule?.label ?? '';
+    final labelController = TextEditingController(text: label);
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            backgroundColor: Colors.transparent,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 450),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    colorScheme.surface,
+                    isDark
+                      ? colorScheme.surface.withValues(alpha: 0.95)
+                      : colorScheme.primary.withValues(alpha: 0.02),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: colorScheme.primary.withValues(alpha: 0.2),
+                  width: 1,
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          colorScheme.primary.withValues(alpha: 0.1),
+                          colorScheme.secondary.withValues(alpha: 0.05),
+                        ],
+                      ),
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [colorScheme.primary, colorScheme.secondary],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            isEdit ? Icons.edit_calendar_rounded : Icons.add_alarm_rounded,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          isEdit ? 'Edit Schedule' : 'New Schedule',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Content
+                  SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Label Input
+                        TextField(
+                          controller: labelController,
+                          decoration: InputDecoration(
+                            labelText: 'Label (Optional)',
+                            hintText: 'e.g., "Bedtime", "Morning routine"',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorScheme.primary.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorScheme.primary.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorScheme.primary,
+                                width: 2,
+                              ),
+                            ),
+                            prefixIcon: Icon(Icons.label_rounded, color: colorScheme.primary),
+                            filled: true,
+                            fillColor: isDark
+                              ? Colors.white.withValues(alpha: 0.03)
+                              : colorScheme.primary.withValues(alpha: 0.05),
+                          ),
+                          onChanged: (value) {
+                            label = value;
+                          },
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Time Picker
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () async {
+                              final time = await showTimePicker(
+                                context: context,
+                                initialTime: selectedTime,
+                              );
+                              if (time != null) {
+                                setDialogState(() {
+                                  selectedTime = time;
+                                });
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                  ? Colors.white.withValues(alpha: 0.03)
+                                  : colorScheme.primary.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: colorScheme.primary.withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.access_time_rounded, color: colorScheme.primary),
+                                  const SizedBox(width: 12),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Schedule Time',
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        selectedTime.format(context),
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                              color: colorScheme.primary,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                  const Spacer(),
+                                  Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    size: 16,
+                                    color: colorScheme.primary.withValues(alpha: 0.5),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Action Selection
+                        Text(
+                          'Action',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    setDialogState(() {
+                                      selectedAction = ScheduleAction.turnOff;
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    decoration: BoxDecoration(
+                                      gradient: selectedAction == ScheduleAction.turnOff
+                                        ? LinearGradient(
+                                            colors: [Colors.red.shade400, Colors.red.shade600],
+                                          )
+                                        : null,
+                                      color: selectedAction == ScheduleAction.turnOff
+                                        ? null
+                                        : Colors.red.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.red.withValues(
+                                          alpha: selectedAction == ScheduleAction.turnOff ? 0.8 : 0.3,
+                                        ),
+                                        width: selectedAction == ScheduleAction.turnOff ? 2 : 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.power_off_rounded,
+                                          size: 20,
+                                          color: selectedAction == ScheduleAction.turnOff
+                                            ? Colors.white
+                                            : Colors.red.shade700,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Turn Off',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: selectedAction == ScheduleAction.turnOff
+                                              ? Colors.white
+                                              : Colors.red.shade700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    setDialogState(() {
+                                      selectedAction = ScheduleAction.turnOn;
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    decoration: BoxDecoration(
+                                      gradient: selectedAction == ScheduleAction.turnOn
+                                        ? LinearGradient(
+                                            colors: [Colors.green.shade400, Colors.green.shade600],
+                                          )
+                                        : null,
+                                      color: selectedAction == ScheduleAction.turnOn
+                                        ? null
+                                        : Colors.green.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.green.withValues(
+                                          alpha: selectedAction == ScheduleAction.turnOn ? 0.8 : 0.3,
+                                        ),
+                                        width: selectedAction == ScheduleAction.turnOn ? 2 : 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.power_settings_new_rounded,
+                                          size: 20,
+                                          color: selectedAction == ScheduleAction.turnOn
+                                            ? Colors.white
+                                            : Colors.green.shade700,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Turn On',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: selectedAction == ScheduleAction.turnOn
+                                              ? Colors.white
+                                              : Colors.green.shade700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Repeat Days
+                        Text(
+                          'Repeat',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _buildDayChip('Mon', 1, selectedDays, setDialogState),
+                            _buildDayChip('Tue', 2, selectedDays, setDialogState),
+                            _buildDayChip('Wed', 3, selectedDays, setDialogState),
+                            _buildDayChip('Thu', 4, selectedDays, setDialogState),
+                            _buildDayChip('Fri', 5, selectedDays, setDialogState),
+                            _buildDayChip('Sat', 6, selectedDays, setDialogState),
+                            _buildDayChip('Sun', 7, selectedDays, setDialogState),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextButton.icon(
+                          onPressed: () {
+                            setDialogState(() {
+                              selectedDays.clear();
+                            });
+                          },
+                          icon: Icon(Icons.clear_rounded, color: colorScheme.primary),
+                          label: Text(
+                            'One-time only',
+                            style: TextStyle(color: colorScheme.primary),
+                          ),
+                          style: TextButton.styleFrom(
+                            backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Actions
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                        ? Colors.white.withValues(alpha: 0.03)
+                        : Colors.black.withValues(alpha: 0.02),
+                      border: Border(
+                        top: BorderSide(
+                          color: colorScheme.primary.withValues(alpha: 0.1),
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              final newSchedule = ScheduleData(
+                                id: existingSchedule?.id ??
+                                    DateTime.now().millisecondsSinceEpoch.toString(),
+                                time: selectedTime,
+                                action: selectedAction,
+                                repeatDays: selectedDays,
+                                label: label.isEmpty ? null : label,
+                                isEnabled: existingSchedule?.isEnabled ?? true,
+                              );
+
+                              setState(() {
+                                if (isEdit) {
+                                  schedules[index] = newSchedule;
+                                } else {
+                                  schedules.add(newSchedule);
+                                }
+                              });
+
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              backgroundColor: colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: Text(isEdit ? 'Update' : 'Add'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDayChip(
+    String label,
+    int day,
+    List<int> selectedDays,
+    StateSetter setDialogState,
+  ) {
+    final isSelected = selectedDays.contains(day);
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setDialogState(() {
+              if (isSelected) {
+                selectedDays.remove(day);
+              } else {
+                selectedDays.add(day);
+                selectedDays.sort();
+              }
+            });
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              gradient: isSelected
+                ? LinearGradient(
+                    colors: [
+                      colorScheme.primary,
+                      colorScheme.secondary,
+                    ],
+                  )
+                : null,
+              color: isSelected
+                ? null
+                : isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : colorScheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                  ? colorScheme.primary.withValues(alpha: 0.5)
+                  : colorScheme.primary.withValues(alpha: 0.2),
+                width: isSelected ? 2 : 1,
+              ),
+              boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: colorScheme.primary.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isSelected)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 6),
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: isSelected
+                      ? Colors.white
+                      : colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -1,18 +1,16 @@
 {
   "rules": {
-    ".read": "auth != null && (auth.token.email == 'espthesisbmn@gmail.com' || auth.token.email == 'smartenergymeter11@gmail.com')",
-    ".write": "auth != null && (auth.token.email == 'espthesisbmn@gmail.com' || auth.token.email == 'smartenergymeter11@gmail.com')",
+    ".read": "auth != null && (auth.token.email == 'espthesisbmn@gmail.com' || auth.token.email == 'smartenergymeter11@gmail.com' || auth.token.email == 'smartenergymeter3@gmail.com')",
+    ".write": "auth != null && (auth.token.email == 'espthesisbmn@gmail.com' || auth.token.email == 'smartenergymeter11@gmail.com' || auth.token.email == 'smartenergymeter3@gmail.com')",
 
     "users": {
       ".read": "auth != null",
-      "$uid": {
+      "$user_email": {
         "notifications": {
-          ".read": "auth != null && auth.uid == $uid",
-          ".write": "auth != null && auth.uid == $uid",
+          ".read": "auth != null",
+          ".write": "auth != null",
           ".indexOn": ["timestamp"]
-        }
-      },
-      "espthesisbmn": {
+        },
         "hubs": {
           ".indexOn": ["ownerId"],
           "$serial_number": {
@@ -21,9 +19,17 @@
               ".write": "auth != null && data.parent().child('ownerId').val() == auth.uid",
               ".validate": "newData.isBoolean()"
             },
+            "schedules": {
+              ".read": "auth != null && root.child('users').child($user_email).child('hubs').child($serial_number).child('ownerId').val() == auth.uid",
+              ".write": "auth != null && root.child('users').child($user_email).child('hubs').child($serial_number).child('ownerId').val() == auth.uid"
+            },
             "plugs": {
               "$plugs_id": {
-                ".write": "auth != null && root.child('users').child('espthesisbmn').child('hubs').child($serial_number).child('ownerId').val() == auth.uid"
+                ".write": "auth != null && root.child('users').child($user_email).child('hubs').child($serial_number).child('ownerId').val() == auth.uid",
+                "schedules": {
+                  ".read": "auth != null && root.child('users').child($user_email).child('hubs').child($serial_number).child('ownerId').val() == auth.uid",
+                  ".write": "auth != null && root.child('users').child($user_email).child('hubs').child($serial_number).child('ownerId').val() == auth.uid"
+                }
               }
             },
             "aggregations": {
