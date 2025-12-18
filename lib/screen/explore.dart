@@ -42,7 +42,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   double _pricePerKWH = 0.0; // New state variable for price per kWh
   String _currencySymbol = '₱'; // Currency symbol loaded from settings
   DateTime? _dueDate;
-  Timer? _scheduleCheckTimer; // Timer to check for scheduled tasks
 
   Future<void> _loadAllDevices() async {
     print('[_loadAllDevices] Starting to load all devices...');
@@ -279,9 +278,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
         setState(() {}); // Rebuild to update 'Active' indicator
       }
     });
-
-    // Start schedule checker timer (checks every minute)
-    _startScheduleChecker();
   }
 
   Future<void> _initializeDevicesAndHubs() async {
@@ -581,7 +577,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
     _hubDataSubscription?.cancel(); // Cancel the old stream subscription
     _hubDataStreamSubscription?.cancel(); // Cancel the new stream subscription
     _activeHubSubscription?.cancel(); // Cancel the active hub subscription
-    _scheduleCheckTimer?.cancel(); // Cancel the schedule check timer
     // DO NOT call stopAllRealtimeDataStreams() or dispose() on the service
     // RealtimeDbService is a singleton shared across the app
     // Other screens (like Analytics) are still using it
@@ -1836,115 +1831,6 @@ class _DevicesTabState extends State<DevicesTab> with TickerProviderStateMixin {
   }
 
   // ========== SCHEDULING METHODS ==========
-
-  /// Start the schedule checker timer that runs every minute
-  void _startScheduleChecker() {
-    _scheduleCheckTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      _checkAndExecuteSchedules();
-    });
-    // Also check immediately on start
-    _checkAndExecuteSchedules();
-  }
-
-  /// Check all devices for schedules that need to be executed
-  /// Uses Philippine Time (UTC+8) regardless of device timezone
-  Future<void> _checkAndExecuteSchedules() async {
-    final currentTime = PhilippinesTime.nowTimeOfDay();
-    final currentWeekday = PhilippinesTime.nowWeekday();
-
-    debugPrint(
-      '[Schedule] Checking schedules at Philippine Time: ${PhilippinesTime.formatTime(currentTime)} (Day ${currentWeekday})',
-    );
-
-    for (final entry in _groupedDevices.entries) {
-      for (final device in entry.value) {
-        // CRITICAL FIX: Reload schedules from Firebase before checking
-        // This ensures we have the latest schedule data
-        await _loadDeviceSchedules(device);
-
-        if (device.schedules == null || device.schedules!.isEmpty) continue;
-
-        for (final schedule in device.schedules!) {
-          if (!schedule.isEnabled) continue;
-
-          // Check if schedule should run today using Philippine timezone
-          if (!PhilippinesTime.shouldRunToday(schedule.repeatDays)) continue;
-
-          // Check if schedule time matches current Philippine time (within same minute)
-          if (PhilippinesTime.isScheduleTime(schedule.time)) {
-            debugPrint(
-              '[Schedule] Executing schedule for ${device.name} at PH Time: ${PhilippinesTime.formatTime(schedule.time)}',
-            );
-
-            // Execute the scheduled action
-            await _executeScheduledAction(device, schedule);
-
-            // If it's a one-time schedule, disable it after execution
-            if (schedule.repeatDays.isEmpty) {
-              schedule.isEnabled = false;
-              await _saveDeviceSchedules(device);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  /// Execute a scheduled action on a device
-  Future<void> _executeScheduledAction(
-    ConnectedDevice device,
-    ScheduleData schedule,
-  ) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null || user.email == null) return;
-
-      // Use the constant rtdbUserPath from constants.dart
-      final targetState = schedule.action == ScheduleAction.turnOff ? false : true;
-
-      if (device.plug == null) {
-        // It's a hub
-        await FirebaseDatabase.instance
-            .ref('$rtdbUserPath/hubs/${device.serialNumber}/ssr_state')
-            .set(targetState);
-
-        debugPrint(
-          '[Schedule] Set hub ${device.serialNumber} ssr_state to $targetState',
-        );
-
-        // Send notification
-        if (mounted) {
-          final notifProvider = Provider.of<NotificationProvider>(context, listen: false);
-          final actionText = schedule.action == ScheduleAction.turnOff ? 'turned off' : 'turned on';
-          await notifProvider.trackScheduleUpdated(
-            '${device.nickname ?? device.name} was $actionText by schedule',
-          );
-        }
-      } else {
-        // It's a plug
-        await FirebaseDatabase.instance
-            .ref(
-              '$rtdbUserPath/hubs/${device.serialNumber}/plugs/${device.plug}/data/ssr_state',
-            )
-            .set(targetState);
-
-        debugPrint(
-          '[Schedule] Set plug ${device.plug} ssr_state to $targetState',
-        );
-
-        // Send notification
-        if (mounted) {
-          final notifProvider = Provider.of<NotificationProvider>(context, listen: false);
-          final actionText = schedule.action == ScheduleAction.turnOff ? 'turned off' : 'turned on';
-          await notifProvider.trackScheduleUpdated(
-            '${device.nickname ?? device.name} (${device.plug}) was $actionText by schedule',
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('[Schedule] Error executing schedule: $e');
-    }
-  }
 
   /// Load schedules from Firebase RTDB for a device
   Future<void> _loadDeviceSchedules(ConnectedDevice device) async {
